@@ -9,16 +9,27 @@ os.environ.setdefault("COOKIE_SECURE", "false")
 os.environ.setdefault("SECRET_KEY", "test-secret")
 os.environ.setdefault("DEBUG", "true")
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
+from pathlib import Path
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.config import settings
 from app.db import get_session
 from app.main import app
 from app.models import Base
+
+
+@pytest.fixture(autouse=True)
+def _data_dir(tmp_path: Path):
+    old = settings.data_dir
+    settings.data_dir = tmp_path / "data"
+    yield
+    settings.data_dir = old
 
 
 @pytest_asyncio.fixture
@@ -35,7 +46,7 @@ async def engine():
 
 
 @pytest_asyncio.fixture
-async def client(engine) -> AsyncGenerator[AsyncClient]:
+async def client_factory(engine) -> AsyncGenerator[Callable[[], AsyncClient]]:
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
 
     async def _get_session():
@@ -48,7 +59,43 @@ async def client(engine) -> AsyncGenerator[AsyncClient]:
                 raise
 
     app.dependency_overrides[get_session] = _get_session
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
+    clients: list[AsyncClient] = []
+
+    def _make() -> AsyncClient:
+        c = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+        clients.append(c)
+        return c
+
+    yield _make
+
+    for c in clients:
+        await c.aclose()
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def client(client_factory) -> AsyncClient:
+    return client_factory()
+
+
+async def register(c: AsyncClient, username: str, password: str = "correct horse!") -> dict:
+    r = await c.post(
+        "/auth/register",
+        json={"username": username, "email": f"{username}@example.com", "password": password},
+    )
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+@pytest_asyncio.fixture
+async def alice(client_factory) -> AsyncClient:
+    c = client_factory()
+    await register(c, "alice")
+    return c
+
+
+@pytest_asyncio.fixture
+async def bob(client_factory) -> AsyncClient:
+    c = client_factory()
+    await register(c, "bob")
+    return c

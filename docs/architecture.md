@@ -9,7 +9,7 @@ Last updated: 2026-09-01 (rev 3 — sets & share links, Caddy).
 
 | # | decision |
 |---|---|
-| Roles | The 6 preset roles (§2.2) — **no** per-capability free assignment. |
+| Roles | The 6 preset roles (§2.2) — **no** per-capability free assignment. Caps: view / upload / write / download / process / manage / delete / own. |
 | Tags | **Flat.** No hierarchy, no `parent_id`. Per-domain vocabulary. |
 | VDS | **~2 GB RAM total.** This rules out Elasticsearch / OpenSearch. |
 | Search | **Postgres-only, no external engine.** Tier 1 (`to_tsvector('russian')` + `pg_trgm`) is the whole search story. The `SearchBackend` interface stays so a small engine (Manticore) *could* be added if the VDS grows — not now. See §7. |
@@ -62,15 +62,17 @@ vocabulary, and its own inbox. Every document belongs to exactly one domain.
 
 ### 2.2 Users & access levels
 
-Underlying capabilities in a domain:
+Underlying capabilities in a domain (`app/rbac.py`):
 
 | capability | meaning |
 |---|---|
 | `view` | see documents & metadata, search, open/preview |
+| `upload` | add new documents / archives |
+| `write` | edit tags & metadata, process the inbox, **create tags** |
 | `download` | download originals, run exports |
-| `write` | upload, process the inbox, edit tags & metadata, request OCR/indexing |
-| `manage` | manage members & invites, manage the tag vocabulary, domain settings |
-| `delete` | soft-delete / restore / hard-delete documents |
+| `process` | request OCR / indexing |
+| `manage` | members & invites, rename/delete/merge tags, domain settings |
+| `delete` | soft-delete / restore / purge documents |
 | `own` | delete the domain, transfer ownership |
 
 Bundled into **6 fixed roles** (locked — no free per-capability assignment):
@@ -78,11 +80,11 @@ Bundled into **6 fixed roles** (locked — no free per-capability assignment):
 | role | capabilities |
 |---|---|
 | `owner` | all |
-| `admin` | view, download, write, manage, delete |
-| `editor` | view, download, write |
-| `tagger` | view, download, write *(inbox + tags only; upload allowed, hard-delete not)* |
+| `admin` | view, upload, write, download, process, manage, delete |
+| `editor` | view, upload, write, download, process |
+| `tagger` | view, write, download, process *(process the inbox & tag; no upload)* |
 | `viewer` | view, download |
-| `scanner` | view + request OCR/indexing only *(for outsourced digitisation)* |
+| `scanner` | view, process *(for outsourced digitisation)* |
 
 A user may be a member of many domains with a different role in each. The bot
 acts entirely as the linked user, with that user's per-domain rights.
@@ -125,8 +127,8 @@ usage_count`.
 
 `document_tag`: `document_id, tag_id, assigned_at, assigned_by`.
 
-Tag admin (`manage`): create, rename, recolour, delete (detaches from docs),
-**merge** two tags into one.
+Creating a tag needs `write` (the inbox workflow adds vocabulary on the fly).
+Rename / recolour / delete (detaches from docs) / **merge** need `manage`.
 
 ### 2.5 Upload batch
 
@@ -498,8 +500,8 @@ non-deleted documents + its trash + its export artifacts.
 
 | phase | scope |
 |---|---|
-| **0 skeleton** | repo layout, config, async DB, Alembic, Docker Compose (`db`+`web`+`worker`), auth (register/login/session), `/health` |
-| **1 core** | domains, members, invites, 6 roles → capability checks; single-file upload with dedup/replace (§13); document CRUD + content-addressed storage; metadata & `doc_date` extraction; inbox queue; flat tags CRUD + assignment |
+| **0 skeleton** ✅ | repo layout, config, async DB, Alembic, Docker Compose (`db`+`web`+`worker`), auth (register/login/session), `/health` |
+| **1 core** ✅ | domains, members, invites, 6 roles → capability deps; single-file upload with dedup / replace / new (§13) + quota; content-addressed blob storage; document CRUD + `doc_date` extraction (pdf/office); inbox queue with per-user defer; flat tags CRUD + merge + assignment |
 | **2 ingest + search** | archive upload & extraction (zip/7z/rar/tar via libarchive); upload batches + conflict report; text parsing; opt-in `index` → `search_tsv`; faceted search + facet counts + `pg_trgm` fuzzy; export (zip + manifest) |
 | **3 OCR** | OCR worker (ocrmypdf/tesseract, concurrency 1); manual + `auto_ocr`; `ocr_*` fields & filters; searchable-PDF sidecars |
 | **4 sets & sharing** | document sets (§15); `build_artifact` job; ad-hoc export as artifact; `download_link` + public `GET /d/{token}` (permanent / one-time); artifact TTL + link pinning |

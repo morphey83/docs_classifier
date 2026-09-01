@@ -1,0 +1,36 @@
+"""Tag schemas."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+
+class TagCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    color: str | None = Field(default=None, max_length=16)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class TagUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    color: str | None = Field(default=None, max_length=16)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class TagMerge(BaseModel):
+    into: uuid.UUID
+
+
+class TagOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    color: str | None
+    description: str | None
+    created_at: datetime
+    usage_count: int = 0
+
+    model_config = {"from_attributes": True}

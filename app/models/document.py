@@ -1,0 +1,184 @@
+"""Document, tag, upload-batch, version, and inbox-defer models."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from enum import StrEnum
+
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.models.base import Base, TimestampMixin, uuid_pk
+
+
+class DocStatus(StrEnum):
+    inbox = "inbox"
+    tagged = "tagged"
+    archived = "archived"
+
+
+class DocSource(StrEnum):
+    upload = "upload"
+    archive = "archive"
+    bot = "bot"
+
+
+class BatchKind(StrEnum):
+    single = "single"
+    archive = "archive"
+
+
+_status_enum = Enum(DocStatus, name="doc_status", native_enum=False, length=16)
+_source_enum = Enum(DocSource, name="doc_source", native_enum=False, length=16)
+_batch_kind_enum = Enum(BatchKind, name="batch_kind", native_enum=False, length=16)
+
+
+class UploadBatch(Base):
+    __tablename__ = "upload_batch"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    domain_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("domain.id", ondelete="CASCADE"), index=True
+    )
+    uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id", ondelete="SET NULL"))
+    source_filename: Mapped[str] = mapped_column(String(500))
+    kind: Mapped[BatchKind] = mapped_column(_batch_kind_enum)
+    item_count: Mapped[int] = mapped_column(Integer, default=0)
+    conflict_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="done")
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class Document(Base):
+    __tablename__ = "document"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    domain_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("domain.id", ondelete="CASCADE"), index=True
+    )
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    storage_key: Mapped[str] = mapped_column(String(80))
+    original_name: Mapped[str] = mapped_column(String(500))
+    title: Mapped[str] = mapped_column(String(500))
+    mime: Mapped[str] = mapped_column(String(160), default="application/octet-stream")
+    ext: Mapped[str] = mapped_column(String(32), default="")
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    doc_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    status: Mapped[DocStatus] = mapped_column(
+        _status_enum, default=DocStatus.inbox, index=True
+    )
+    source: Mapped[DocSource] = mapped_column(_source_enum, default=DocSource.upload)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+
+    upload_batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("upload_batch.id", ondelete="SET NULL"), nullable=True
+    )
+    uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id", ondelete="SET NULL"))
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+
+    tags: Mapped[list[Tag]] = relationship(
+        secondary="document_tag", lazy="selectin", order_by="Tag.name"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("domain_id", "sha256", name="uq_document_domain_id_sha256"),
+    )
+
+
+class Tag(Base, TimestampMixin):
+    __tablename__ = "tag"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    domain_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("domain.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(120))
+    slug: Mapped[str] = mapped_column(String(64))
+    color: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("domain_id", "slug", name="uq_tag_domain_id_slug"),
+    )
+
+
+class DocumentTag(Base):
+    __tablename__ = "document_tag"
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document.id", ondelete="CASCADE"), primary_key=True
+    )
+    tag_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True
+    )
+    assigned_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class DocumentVersion(Base):
+    __tablename__ = "document_version"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document.id", ondelete="CASCADE"), index=True
+    )
+    version_no: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    storage_key: Mapped[str] = mapped_column(String(80))
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    doc_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    original_name: Mapped[str] = mapped_column(String(500))
+    replaced_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    replaced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class InboxDefer(Base):
+    __tablename__ = "inbox_defer"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), primary_key=True
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document.id", ondelete="CASCADE"), primary_key=True
+    )
+    deferred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

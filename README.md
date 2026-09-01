@@ -10,11 +10,17 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
 
 ## Status
 
-**Phase 0 — skeleton.** Done: config, async DB, Alembic migrations, auth
-(register / login / logout / me) with server-side session cookies, `/health`,
-a SAQ worker stub, Docker Compose (`db` + `web` + `worker`), test suite.
+**Phases 0–1 done.**
 
-Roadmap (§12 of the architecture doc): 1 core · 2 ingest + search · 3 OCR ·
+- **0 skeleton** — config, async DB, Alembic, auth (session cookies), `/health`,
+  SAQ worker stub, Docker Compose, tests.
+- **1 core** — domains + members (6 roles) + invites + capability-checked
+  endpoints; content-addressed blob storage; single-file upload with
+  dedup / replace / new + per-domain quota; document CRUD + `doc_date`
+  extraction (PDF / Office); inbox queue with per-user defer;
+  flat tags CRUD / merge / assignment.
+
+Roadmap (§12 of the architecture doc): 2 ingest + search · 3 OCR ·
 4 sets & sharing · 5 trash & lifecycle · 6 bot · 7 web UI.
 
 ## Stack
