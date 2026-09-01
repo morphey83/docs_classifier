@@ -8,8 +8,13 @@
   <style>
     body { padding-block: 0; }
     main.container { padding-block: 1.5rem 4rem; }
-    nav.topbar { border-bottom: 1px solid var(--pico-muted-border-color); }
+    nav.topbar { border-bottom: 1px solid var(--pico-muted-border-color);
+      position: relative; z-index: 20; }
     nav.topbar .container { padding-block: .4rem; }
+    nav.topbar > .container > ul { display: flex; align-items: center; margin: 0;
+      padding: 0; flex-wrap: wrap; gap: .1rem .25rem; }
+    nav.topbar > .container > ul > li { list-style: none; padding: 0 .45rem; }
+    nav.topbar li.push { margin-left: auto; }   /* pin the profile to the right */
     .muted { color: var(--pico-muted-color); }
     .tag { display:inline-block; padding:.05rem .5rem; margin:.1rem; border-radius:1rem;
            background: var(--pico-secondary-background); font-size:.8rem; white-space:nowrap; }
@@ -37,7 +42,11 @@
     .profile-menu { margin-bottom:0; }
     .profile-menu > summary { padding:.3rem .6rem; }
     .profile-menu > summary::after { display:none; }        /* hide pico's caret */
-    .profile-menu ul { min-width: 12rem; }
+    /* open the menu leftward so it never leaves the screen at the right edge */
+    .profile-menu[open] > ul { left:auto; right:0; min-width:13rem; z-index:30; }
+    .profile-menu > ul li { padding:.15rem .25rem; }
+    .profile-menu > ul form { margin:0; }
+    .profile-menu > ul form button { width:100%; }
     .icon-actions { display:flex; gap:.15rem; }
     .icon-actions a, .icon-actions button {
       text-decoration:none; padding:.15rem .35rem; border:0; background:none;
@@ -57,14 +66,10 @@
         <li><a href="/inbox">Очередь на сортировку</a></li>
         <li><a href="/upload">Загрузка</a></li>
         <li><a href="/">Домены</a></li>
-        {% endif %}
-      </ul>
-      <ul>
-        {% if user %}
-        <li>
+        <li class="push">
           <details class="dropdown profile-menu">
             <summary role="button" class="secondary outline" aria-label="Профиль">👤</summary>
-            <ul dir="rtl">
+            <ul>
               <li><a href="/profile">{{ user.username }} — профиль</a></li>
               <li>
                 <form method="post" action="/logout">
@@ -76,7 +81,9 @@
           </details>
         </li>
         {% else %}
-        <li><a href="/login" role="button" class="secondary outline" aria-label="Войти">👤</a></li>
+        <li class="push">
+          <a href="/login" role="button" class="secondary outline" aria-label="Войти">👤</a>
+        </li>
         {% endif %}
       </ul>
     </div>
