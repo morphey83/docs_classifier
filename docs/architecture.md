@@ -22,7 +22,7 @@ Last updated: 2026-09-01 (rev 3 — sets & share links, Caddy).
 | UI | **HTMX + Jinja**, server-rendered, same FastAPI app. (Details in a later round.) |
 | At-rest encryption | Not in scope. |
 | Reverse proxy | **No proxy / no domain on the VDS yet** → compose ships its own **Caddy**. Interim: `tls internal` (self-signed) for IP access; once a (sub)domain points at the VDS, one Caddyfile line switches to real Let's Encrypt TLS. A free `*.duckdns.org` name + Caddy DNS-01 also works. |
-| Document sets | Persistent hand-curated collections → build an immutable archive **artifact** → download, or share via a **permanent / one-time link** (`GET /d/{token}`). See §15. |
+| Document sets | Persistent hand-curated collections. The archive is a **cache of the set's current content** — built on first download, rebuilt automatically (overwritten in place) when the set changes, file purged after `domain.set_archive_ttl_days` (default 7). **Permanent / one-time links** bind to the set's stable artifact and always serve current contents (rights re-checked each access). See §15. |
 
 All open questions resolved. Design phase complete once this rev is acked.
 
@@ -261,7 +261,8 @@ session(id, user_id, created_at, expires_at, user_agent, ip)          # server-s
 domain(id, name, slug, owner_id, description, settings_jsonb, created_at)
   settings: auto_ocr, auto_index, default_ocr_lang,
             max_upload_mb, storage_quota_mb, trash_retention_days,
-            archive_on_conflict (skip|new)
+            archive_on_conflict (skip|new), set_archive_ttl_days,
+            allow_public_links
 domain_member(domain_id, user_id, role, added_by, added_at)
 domain_invite(id, domain_id, email|username, role, token, created_by,
               expires_at, accepted_at)
@@ -279,7 +280,7 @@ document_set(id, domain_id, name, description, visibility (private|domain),
              created_by, item_count, created_at, updated_at)
 document_set_item(set_id, document_id, added_by, added_at, position)   # uniq(set,doc)
 
-artifact(id, domain_id, kind (adhoc_export|set_archive), source_id,
+artifact(id, domain_id, kind (adhoc_export|set_archive), source_id, content_hash?,
          format (zip), status (building|ready|failed), storage_key?, size_bytes,
          item_count, missing_count, snapshot_jsonb, requested_by, created_at,
          expires_at?)                       # replaces export_job
@@ -431,8 +432,9 @@ Separate container, shares DB + `app/services/*`. Acts as the linked user.
 | `parse_text` | pdf (pymupdf), docx (python-docx), xlsx (openpyxl), pptx, txt/csv/md, html, eml/msg |
 | `ocr_document` | manual request or `auto_ocr` |
 | `index_document` | manual request or `auto_index` |
-| `build_artifact` | ad-hoc export **or** set-archive request — zips a snapshot + manifest |
-| `cleanup` | expired artifacts (unless pinned by a live permanent link), trash past retention, orphan blobs (refcount = 0) |
+| `build_artifact` | ad-hoc export — zips a point-in-time snapshot + manifest |
+| `build_set_archive` | (re)builds a set's archive cache; sets `content_hash` |
+| `cleanup` | purge expired set-archive **files** (keep row + links → rebuild on next access); delete expired ad-hoc exports (row + file); trash past retention; orphan blobs (refcount 0) |
 
 Queue: **SAQ on Postgres** — no Redis. Worker image carries the OCR + archive
 native deps.
@@ -462,11 +464,13 @@ Global hard caps in `.env` (a per-domain setting can never exceed these):
 | `MAX_ARCHIVE_DEPTH` | 2 | nested-archive recursion |
 | `DEFAULT_DOMAIN_QUOTA_MB` | 5000 | storage per domain |
 | `DEFAULT_TRASH_RETENTION_DAYS` | 30 | |
-| `EXPORT_TTL_HOURS` | 48 | async export artifact lifetime |
+| `EXPORT_TTL_HOURS` | 48 | ad-hoc export artifact lifetime |
+| `SET_ARCHIVE_TTL_DAYS` | 7 | set-archive cache file lifetime (per-domain `set_archive_ttl_days`) |
 
 Per-domain overrides (`domain.settings`, editable by `owner`/`admin`, clamped to
 the global caps): `storage_quota_mb`, `max_upload_mb`, `trash_retention_days`,
-`auto_ocr`, `auto_index`, `default_ocr_lang`, `archive_on_conflict`.
+`auto_ocr`, `auto_index`, `default_ocr_lang`, `archive_on_conflict`,
+`set_archive_ttl_days`, `allow_public_links`.
 
 Enforcement: upload rejected with `413` when
 `used_bytes + incoming > storage_quota`; for archives the *projected* unpacked
@@ -504,7 +508,7 @@ non-deleted documents + its trash + its export artifacts.
 | **1 core** ✅ | domains, members, invites, 6 roles → capability deps; single-file upload with dedup / replace / new (§13) + quota; content-addressed blob storage; document CRUD + `doc_date` extraction (pdf/office); inbox queue with per-user defer; flat tags CRUD + merge + assignment |
 | **2 ingest + search** ✅ | archive upload → background extraction (zip/tar stdlib, 7z py7zr, rar rarfile+unar) with bomb/traversal guards + nested recursion; `upload_batch` + `upload_batch_item` (per-entry outcomes); opt-in `POST /documents/{id}/index` → parse text + PG `search_tsv` (SQLite → `ILIKE`); faceted search with tag/type/status facet counts; `POST /domains/{d}/exports` → `artifact` (zip + manifest.json/csv), authed `GET /artifacts/{id}[/download]` |
 | **3 OCR** ✅ | SAQ worker on Postgres (`app/worker.py`) + `job_mode=inline` for dev/tests (`app/jobs.dispatch`); `POST /documents/{id}/ocr` + per-domain `auto_ocr` (image / image-only PDF only, else 422/unsupported); ocrmypdf for PDFs, pytesseract for images; `ocr_status`/`ocr_at`/`ocr_lang` + `has_ocr` filter; re-indexes with the OCR text; searchable-PDF sidecar under `DATA_DIR/derived/`. Archive extraction + artifact builds also moved onto `dispatch`. |
-| **4 sets & sharing** | document sets (§15); `build_artifact` job; ad-hoc export as artifact; `download_link` + public `GET /d/{token}` (permanent / one-time); artifact TTL + link pinning |
+| **4 sets & sharing** | document sets (§15); set content hash + `build_set_archive` job (lazy build, rebuild-on-change, overwrite in place); transparent `GET …/sets/{s}/archive[/download]` (202 while building); `download_link` bound to the set's stable artifact + public `GET /d/{token}` (permanent / one-time, rights re-checked); `cleanup` purges expired archive files |
 | **5 trash & lifecycle** | soft-delete → Корзина; 30-day auto-purge (`cleanup` job); owner force-purge; restore-on-reupload (§14); `document_version` on replace; blob refcount GC |
 | **6 bot** | aiogram bot: account linking, upload, inbox processing, `/find`, sets, export |
 | **7 web UI** | HTMX + Jinja — *separate design round* |
@@ -547,8 +551,11 @@ that a user fills incrementally: run a search → tick some results →
 **"добавить в набор"** → pick an existing set or create a new one. Distinct from
 a search filter (dynamic) and from an ad-hoc export (one-shot).
 
-When the set is ready, the user **generates an archive** from it and either
-downloads it directly or creates a **share link** — *permanent* or *one-time*.
+The user never explicitly "builds" an archive. The archive is a **cache of the
+set's current content**, produced on demand and rebuilt automatically whenever
+the set has changed. Links are created against the set and keep working across
+rebuilds — a link always serves the set's *current* contents (rights are
+re-checked on every access).
 
 ### Model
 
@@ -556,41 +563,83 @@ downloads it directly or creates a **share link** — *permanent* or *one-time*.
   (`private` to creator, or `domain` = visible to all members),
   `created_by`, `item_count`.
 - `document_set_item` — `(set_id, document_id)` unique (idempotent add),
-  `added_by`, `added_at`, `position` (manual reorder). If the document is later
-  trashed the item stays but is flagged stale; on blob purge it is removed.
-- `artifact` — a built zip on disk (`kind = set_archive`, `source_id = set_id`;
-  or `kind = adhoc_export`). Holds a **snapshot** (`snapshot_jsonb`: the exact
-  document ids + versions at build time) so the file is immutable even if the
-  set changes afterwards. `status`, `size_bytes`, `item_count`, `missing_count`,
-  `expires_at`.
-- `download_link` — `artifact_id`, opaque `token` (≈192-bit, URL-safe),
-  `max_downloads` (`1` = one-time, `NULL` = unlimited), `expires_at` (nullable),
-  `download_count`, `revoked_at`, `last_downloaded_at`, `created_by`.
+  `added_by`, `added_at`, `position` (manual reorder). If a document is trashed
+  the item stays but is skipped on build; on blob purge it is removed.
+- `artifact` — **one per set** (`kind = set_archive`, `source_id = set_id`),
+  created lazily and **overwritten in place** when the set changes. Fields:
+  `status` (`building`/`ready`/`failed`), `storage_key` (fixed
+  `set-<set_id>.zip`, cleared when the file is purged), `content_hash` (the set
+  hash the current file was built from), `size_bytes`, `item_count`,
+  `missing_count`, `snapshot` (doc ids at last build), `expires_at` (**file**
+  expiry — see cleanup). Ad-hoc exports also use `artifact`
+  (`kind = adhoc_export`) but those are point-in-time snapshots, never rebuilt.
+- `download_link` — `artifact_id` (the set's stable artifact), opaque `token`
+  (≈192-bit, URL-safe), `max_downloads` (`1` = one-time, `NULL` = unlimited),
+  `expires_at` (nullable), `download_count`, `revoked_at`, `last_downloaded_at`,
+  `created_by`.
+
+### Set content hash
+
+Deterministic, computed on every archive access and compared to
+`artifact.content_hash`:
+
+```
+sha256(json([
+  (str(doc.id), doc.sha256, doc.title,
+   doc.doc_date.isoformat() or "", ",".join(sorted(tag_slugs)))
+  for doc in non-deleted items, sorted by doc.id
+]))
+```
+
+Covers everything that ends up in the zip or the manifest, so any change that
+would change the archive triggers a rebuild.
+
+### Ensure-current (the transparent build)
+
+On `GET …/sets/{s}/archive[/download]` and on `GET /d/{token}`:
+
+1. compute `current_hash` from the set.
+2. load the set's `artifact` (create it, `status=building`, if absent).
+3. if `artifact.content_hash != current_hash` **or** the file is missing **or**
+   `expires_at` has passed → enqueue `build_set_archive`, set
+   `status=building`, `expires_at = now + domain.set_archive_ttl_days`.
+4. respond:
+   - `ready` and current → **200**, stream the file.
+   - building → **202** `{status:"building", retry_after: 2}` — the client
+     polls / retries.
+
+`build_set_archive(set_id)` writes `data/artifacts/set-<set_id>.zip` (files/ +
+`manifest.json` + `manifest.csv`), sets `content_hash`, `size_bytes`,
+`item_count`, `missing_count`, `status=ready`.
 
 ### Workflow
 
 1. Search results carry checkboxes → **"добавить в набор"** → dialog lists the
-   user's open sets (+ editable `domain`-visible sets) or **"＋ создать набор"**.
+   user's sets (+ editable `domain`-visible sets) or **"＋ создать набор"**.
 2. Duplicates are ignored. Toast: *добавлено N в «набор X»*.
 3. **Наборы** section: each set with its count; open a set to review, reorder,
    remove items, edit name/visibility.
-4. In a set → **"Сформировать архив"** → enqueues `build_artifact` →
-   `artifact(building → ready)`. The set keeps a history of its artifacts (by
-   date); re-generating makes a new one.
-5. On a ready artifact: **"Скачать"** (authed) and **"Создать ссылку"** →
-   choose *постоянная* (`max_downloads=NULL`, `expires_at=NULL`) /
+4. **Скачать архив** — just a download. The first request builds it (202 while
+   building), later requests stream it. Editing the set and downloading again
+   transparently rebuilds.
+5. **Создать ссылку** — *постоянная* (`max_downloads=NULL`, `expires_at=NULL`) /
    *одноразовая* (`max_downloads=1`, optional expiry) / *с истечением* (custom
-   `expires_at`).
-6. Links are managed on the set: list, copy, see download count, **revoke**.
+   `expires_at`). The link binds to the set's stable `artifact_id`.
+6. Links are managed on the set: list, copy, download count, **revoke**.
 
 ### Public download — `GET /d/{token}`
 
-No auth. Checks, in order: link not `revoked`, not past `expires_at`,
-`download_count < max_downloads` (or unlimited); artifact `ready` and not
-expired. Then streams the file (`Content-Disposition: attachment;
-filename="<set> <date>.zip"`), increments `download_count`, sets
-`last_downloaded_at`. IP rate-limited. A one-time link is dead after the first
-completed download.
+No auth cookie, but **rights are re-checked every time**:
+
+- link not `revoked`, not past `expires_at`, `download_count < max_downloads`;
+- `allow_public_links` still `true` for the domain;
+- the link's `created_by` still has `download` in the domain (removed → link
+  dies).
+
+Then runs *ensure-current* (§ above); if `ready`, streams the file
+(`Content-Disposition: attachment; filename="<set> <date>.zip"`), increments
+`download_count`, sets `last_downloaded_at`. IP rate-limited. A one-time link is
+dead after the first completed download.
 
 ### Permissions
 
@@ -598,23 +647,24 @@ completed download.
 |---|---|
 | create / edit own set, add/remove items | `view` |
 | edit a `domain`-visible set someone else made | `manage` (or be the creator) |
-| generate an archive | `download` |
+| download the set archive | `download` |
 | create a **one-time** link | `download` |
 | create a **permanent** link | `write` *(a standing public URL is a bigger commitment)* |
 | revoke a link | link creator, or `manage` |
 
-Domain setting `allow_public_links` (default `true`) — owner can switch off all
-link creation. Every link create / revoke / public download is in `audit_log`.
+Domain setting `allow_public_links` (default `true`). Every link create /
+revoke / public download is in `audit_log`.
 
-### Lifecycle interplay
+### Lifecycle & cleanup
 
-- An `artifact` normally expires after `EXPORT_TTL_HOURS` (ad-hoc) or a longer
-  set-archive TTL, and the `cleanup` job deletes the zip.
-- **A live, non-expiring `download_link` pins its artifact** — `cleanup` skips
-  any artifact that still has an active permanent link. Revoke the link (or it
-  expires) → the artifact becomes eligible for cleanup again.
-- Deleting a set does **not** delete already-built artifacts or their links
-  (they were snapshots); it just removes the curation list.
+- Set‑archive **files** expire after `domain.set_archive_ttl_days` (default
+  **7**, per‑domain). The `cleanup` job deletes any expired archive file and
+  clears `artifact.storage_key` / sets `status=building` — the row and its
+  links survive; the next access rebuilds. Nothing is "pinned", so temp
+  storage stays bounded.
+- Ad‑hoc export files expire after `EXPORT_TTL_HOURS` and are removed row‑and‑
+  all (they are snapshots, not rebuildable).
+- Deleting a set deletes its artifact file, artifact row, and links.
 
 ---
 
