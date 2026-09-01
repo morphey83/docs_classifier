@@ -60,8 +60,14 @@
     .icon-actions .danger:hover { background:#fee2e2; }
     .icon-actions .icon { width:1.25em; height:1.25em; vertical-align:middle; }
     .icon-actions .danger { color: var(--pico-del-color, #b3261e); }
-    .freq-tags { display:flex; flex-wrap:wrap; gap:.35rem; margin:.2rem 0 1rem; }
+    .inbox-preview { display:block; width:100%; max-height:52vh; object-fit:contain;
+      border-radius:.4rem; margin:.1rem 0 1.1rem; background:#f1f3f5; }
+    .tag-actions { display:flex; justify-content:space-between; gap:.5rem; margin-top:1rem; }
+    .freq-tags { display:flex; flex-wrap:nowrap; gap:.35rem; align-items:center;
+      margin:-.4rem 0 1rem; overflow-x:auto; padding-bottom:.3rem; }
+    .freq-tags .freq-label { flex:none; font-size:.8rem; }
     .freq-tags .freq {
+      flex:none; white-space:nowrap;
       padding:.15rem .7rem; border-radius:1rem; font-size:.82rem; line-height:1.4;
       cursor:pointer; transition:none;
       background:#fff; border:1px solid var(--pico-primary);

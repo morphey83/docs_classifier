@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+
+# Telegram rejects photos whose file is much bigger than this; past it we fall
+# back to a plain text card.
+_PREVIEW_MAX = 9 * 1024 * 1024
 
 _LINK_HINT = (
     "Аккаунт не привязан. Отправьте /start, чтобы связать этот Telegram "
@@ -25,3 +29,22 @@ async def reply(event: Message | CallbackQuery, text: str, **kwargs) -> None:
             await event.message.answer(text, **kwargs)
     else:
         await event.answer(text, **kwargs)
+
+
+async def send_doc_card(
+    target: Message, doc, text: str, *, reply_markup: InlineKeyboardMarkup | None = None
+) -> None:
+    """Send a document card: as a photo with caption when the doc is a
+    previewable image (thumbnail, or the original if it's small enough),
+    otherwise a plain text message. Used for search results and the inbox."""
+    from aiogram.types import FSInputFile
+
+    from app import storage
+    from app.services import thumbs
+
+    if thumbs.can_thumb(doc.mime, doc.ext):
+        preview = await thumbs.ensure_thumb(doc.sha256) or storage.blob_path(doc.sha256)
+        if preview.is_file() and preview.stat().st_size <= _PREVIEW_MAX:
+            await target.answer_photo(FSInputFile(preview), caption=text, reply_markup=reply_markup)
+            return
+    await target.answer(text, reply_markup=reply_markup)

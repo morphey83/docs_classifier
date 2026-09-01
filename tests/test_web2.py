@@ -85,9 +85,17 @@ async def test_inbox_table_and_modal_tagging(alice, web_domain):
     doc_id = re.search(r'data-doc="([0-9a-f-]{36})"', card.text).group(1)
     assert 'class="freq' in card.text or "частые" not in card.text  # chips section optional
 
+    # the card carries an editable "Название" field prefilled with the title
+    assert 'name="title"' in card.text
+
     r = await alice.post(
         f"/inbox/{doc_id}/done",
-        data={"tags": "готово", "domain_id": "", "csrf_token": web_csrf(card.text)},
+        data={
+            "tags": "готово",
+            "title": "Переименованный документ",
+            "domain_id": "",
+            "csrf_token": web_csrf(card.text),
+        },
         headers={"HX-Request": "true"},
     )
     assert r.status_code == 200
@@ -96,6 +104,10 @@ async def test_inbox_table_and_modal_tagging(alice, web_domain):
 
     table = await alice.get("/inbox/table", headers={"HX-Request": "true"})
     assert "в очереди: 1" in table.text
+
+    # the rename from the modal stuck
+    doc_page = await alice.get(f"/documents/{doc_id}")
+    assert "Переименованный документ" in doc_page.text
 
 
 async def test_inbox_defer_advances(alice, web_domain):

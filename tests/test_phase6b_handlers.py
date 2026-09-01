@@ -35,7 +35,7 @@ class RecordingBot(Bot):
     async def __call__(self, method: TelegramMethod, request_timeout: int | None = None):
         self.calls.append(method)
         name = type(method).__name__
-        if name in ("SendMessage", "SendDocument", "EditMessageText"):
+        if name in ("SendMessage", "SendDocument", "SendPhoto", "EditMessageText"):
             return Message(
                 message_id=len(self.calls),
                 date=datetime.now(tz=UTC),
@@ -116,6 +116,28 @@ async def test_find_returns_results_across_domains(linked):
     joined = "\n".join(bot.texts())
     assert "[Alpha]" in joined and "[Beta]" in joined
     assert "Найдено: 2" in joined
+
+
+async def test_find_sends_image_results_as_photos(linked):
+    from io import BytesIO
+
+    from PIL import Image
+
+    alice, _uid = linked
+    d = (await alice.post("/api/domains", json={"name": "Снимки"})).json()
+    buf = BytesIO()
+    Image.new("RGB", (64, 48), (10, 90, 160)).save(buf, "PNG")
+    await alice.post(
+        f"/api/domains/{d['id']}/uploads",
+        files={"file": ("shot-plan.png", buf.getvalue(), "image/png")},
+    )
+
+    bot, dp = RecordingBot(), build_dispatcher()
+    await dp.feed_update(bot, _message_update("/find plan"))
+    kinds = [type(m).__name__ for m in bot.calls]
+    assert "SendPhoto" in kinds  # the image result is a photo card, not plain text
+    captions = [getattr(m, "caption", "") or "" for m in bot.calls]
+    assert any("shot-plan" in c for c in captions)
 
 
 async def test_domain_command_lists_memberships(linked):

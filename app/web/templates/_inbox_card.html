@@ -5,38 +5,42 @@
 </div>
 {% else %}
 <div data-doc="{{ doc.id }}">
-  <hgroup>
-    <h4><a href="/documents/{{ doc.id }}" target="_blank">{{ doc.title }}</a></h4>
-    <p class="muted">[{{ domain.name }}] · {{ doc.original_name }} ·
-      {{ doc.mime }} · {{ doc.size_bytes|humansize }} · {{ doc.doc_date|shortdate }}</p>
-  </hgroup>
+  <p class="muted" style="margin-bottom:.5rem">
+    [{{ domain.name }}] · {{ doc.mime }} · {{ doc.size_bytes|humansize }} ·
+    {{ doc.doc_date|shortdate }} ·
+    <a href="/documents/{{ doc.id }}" target="_blank">открыть ↗</a>
+  </p>
 
   {% if is_image %}
-  <img src="/documents/{{ doc.id }}/thumb" alt="превью"
-       style="max-width:100%;max-height:42vh;border-radius:.4rem;display:block;margin:.4rem 0">
-  {% endif %}
-
-  {% if cur_tags %}<p>{% for n in cur_tags|sort %}<span class="tag">{{ n }}</span>{% endfor %}</p>{% endif %}
-
-  {% if freq %}
-  <p class="muted" style="margin-bottom:.2rem">частые теги:</p>
-  <div class="freq-tags">
-    {% for name in freq %}
-    <button type="button" class="freq" data-tag="{{ name }}">{{ name }}</button>
-    {% endfor %}
-  </div>
+  <img src="/documents/{{ doc.id }}/thumb" alt="превью" class="inbox-preview">
   {% endif %}
 
   <form hx-post="/inbox/{{ doc.id }}/done" hx-target="#tagcard">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <input type="hidden" name="domain_id" value="{{ picked }}">
-    <input name="tags" id="tagfield" autocomplete="off" autofocus
-           value="{{ cur_tags|join(', ') }}" placeholder="теги через запятую">
-    <div role="group">
-      <button type="submit">Готово, дальше →</button>
+
+    <label>Название
+      <input name="title" value="{{ doc.title }}" autocomplete="off" maxlength="500" required>
+    </label>
+
+    <label>Теги
+      <input name="tags" id="tagfield" autocomplete="off" autofocus
+             value="{{ cur_tags|join(', ') }}" placeholder="через запятую">
+    </label>
+
+    {% if freq %}
+    <div class="freq-tags">
+      <span class="freq-label muted">частые:</span>
+      {% for name in freq %}
+      <button type="button" class="freq" data-tag="{{ name }}">{{ name }}</button>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="tag-actions">
       <button type="button" hx-post="/inbox/{{ doc.id }}/defer" hx-target="#tagcard"
               hx-include="closest form" class="secondary outline">Отложить</button>
-      <button type="button" class="secondary" onclick="closeTag()">Закрыть</button>
+      <button type="submit">Готово, дальше →</button>
     </div>
   </form>
 </div>

@@ -166,6 +166,7 @@ async def inbox_done(
     request: Request,
     document_id: uuid.UUID,
     tags: str = Form(default=""),
+    title: str = Form(default=""),
     domain_id: str = Form(default=""),
     _: None = CsrfGuard,
     user=Depends(current_user),
@@ -174,6 +175,8 @@ async def inbox_done(
     doc, domain = await _doc_domain(db, user, document_id)
     if domain is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "нет прав на этот документ")
+    if title.strip():
+        await docs_svc.update_document(db, doc, title=title)
     names = [p.strip() for p in tags.split(",") if p.strip()]
     tag_ids = []
     for name in names:

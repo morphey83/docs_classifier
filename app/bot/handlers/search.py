@@ -18,7 +18,7 @@ from app.bot.access import BotAccessError, doc_ctx, member_domain_ids, member_do
 from app.bot.callbacks import DocCb, NewSetCb, PageCb, SetPickCb
 from app.bot.flows import Edit
 from app.bot.formatting import result_line
-from app.bot.handlers._util import needs_link
+from app.bot.handlers._util import needs_link, send_doc_card
 from app.bot.keyboards import pager_kb, result_kb, set_pick_kb
 from app.bot.parsing import describe, parse_query, to_filters
 from app.config import settings
@@ -86,7 +86,9 @@ async def _run(target: Message, db: AsyncSession, user: User, pq) -> None:
     tag_map = await _tags_for(db, [d.id for d in docs])
     for doc in docs:
         _, _, caps = await _safe_caps(db, user, doc)
-        await target.answer(
+        await send_doc_card(
+            target,
+            doc,
             result_line(doc, names.get(doc.domain_id), tag_map.get(doc.id, [])),
             reply_markup=result_kb(doc, caps),
         )
