@@ -1,7 +1,7 @@
 # DocsClassifier — architecture & requirements
 
 Status: **phases 0–5 built.** Design locked.
-Last updated: 2026-09-01 (rev 3 — sets & share links, Caddy).
+Last updated: 2026-09-01 (rev 4 — cross-domain search, Telegram linking, allowed file types).
 
 ---
 
@@ -23,6 +23,10 @@ Last updated: 2026-09-01 (rev 3 — sets & share links, Caddy).
 | At-rest encryption | Not in scope. |
 | Reverse proxy | **No proxy / no domain on the VDS yet** → compose ships its own **Caddy**. Interim: `tls internal` (self-signed) for IP access; once a (sub)domain points at the VDS, one Caddyfile line switches to real Let's Encrypt TLS. A free `*.duckdns.org` name + Caddy DNS-01 also works. |
 | Document sets | Persistent hand-curated collections. The archive is a **cache of the set's current content** — built on first download, rebuilt automatically (overwritten in place) when the set changes, file purged after `domain.set_archive_ttl_days` (default 7). **Permanent / one-time links** bind to the set's stable artifact and always serve current contents (rights re-checked each access). See §15. |
+| Cross-domain search | The bot (and later a global web search) needs to search across every domain a user belongs to at once. `GET /documents` makes `domain_id` an optional filter rather than a path segment; `GET /domains/{d}/documents` is kept for domain-scoped browsing. Tag filters switch from slug- to **name**-matching (case-insensitive) so they compose across domains with different vocabularies. See §7. |
+| Telegram account linking | **Bidirectional, always verified** — never a typed `@username`. Bot-initiated (`/start`) sends a link to a minimal linking page; web-initiated (profile) shows a bot deep-link (`t.me/<bot>?start=<token>`). One `tg_link_token`, single-use, 15 min TTL, either direction. See §8. |
+| Allowed file types | Owner/admin can restrict a domain to a list of extensions (`domain.settings.allowed_types`, instance default `DEFAULT_ALLOWED_TYPES`). A disallowed direct upload is rejected (415); a disallowed archive entry is skipped and reported on the batch, not fatal. Applies to web and bot alike (one choke point, `ingest_upload`). See §3.1. |
+| Public links & the bot | No domain yet, so every absolute link (share links, the bot's deep-links) is built from one setting, **`PUBLIC_BASE_URL`** — flipping bare-IP → real (sub)domain later touches config, not code. See §10. |
 
 All open questions resolved. Design phase complete once this rev is acked.
 
@@ -155,6 +159,24 @@ status (processing|done|partial), error, uploaded_at`.
    Unified via **libarchive** (`libarchive-tools` in the image) with `py7zr` /
    stdlib `zipfile` as fallbacks. `rar` needs `unar`/`unrar` in the image —
    licensing note in the deploy docs.
+5. **Allowed file types** — a domain's owner/admin can restrict which types are
+   ever stored as documents, via `domain.settings.allowed_types` (a list of
+   extensions, e.g. `["pdf", "docx", "png"]`; `null`/unset = unrestricted). New
+   domains inherit the instance-wide `DEFAULT_ALLOWED_TYPES` (also `null` by
+   default). The check applies uniformly wherever a document is created —
+   direct upload *and* each entry unpacked from an archive — from one place:
+   `ingest_upload()` raises `DisallowedType` after probing `mime`/`ext`.
+   - Direct upload of a disallowed type → **415**, body names the type and the
+     domain's allowed list.
+   - An archive entry of a disallowed type is **skipped, not fatal**: recorded
+     on its `upload_batch_item` as `outcome="skipped_type"` with a `note`
+     explaining why, exactly like a name conflict is skipped today (§13). The
+     batch's item list (`GET /domains/{d}/uploads/{batch}`) is how the caller
+     — web or bot — learns which files were left out and why; the bot turns
+     that into a short summary message after an archive upload.
+   - This is content-addressed storage, so a rejected direct upload leaves an
+     orphan blob; the existing `cleanup` orphan sweep (§9) reclaims it — no
+     special-cased pre-check needed before the blob is written.
 
 ### 3.2 Inbox processing ("на обработку")
 
@@ -262,7 +284,7 @@ domain(id, name, slug, owner_id, description, settings_jsonb, created_at)
   settings: auto_ocr, auto_index, default_ocr_lang,
             max_upload_mb, storage_quota_mb, trash_retention_days,
             archive_on_conflict (skip|new), set_archive_ttl_days,
-            allow_public_links
+            allow_public_links, allowed_types (list[ext] | null)
 domain_member(domain_id, user_id, role, added_by, added_at)
 domain_invite(id, domain_id, email|username, role, token, created_by,
               expires_at, accepted_at)
@@ -290,6 +312,12 @@ download_link(id, artifact_id, token, max_downloads?, download_count,
 audit_log(id, domain_id?, actor_id, action, target_type, target_id,
           detail_jsonb, at)
 job(…)                                    # SAQ table(s)
+
+tg_link_token(id, token, tg_id?, tg_username?, account_id?, created_at,
+              expires_at, consumed_at)    # bridges a Telegram id <-> an account;
+                                           # either tg_id or account_id is set at
+                                           # creation, the other filled on consume
+                                           # (§8). TTL 15 min, single-use.
 ```
 
 Uniqueness: partial unique index `document (domain_id, sha256)` where
@@ -308,7 +336,8 @@ dedup). Derived files: `DATA_DIR/derived/<h>/…`.
 POST   /auth/register            POST /auth/login    POST /auth/logout
 GET    /auth/me
 POST   /auth/api-keys            DELETE /auth/api-keys/{id}
-POST   /auth/tg-link             # returns one-time code for the bot
+POST   /auth/tg-link             # web-initiated linking: {token, deep_link} (§8)
+GET    /tg/link/{token}          # minimal standalone page: log in / register, confirm
 
 GET    /domains                  POST /domains
 GET    /domains/{d}              PATCH /domains/{d}      DELETE /domains/{d}
@@ -318,7 +347,8 @@ POST   /invites/{token}/accept
 
 POST   /domains/{d}/uploads              # file(s) or archive  -> batch/docs
 GET    /domains/{d}/uploads/{batch}
-GET    /domains/{d}/documents            # faceted search (§7)
+GET    /domains/{d}/documents            # faceted search, one domain (§7)
+GET    /documents                        # faceted search, cross-domain (§7)
 GET    /documents/{id}                   PATCH /documents/{id}
 GET    /documents/{id}/content           # download original (+ range)
 GET    /documents/{id}/preview           # thumbnail / first page
@@ -331,6 +361,7 @@ GET    /domains/{d}/inbox/next           GET /domains/{d}/inbox        # count/l
 GET    /domains/{d}/tags                 POST /domains/{d}/tags
 PATCH  /domains/{d}/tags/{id}            DELETE /domains/{d}/tags/{id}
 POST   /domains/{d}/tags/{id}/merge      # into another tag
+GET    /tags                             # cross-domain tag-name options (§7)
 
 # --- document sets (§15) ---
 GET    /domains/{d}/sets                 POST /domains/{d}/sets
@@ -378,14 +409,43 @@ Growth path (only if the VDS is upgraded): add **Manticore Search** behind the
 fuzzy. Not Elasticsearch. A hunspell Russian dictionary + the `RUM` index in
 Postgres is an intermediate upgrade that needs no new container.
 
-### Query parameters
+### Cross-domain search
 
-`GET /domains/{d}/documents?…`
+The search core is domain-**set**-based, not domain-single: `search_documents(db,
+domain_ids, filters)`. Two routes share it:
+
+- `GET /domains/{d}/documents` — the existing domain-scoped route; membership
+  in `{d}` is required (`view`), `domain_ids = [d]`. Unchanged response shape,
+  kept for a "documents in this domain" view.
+- `GET /documents` — **the primary route for the bot (and eventually a
+  cross-domain web search)**. No path-scoped domain. `domain_id` becomes an
+  ordinary *optional* query filter: given → narrows to that one domain (the
+  caller must be a member); omitted → searches every domain the caller belongs
+  to. Each hit's `domain_id` (and, on this route, a resolved `domain_name`) is
+  already part of `DocumentOut`, so results are self-describing without N+1
+  lookups.
+
+**Tags, either route:** `tags_all` / `tags_any` / `tags_none` now match by tag
+**name**, case-insensitively — not by slug. A document only ever carries tags
+from its own domain's vocabulary, so name-matching composes correctly across
+domains without needing shared ids; it's also simply what a caller has on hand
+(nobody types a slug). Slugs remain an internal, per-domain implementation
+detail for `tag` CRUD and uniqueness.
+
+**`GET /tags?domain_id=`** — the filter-picker's source of *available* tag
+values: aggregates by (lowercased) name across the domain(s) searched
+(one, if `domain_id` given; otherwise every domain the caller belongs to),
+summing usage counts. Distinct from `GET /domains/{d}/tags` (unchanged),
+which manages *that domain's* vocabulary (create/rename/merge — inherently
+per-domain operations).
+
+### Query parameters
 
 | param | matches |
 |---|---|
+| `domain_id` | narrows to one domain; omitted on `GET /documents` = all of the caller's domains |
 | `q` | full-text over `title` + (for indexed docs) `extracted_text`, via `search_tsv` + `pg_trgm` fuzzy fallback |
-| `tags_all` | has **every** listed tag (slugs, comma-sep) |
+| `tags_all` | has **every** listed tag (names, comma-sep, case-insensitive) |
 | `tags_any` | has **any** listed tag |
 | `tags_none` | has **none** of the listed tags |
 | `type` / `ext` / `mime` | document type |
@@ -399,29 +459,90 @@ Postgres is an intermediate upgrade that needs no new container.
 | `sort` | `relevance` \| `doc_date` \| `uploaded_at` \| `size` \| `title` |
 | `page`, `page_size` | |
 
-Saved searches (per user, per domain) back the "выдать нужный набор" export and
-the bot's `/find` shortcuts.
+Facets (tag/type/status histograms) are computed over whatever domain set was
+searched; the tag bucket groups by name the same way filtering does.
+
+Saved searches (per user) back the "выдать нужный набор" export and the bot's
+`/find` shortcuts (§8) — persisted so a bare `/find` repeats the last query.
 
 ---
 
 ## 8. Telegram bot (aiogram 3)
 
-Separate container, shares DB + `app/services/*`. Acts as the linked user.
+Separate container, **long-polling** (no public domain/cert yet — switch to a
+webhook once Caddy has real TLS). Shares the DB + imports `app/services/*`
+directly, in-process — the bot is not an HTTP client of its own API; only the
+account-linking handshake touches a browser. A middleware resolves
+`message.from_user.id` → `User` via `tg_id` on every update; no match →
+"сначала привяжите аккаунт: /start".
 
-- `/start` → link account with the one-time code from the web UI.
-- `/domain` → pick the "current" domain (inline list of the user's memberships).
+### Account linking — bidirectional, always verified
+
+One `tg_link_token` (§5), consumed once, TTL 15 min. Verification means: the
+side that claims a Telegram identity must actually act *from* that Telegram
+account (typing `/start <token>` proves it), and the side that claims a
+service account must actually be an authenticated web session. A plain
+"type your @username in your profile" is **not** accepted anywhere — usernames
+aren't proof of ownership; Telegram identifies by numeric id.
+
+- **Bot-initiated** (`/start`, no payload): bot creates a token holding this
+  `tg_id` (+ `tg_username`), sends a link to `GET /tg/link/{token}` — a
+  **minimal standalone page** (log in or register, then "Привязать этот
+  Telegram?"; not the full app shell — ships with Phase 6a, ahead of the real
+  Phase 7 UI). Confirming sets `user.tg_id`, consumes the token.
+- **Web-initiated** (profile → "Подключить Telegram"): `POST /auth/tg-link`
+  (authed) creates a token holding `account_id`, returns
+  `{token, deep_link: "https://<host>/…"}` — actually a `t.me/<bot>?start=<token>`
+  URL; the page shows it as a button/QR. Tapping it opens the bot, which
+  receives `/start <token>`, matches the pending token, sets `user.tg_id`.
+- Conflicts: token's `tg_id` already linked elsewhere → named error, no
+  silent takeover. Caller already has a `tg_id` → must unlink first.
+- Every absolute link the bot ever sends (share links, this deep-link, the
+  linking page URL) is built from a configured **`PUBLIC_BASE_URL`** (§10) —
+  not inferred from the request — so it survives the move from bare-IP to a
+  real (sub)domain without code changes; sysadmin flips one setting.
+
+### Everyday use
+
+- `/domain` → pick or clear the "current" domain (affects only what upload
+  defaults to and what a bare `/find` searches by default — search itself is
+  cross-domain, see below).
 - **Upload**: send a document / photo / archive → ingested into the current
-  domain's inbox. Bot API download cap ≈ 20 MB — the bot tells the user to use
-  the web UI for anything larger (accepted limitation, no self-hosted Bot API
-  server).
-- **Process inbox**: `/inbox` → bot shows the next document (preview + metadata)
-  with an inline keyboard: frequent tags as buttons, "＋ new tag" (free text
-  reply), "skip", "done". Loops until the inbox is empty.
-- **Search**: `/find договор #контрагент type:pdf 2024` → paginated results,
-  each with a "➕ в набор" button; tap a result to receive the file.
-- **Sets**: `/sets` → list; open one → "📦 сформировать архив" → bot sends the
-  zip, or a share link if it is large / the user asks for one.
-- **Export**: the last `/find` → "📦 архив" → same as above.
+  domain's inbox (asks which domain first if none is set and the user belongs
+  to more than one). Bot API download cap ≈ 20 MB — larger files: use the web.
+  A disallowed file type (§3.1 `allowed_types`) is rejected with the reason;
+  for an archive, the bot summarizes what was skipped and why after
+  processing (`GET /domains/{d}/uploads/{batch}` item outcomes).
+- **Process inbox**: `/inbox` → next document (preview + metadata) with an
+  inline keyboard: frequent tags as buttons, "＋ new tag" (free-text reply),
+  "skip", "done". Loops until empty.
+- **Search**: `/find договор #контрагент type:pdf 2024` hits `GET /documents`
+  (cross-domain unless `/domain` narrows it) — mini-syntax in the message text
+  (`#tag`, `type:`, `ocr:yes/no`, `index:yes/no`, a bare year/date) plus
+  inline "refine" buttons for what doesn't fit in text: 📅 период (месяц/год/
+  всё), 🗂 тип, 📁 домен, 🔖 теги (options pulled from `GET /tags`, cross-domain).
+  Results show `[Домен] Название · тип · дата`; `◀ ▶` pagination. The last
+  query persists per user so a bare `/find` repeats it.
+- **Per-result actions** (inline keyboard under each hit): ✏️ название,
+  🔖 теги (add/remove — reuses the domain's vocabulary, `write` cap), 🔍 OCR /
+  📇 индексация (only offered when the type is supported / not already
+  done — `process` cap), 🔖 в набор (§ below), 📄 файл (send the original if
+  small enough, else a link).
+  - *Does editing break a cache?* A set's archive cache is keyed by content
+    (title + tags included, §15) — editing a tagged/titled document that
+    belongs to a set makes that set's archive stale, and it **transparently
+    rebuilds** on the next download/link hit. That's the intended behaviour,
+    not a bug. Full-text search staleness is a separate, pre-existing gap:
+    `search_tsv` isn't rebuilt on a title edit unless re-indexed — fixed
+    globally (both web and bot) by re-running `index_document` on title change
+    when the document was already indexed.
+- **Sets**: `/sets` → list (own + domain-visible); open one to review items,
+  or "➕ создать" from search results ("🔖 в набор", filtered to sets in that
+  result's domain). "📦 скачать" runs the same ensure-current flow as the web
+  (§15) — 202-while-building → bot says "готовлю архив, секунду" and retries.
+  When ready: **≤ 50 MB → offers a choice** ("📄 файлом" / "🔗 ссылкой");
+  above that, only a link. "🔗 ссылка на скачивание" → постоянная (`write`) /
+  одноразовая (`download`), same rights model as the web (§15).
 
 ---
 
@@ -468,11 +589,13 @@ Global hard caps in `.env` (a per-domain setting can never exceed these):
 | `DEFAULT_TRASH_RETENTION_DAYS` | 30 | |
 | `EXPORT_TTL_HOURS` | 48 | ad-hoc export artifact lifetime |
 | `SET_ARCHIVE_TTL_DAYS` | 7 | set-archive cache file lifetime (per-domain `set_archive_ttl_days`) |
+| `DEFAULT_ALLOWED_TYPES` | *(unset = unrestricted)* | instance-wide default file-type allowlist, extensions (§3.1) |
+| `PUBLIC_BASE_URL` | *(unset = relative)* | scheme+host used to build every absolute link the app hands out (share links, the bot's deep-links, the linking page, §8) — the one place that changes when a real (sub)domain replaces the bare VDS IP |
 
 Per-domain overrides (`domain.settings`, editable by `owner`/`admin`, clamped to
 the global caps): `storage_quota_mb`, `max_upload_mb`, `trash_retention_days`,
 `auto_ocr`, `auto_index`, `default_ocr_lang`, `archive_on_conflict`,
-`set_archive_ttl_days`, `allow_public_links`.
+`set_archive_ttl_days`, `allow_public_links`, `allowed_types`.
 
 Enforcement: upload rejected with `413` when
 `used_bytes + incoming > storage_quota`; for archives the *projected* unpacked
@@ -512,8 +635,14 @@ non-deleted documents + its trash + its export artifacts.
 | **3 OCR** ✅ | SAQ worker on Postgres (`app/worker.py`) + `job_mode=inline` for dev/tests (`app/jobs.dispatch`); `POST /documents/{id}/ocr` + per-domain `auto_ocr` (image / image-only PDF only, else 422/unsupported); ocrmypdf for PDFs, pytesseract for images; `ocr_status`/`ocr_at`/`ocr_lang` + `has_ocr` filter; re-indexes with the OCR text; searchable-PDF sidecar under `DATA_DIR/derived/`. Archive extraction + artifact builds also moved onto `dispatch`. |
 | **4 sets & sharing** ✅ | document sets (§15) with `private`/`domain` visibility + idempotent items; `set_content_hash` + `build_set_archive` job (lazy build, rebuild-on-change, overwrite in place, `set-<id>.zip`); transparent `GET …/sets/{s}/archive[/download]` (200 when current, else 202 while building); `Artifact.content_hash` col (migration 0005); `download_link` bound to the set's stable artifact + public `GET /d/{token}` (permanent needs `write` / one-time needs `download`, rights + `allow_public_links` + owner's `download` re-checked each hit, per-IP rate limit). Expired-file purge by `cleanup` is Phase 5 — until then a passed `expires_at` just triggers a rebuild on next access. |
 | **5 trash & lifecycle** ✅ | `DELETE /documents/{id}` soft-delete (`delete` cap) → `GET /domains/{d}/trash` + `?include_trash=true`; `POST /documents/{id}/restore` (409 if content is active again); `POST /domains/{d}/trash/purge` owner-only; `cleanup` SAQ cron (`app/services/cleanup.py`, nightly) — per-domain trash retention → `hard_purge` (explicit child-row deletes + blob refcount GC), expired ad-hoc exports removed row+file, expired set-archive files cleared (row+links kept), orphan-blob disk sweep; dedup unique index made partial (`WHERE deleted_at IS NULL`, migration 0006) so trashed content doesn't block re-upload; `uploaded_at` gains a Python µs default for stable inbox FIFO |
-| **6 bot** | aiogram bot: account linking, upload, inbox processing, `/find`, sets, export |
+| **6a API groundwork** | cross-domain search core + `GET /documents` + `GET /tags` (§7, tag matching switches to name); `allowed_types` policy (§3.1) + `DisallowedType` + `skipped_type` batch outcome; `PUBLIC_BASE_URL` + absolute `LinkOut.url`; auto-reindex on title edit; `tg_link_token` + `POST /auth/tg-link` + minimal `GET /tg/link/{token}` page (§8) |
+| **6b bot** | aiogram bot on long-polling: account linking (both directions), `/domain`, upload incl. allowed-types feedback, `/inbox`, cross-domain `/find` with refine buttons + persisted last query, per-result actions (title/tags/OCR/index/в набор), set archive delivery (file ≤ 50 MB or link) |
 | **7 web UI** | HTMX + Jinja — *separate design round* |
+
+Deliberately **out of scope for 6a/6b**: push notifications when an async job
+(OCR/index/archive build) finishes — the bot re-shows current status when the
+user next looks; revisit once there's a reason to add a job → bot message
+channel.
 
 Cross-cutting throughout: tests, audit log, quota enforcement.
 
