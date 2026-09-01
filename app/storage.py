@@ -36,6 +36,16 @@ def _blobs_root() -> Path:
     return settings.data_dir / "blobs"
 
 
+def artifacts_dir() -> Path:
+    d = settings.data_dir / "artifacts"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def artifact_path(artifact_id: str) -> Path:
+    return artifacts_dir() / f"{artifact_id}.zip"
+
+
 def blob_path(sha256: str) -> Path:
     return _blobs_root() / sha256[:2] / sha256[2:4] / sha256
 

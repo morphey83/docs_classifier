@@ -33,9 +33,7 @@ async def get_or_create_tag(
     if not name:
         raise TagError("tag name is empty")
     slug = slugify(name)
-    tag = await db.scalar(
-        select(Tag).where(Tag.domain_id == domain_id, Tag.slug == slug)
-    )
+    tag = await db.scalar(select(Tag).where(Tag.domain_id == domain_id, Tag.slug == slug))
     if tag is None:
         tag = Tag(domain_id=domain_id, name=name, slug=slug, created_by=actor.id)
         db.add(tag)
@@ -101,13 +99,9 @@ async def merge_tags(db: AsyncSession, *, source: Tag, target: Tag) -> None:
     if source.domain_id != target.domain_id:
         raise TagError("tags belong to different domains")
     already = set(
-        await db.scalars(
-            select(DocumentTag.document_id).where(DocumentTag.tag_id == target.id)
-        )
+        await db.scalars(select(DocumentTag.document_id).where(DocumentTag.tag_id == target.id))
     )
-    links = await db.scalars(
-        select(DocumentTag).where(DocumentTag.tag_id == source.id)
-    )
+    links = await db.scalars(select(DocumentTag).where(DocumentTag.tag_id == source.id))
     for link in links:
         if link.document_id in already:
             await db.delete(link)
@@ -130,9 +124,7 @@ async def set_document_tags(
         raise TagError(f"unknown tag ids: {sorted(map(str, missing))}")
 
     current = set(
-        await db.scalars(
-            select(DocumentTag.tag_id).where(DocumentTag.document_id == document.id)
-        )
+        await db.scalars(select(DocumentTag.tag_id).where(DocumentTag.document_id == document.id))
     )
     to_add = valid - current
     to_remove = current - valid

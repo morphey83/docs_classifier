@@ -39,15 +39,11 @@ async def test_name_conflict_then_replace_and_new(alice, domain):
     assert conflict.status_code == 409
     assert conflict.json()["detail"]["error"] == "name_conflict"
 
-    rep = await alice.post(
-        f"/domains/{d}/uploads?on_conflict=replace", files=_file(content=b"v2")
-    )
+    rep = await alice.post(f"/domains/{d}/uploads?on_conflict=replace", files=_file(content=b"v2"))
     assert rep.json()["outcome"] == "replaced"
     assert rep.json()["document"]["version"] == 2
 
-    new = await alice.post(
-        f"/domains/{d}/uploads?on_conflict=new", files=_file(content=b"v3")
-    )
+    new = await alice.post(f"/domains/{d}/uploads?on_conflict=new", files=_file(content=b"v3"))
     assert new.json()["outcome"] == "new_from_conflict"
     assert new.json()["document"]["title"] == "report (2)"
 

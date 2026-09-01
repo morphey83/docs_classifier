@@ -55,9 +55,7 @@ def _as_aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
-async def get_current_user(
-    request: Request, db: AsyncSession = Depends(get_session)
-) -> User:
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_session)) -> User:
     token = request.cookies.get(settings.session_cookie_name)
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not authenticated")

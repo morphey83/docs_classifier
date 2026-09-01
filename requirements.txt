@@ -9,5 +9,9 @@ pydantic-settings==2.7.0
 argon2-cffi==23.1.0
 python-multipart==0.0.20
 pypdf==5.1.0
+py7zr==0.22.0        # 7z archives (Linux wheels; skips cleanly if unimportable)
+rarfile==4.2         # rar archives — needs `unar` in the image
+python-docx==1.1.2
+openpyxl==3.1.5
 saq==0.22.4
 psycopg[binary,pool]==3.2.3

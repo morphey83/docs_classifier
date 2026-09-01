@@ -1,5 +1,11 @@
 """SQLAlchemy models."""
 
+from app.models.artifact import (
+    Artifact,
+    ArtifactKind,
+    ArtifactStatus,
+    DownloadLink,
+)
 from app.models.base import Base
 from app.models.document import (
     BatchKind,
@@ -9,14 +15,20 @@ from app.models.document import (
     DocumentTag,
     DocumentVersion,
     InboxDefer,
+    IndexStatus,
     Tag,
+    TextSource,
     UploadBatch,
+    UploadBatchItem,
 )
 from app.models.domain import Domain, DomainInvite, DomainMember
 from app.models.user import ApiKey, Session, User
 
 __all__ = [
     "ApiKey",
+    "Artifact",
+    "ArtifactKind",
+    "ArtifactStatus",
     "Base",
     "BatchKind",
     "DocSource",
@@ -27,9 +39,13 @@ __all__ = [
     "Domain",
     "DomainInvite",
     "DomainMember",
+    "DownloadLink",
     "InboxDefer",
+    "IndexStatus",
     "Session",
     "Tag",
+    "TextSource",
     "UploadBatch",
+    "UploadBatchItem",
     "User",
 ]

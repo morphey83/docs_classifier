@@ -20,8 +20,13 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
   extraction (PDF / Office); inbox queue with per-user defer;
   flat tags CRUD / merge / assignment.
 
-Roadmap (§12 of the architecture doc): 2 ingest + search · 3 OCR ·
-4 sets & sharing · 5 trash & lifecycle · 6 bot · 7 web UI.
+- **2 ingest + search** — archive upload (zip/7z/rar/tar) → background
+  extraction with bomb guards; upload batches with per-entry outcomes;
+  opt-in body-text indexing (`POST /documents/{id}/index`); faceted search
+  with facet counts; `POST /domains/{d}/exports` → zip + manifest artifact.
+
+Roadmap (§12 of the architecture doc): 3 OCR · 4 sets & sharing ·
+5 trash & lifecycle · 6 bot · 7 web UI.
 
 ## Stack
 

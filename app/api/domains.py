@@ -49,8 +49,7 @@ async def list_domains(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)
 ) -> list[DomainOut]:
     return [
-        _domain_out(domain, member.role)
-        for domain, member in await svc.list_memberships(db, user)
+        _domain_out(domain, member.role) for domain, member in await svc.list_memberships(db, user)
     ]
 
 
@@ -60,9 +59,7 @@ async def create_domain(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> DomainOut:
-    domain = await svc.create_domain(
-        db, user, name=body.name, description=body.description
-    )
+    domain = await svc.create_domain(db, user, name=body.name, description=body.description)
     return _domain_out(domain, Role.owner)
 
 
@@ -100,8 +97,7 @@ async def list_members(
     ctx: DomainCtx = Depends(require(Cap.view)), db: AsyncSession = Depends(get_session)
 ) -> list[MemberOut]:
     return [
-        _member_out(u, m.role, m.added_at)
-        for m, u in await svc.list_members(db, ctx.domain.id)
+        _member_out(u, m.role, m.added_at) for m, u in await svc.list_members(db, ctx.domain.id)
     ]
 
 
@@ -119,9 +115,7 @@ async def add_member(
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such user")
     try:
-        member = await svc.add_or_update_member(
-            db, ctx.domain, target, body.role, actor=ctx.user
-        )
+        member = await svc.add_or_update_member(db, ctx.domain, target, body.role, actor=ctx.user)
     except svc.DomainError as err:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(err)) from err
     return _member_out(target, member.role, member.added_at)
@@ -138,9 +132,7 @@ async def update_member(
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such user")
     try:
-        member = await svc.add_or_update_member(
-            db, ctx.domain, target, body.role, actor=ctx.user
-        )
+        member = await svc.add_or_update_member(db, ctx.domain, target, body.role, actor=ctx.user)
     except svc.DomainError as err:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(err)) from err
     return _member_out(target, member.role, member.added_at)

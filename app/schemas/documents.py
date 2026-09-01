@@ -7,7 +7,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.models import DocSource, DocStatus
+from app.models import DocSource, DocStatus, IndexStatus, TextSource
 from app.schemas.tags import TagOut
 
 
@@ -25,6 +25,9 @@ class DocumentOut(BaseModel):
     status: DocStatus
     source: DocSource
     version: int
+    text_source: TextSource
+    index_status: IndexStatus
+    indexed_at: datetime | None
     uploaded_at: datetime
     uploaded_by: uuid.UUID
     deleted_at: datetime | None
@@ -50,11 +53,22 @@ class UploadResult(BaseModel):
     document: DocumentOut
 
 
+class FacetBucket(BaseModel):
+    count: int
+
+
+class Facets(BaseModel):
+    tags: list[dict]
+    types: list[dict]
+    status: dict[str, int]
+
+
 class DocumentList(BaseModel):
     items: list[DocumentOut]
     total: int
     page: int
     page_size: int
+    facets: Facets | None = None
 
 
 class InboxStatus(BaseModel):

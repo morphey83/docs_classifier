@@ -38,9 +38,7 @@ class DocCtx(DomainCtx):
 def _check_caps(ctx: DomainCtx, caps: tuple[Cap, ...]) -> None:
     for cap in caps:
         if not ctx.has(cap):
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN, f"requires '{cap}' in this domain"
-            )
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"requires '{cap}' in this domain")
 
 
 def require(*caps: Cap) -> Callable[..., Awaitable[DomainCtx]]:

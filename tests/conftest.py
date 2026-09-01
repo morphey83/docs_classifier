@@ -18,8 +18,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+import app.db as db_module
 from app.config import settings
-from app.db import get_session
 from app.main import app
 from app.models import Base
 
@@ -41,24 +41,18 @@ async def engine():
     )
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Point the whole app (request deps *and* background-task sessions) at it.
+    prev_e, prev_s = db_module._engine, db_module._sessionmaker
+    db_module._engine = eng
+    db_module._sessionmaker = async_sessionmaker(eng, expire_on_commit=False, autoflush=False)
     yield eng
+    db_module._engine, db_module._sessionmaker = prev_e, prev_s
     await eng.dispose()
 
 
 @pytest_asyncio.fixture
 async def client_factory(engine) -> AsyncGenerator[Callable[[], AsyncClient]]:
-    sessionmaker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
-
-    async def _get_session():
-        async with sessionmaker() as session:
-            try:
-                yield session
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                raise
-
-    app.dependency_overrides[get_session] = _get_session
     clients: list[AsyncClient] = []
 
     def _make() -> AsyncClient:
@@ -67,10 +61,8 @@ async def client_factory(engine) -> AsyncGenerator[Callable[[], AsyncClient]]:
         return c
 
     yield _make
-
     for c in clients:
         await c.aclose()
-    app.dependency_overrides.clear()
 
 
 @pytest_asyncio.fixture

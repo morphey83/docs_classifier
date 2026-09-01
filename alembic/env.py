@@ -23,22 +23,30 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _include_object(obj, name, type_, reflected, compare_to):
+    """Hand-managed full-text-search objects live outside the ORM metadata."""
+    if type_ == "column" and name == "search_tsv":
+        return False
+    return not (type_ == "index" and name and ("_fts" in name or "_trgm" in name))
+
+
+_CFG = {"compare_type": True, "include_object": _include_object}
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=settings.database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        compare_type=True,
+        **_CFG,
     )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def _do_run_migrations(connection) -> None:
-    context.configure(
-        connection=connection, target_metadata=target_metadata, compare_type=True
-    )
+    context.configure(connection=connection, target_metadata=target_metadata, **_CFG)
     with context.begin_transaction():
         context.run_migrations()
 

@@ -19,11 +19,9 @@ from app.models import (
     DocSource,
     DocStatus,
     Document,
-    DocumentTag,
     DocumentVersion,
     Domain,
     InboxDefer,
-    Tag,
     User,
 )
 from app.util.time import utcnow
@@ -85,19 +83,32 @@ async def _unique_title(db: AsyncSession, domain_id: uuid.UUID, base: str) -> st
     return f"{base} ({n})"
 
 
+async def store_and_probe(
+    stream: BinaryIO, original_name: str
+) -> tuple[storage.BlobInfo, metadata.FileMeta]:
+    """Persist an uploaded stream to the blob store and read its file metadata."""
+    blob = await run_in_threadpool(storage.store_stream, stream)
+    meta = await run_in_threadpool(metadata.extract, storage.blob_path(blob.sha256), original_name)
+    return blob, meta
+
+
 async def ingest_upload(
     db: AsyncSession,
     domain: Domain,
     uploader: User,
     *,
-    stream: BinaryIO,
+    stream: BinaryIO | None = None,
     original_name: str,
+    blob: storage.BlobInfo | None = None,
+    meta: metadata.FileMeta | None = None,
     on_conflict: OnConflict | None = None,
     source: DocSource = DocSource.upload,
     batch_id: uuid.UUID | None = None,
 ) -> IngestResult:
-    original_name = Path(original_name).name or "file"
-    blob = await run_in_threadpool(storage.store_stream, stream)
+    original_name = original_name.strip() or "file"
+    if blob is None or meta is None:
+        assert stream is not None
+        blob, meta = await store_and_probe(stream, original_name)
 
     used = await _domain_used_bytes(db, domain.id)
     quota = _quota_bytes(domain)
@@ -129,10 +140,6 @@ async def ingest_upload(
         trashed.deleted_by = None
         await db.flush()
         return IngestResult(trashed, "restored")
-
-    meta = await run_in_threadpool(
-        metadata.extract, storage.blob_path(blob.sha256), original_name
-    )
 
     # 3. same name, different content -> conflict
     same_name = await db.scalar(
@@ -241,49 +248,13 @@ async def update_document(
     return doc
 
 
-async def list_documents(
-    db: AsyncSession,
-    domain_id: uuid.UUID,
-    *,
-    status: DocStatus | None = None,
-    tag_slugs: list[str] | None = None,
-    q: str | None = None,
-    include_trash: bool = False,
-    page: int = 1,
-    page_size: int = 50,
-) -> tuple[list[Document], int]:
-    stmt = select(Document).where(Document.domain_id == domain_id)
-    if not include_trash:
-        stmt = stmt.where(Document.deleted_at.is_(None))
-    if status is not None:
-        stmt = stmt.where(Document.status == status)
-    if q:
-        stmt = stmt.where(Document.title.ilike(f"%{q}%"))
-    if tag_slugs:
-        for slug in tag_slugs:
-            sub = (
-                select(DocumentTag.document_id)
-                .join(Tag, Tag.id == DocumentTag.tag_id)
-                .where(Tag.domain_id == domain_id, Tag.slug == slug)
-            )
-            stmt = stmt.where(Document.id.in_(sub))
-
-    total = int(
-        await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-    )
-    rows = await db.scalars(
-        stmt.order_by(Document.uploaded_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    return list(rows), total
-
-
 # --- inbox queue ---------------------------------------------------------
 async def inbox_count(db: AsyncSession, domain_id: uuid.UUID) -> int:
     return int(
         await db.scalar(
-            select(func.count()).select_from(Document).where(
+            select(func.count())
+            .select_from(Document)
+            .where(
                 Document.domain_id == domain_id,
                 Document.status == DocStatus.inbox,
                 Document.deleted_at.is_(None),
@@ -325,8 +296,6 @@ async def defer_document(db: AsyncSession, doc: Document, user_id: uuid.UUID) ->
 async def clear_defers(db: AsyncSession, domain_id: uuid.UUID, user_id: uuid.UUID) -> int:
     docs = select(Document.id).where(Document.domain_id == domain_id)
     result = await db.execute(
-        delete(InboxDefer).where(
-            InboxDefer.user_id == user_id, InboxDefer.document_id.in_(docs)
-        )
+        delete(InboxDefer).where(InboxDefer.user_id == user_id, InboxDefer.document_id.in_(docs))
     )
     return result.rowcount or 0

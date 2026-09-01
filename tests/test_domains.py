@@ -37,8 +37,10 @@ async def test_add_member_and_role_capabilities(alice, bob):
     ).status_code == 403
 
     # promote to editor -> can upload
-    await alice.patch(f"/domains/{d['id']}/members/{(await bob.get('/auth/me')).json()['id']}",
-                      json={"role": "editor"})
+    await alice.patch(
+        f"/domains/{d['id']}/members/{(await bob.get('/auth/me')).json()['id']}",
+        json={"role": "editor"},
+    )
     up2 = await bob.post(
         f"/domains/{d['id']}/uploads", files={"file": ("x.txt", b"hi", "text/plain")}
     )
@@ -47,9 +49,7 @@ async def test_add_member_and_role_capabilities(alice, bob):
 
 async def test_cannot_assign_owner_role(alice, bob):
     d = (await alice.post("/domains", json={"name": "D"})).json()
-    r = await alice.post(
-        f"/domains/{d['id']}/members", json={"username": "bob", "role": "owner"}
-    )
+    r = await alice.post(f"/domains/{d['id']}/members", json={"username": "bob", "role": "owner"})
     assert r.status_code == 422
 
 

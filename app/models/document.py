@@ -39,9 +39,24 @@ class BatchKind(StrEnum):
     archive = "archive"
 
 
+class TextSource(StrEnum):
+    none = "none"
+    parsed = "parsed"
+    ocr = "ocr"
+
+
+class IndexStatus(StrEnum):
+    none = "none"
+    pending = "pending"
+    done = "done"
+    failed = "failed"
+
+
 _status_enum = Enum(DocStatus, name="doc_status", native_enum=False, length=16)
 _source_enum = Enum(DocSource, name="doc_source", native_enum=False, length=16)
 _batch_kind_enum = Enum(BatchKind, name="batch_kind", native_enum=False, length=16)
+_text_source_enum = Enum(TextSource, name="text_source", native_enum=False, length=16)
+_index_status_enum = Enum(IndexStatus, name="index_status", native_enum=False, length=16)
 
 
 class UploadBatch(Base):
@@ -56,11 +71,32 @@ class UploadBatch(Base):
     kind: Mapped[BatchKind] = mapped_column(_batch_kind_enum)
     item_count: Mapped[int] = mapped_column(Integer, default=0)
     conflict_count: Mapped[int] = mapped_column(Integer, default=0)
-    status: Mapped[str] = mapped_column(String(16), default="done")
+    status: Mapped[str] = mapped_column(String(16), default="processing")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+    items: Mapped[list[UploadBatchItem]] = relationship(
+        back_populates="batch", cascade="all, delete-orphan"
+    )
+
+
+class UploadBatchItem(Base):
+    __tablename__ = "upload_batch_item"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    batch_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("upload_batch.id", ondelete="CASCADE"), index=True
+    )
+    entry_name: Mapped[str] = mapped_column(String(1000))
+    outcome: Mapped[str] = mapped_column(String(24))  # created / deduplicated / … / error / skipped
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("document.id", ondelete="SET NULL"), nullable=True
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    batch: Mapped[UploadBatch] = relationship(back_populates="items")
 
 
 class Document(Base):
@@ -82,11 +118,20 @@ class Document(Base):
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    status: Mapped[DocStatus] = mapped_column(
-        _status_enum, default=DocStatus.inbox, index=True
-    )
+    status: Mapped[DocStatus] = mapped_column(_status_enum, default=DocStatus.inbox, index=True)
     source: Mapped[DocSource] = mapped_column(_source_enum, default=DocSource.upload)
     version: Mapped[int] = mapped_column(Integer, default=1)
+
+    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    text_source: Mapped[TextSource] = mapped_column(
+        _text_source_enum, default=TextSource.none, server_default="none"
+    )
+    index_status: Mapped[IndexStatus] = mapped_column(
+        _index_status_enum, default=IndexStatus.none, server_default="none"
+    )
+    indexed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
     upload_batch_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("upload_batch.id", ondelete="SET NULL"), nullable=True
@@ -107,9 +152,7 @@ class Document(Base):
         secondary="document_tag", lazy="selectin", order_by="Tag.name"
     )
 
-    __table_args__ = (
-        UniqueConstraint("domain_id", "sha256", name="uq_document_domain_id_sha256"),
-    )
+    __table_args__ = (UniqueConstraint("domain_id", "sha256", name="uq_document_domain_id_sha256"),)
 
 
 class Tag(Base, TimestampMixin):
@@ -127,9 +170,7 @@ class Tag(Base, TimestampMixin):
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
 
-    __table_args__ = (
-        UniqueConstraint("domain_id", "slug", name="uq_tag_domain_id_slug"),
-    )
+    __table_args__ = (UniqueConstraint("domain_id", "slug", name="uq_tag_domain_id_slug"),)
 
 
 class DocumentTag(Base):

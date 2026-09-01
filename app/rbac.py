@@ -19,14 +19,14 @@ class Role(StrEnum):
 
 
 class Cap(StrEnum):
-    view = "view"          # see documents & metadata, search, preview
-    upload = "upload"      # add new documents / archives
-    write = "write"        # edit tags & metadata, process the inbox
+    view = "view"  # see documents & metadata, search, preview
+    upload = "upload"  # add new documents / archives
+    write = "write"  # edit tags & metadata, process the inbox
     download = "download"  # download originals, run exports
-    process = "process"    # request OCR / indexing
-    manage = "manage"      # members, invites, tag vocabulary, domain settings
-    delete = "delete"      # soft-delete / restore / purge
-    own = "own"            # delete the domain, transfer ownership
+    process = "process"  # request OCR / indexing
+    manage = "manage"  # members, invites, tag vocabulary, domain settings
+    delete = "delete"  # soft-delete / restore / purge
+    own = "own"  # delete the domain, transfer ownership
 
 
 _ALL: frozenset[Cap] = frozenset(Cap)

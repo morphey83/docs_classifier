@@ -72,9 +72,7 @@ async def add_or_update_member(
         raise DomainError("assign ownership via transfer, not a role change")
     member = await db.get(DomainMember, (domain.id, target.id))
     if member is None:
-        member = DomainMember(
-            domain_id=domain.id, user_id=target.id, role=role, added_by=actor.id
-        )
+        member = DomainMember(domain_id=domain.id, user_id=target.id, role=role, added_by=actor.id)
         db.add(member)
     else:
         if member.role == Role.owner:

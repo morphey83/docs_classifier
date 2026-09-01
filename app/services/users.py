@@ -21,9 +21,7 @@ class RegistrationError(ValueError):
     pass
 
 
-async def register_user(
-    db: AsyncSession, *, username: str, email: str, password: str
-) -> User:
+async def register_user(db: AsyncSession, *, username: str, email: str, password: str) -> User:
     if await username_or_email_taken(db, username, email.lower()):
         raise RegistrationError("username or email already registered")
     user = User(
@@ -38,9 +36,7 @@ async def register_user(
 
 async def authenticate(db: AsyncSession, *, login: str, password: str) -> User | None:
     login = login.strip().lower()
-    result = await db.execute(
-        select(User).where((User.username == login) | (User.email == login))
-    )
+    result = await db.execute(select(User).where((User.username == login) | (User.email == login)))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         await verify_password(DUMMY_HASH, password)  # constant-ish timing

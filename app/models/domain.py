@@ -49,9 +49,7 @@ class DomainMember(Base):
     added_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
-    added_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     domain: Mapped[Domain] = relationship(back_populates="members")
 
@@ -69,15 +67,11 @@ class DomainInvite(Base, TimestampMixin):
     token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    accepted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     accepted_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "domain_id", "email", name="uq_domain_invite_domain_id_email"
-        ),
+        UniqueConstraint("domain_id", "email", name="uq_domain_invite_domain_id_email"),
     )

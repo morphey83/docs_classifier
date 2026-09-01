@@ -6,8 +6,11 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Native deps for later phases (archives, OCR) go here when those phases land:
-#   libarchive-tools unar tesseract-ocr tesseract-ocr-rus ghostscript ...
+# unar: rar extraction (rarfile shells out to it). OCR deps (tesseract, …)
+# are added in phase 3.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends unar \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
