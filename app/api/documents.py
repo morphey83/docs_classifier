@@ -128,6 +128,16 @@ async def upload(
                 "resolve_with": ["?on_conflict=replace", "?on_conflict=new"],
             },
         ) from err
+    except svc.DisallowedType as err:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail={
+                "error": "type_not_allowed",
+                "ext": err.ext,
+                "mime": err.mime,
+                "allowed": err.allowed,
+            },
+        ) from err
     except svc.QuotaExceeded as err:
         raise HTTPException(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -222,7 +232,7 @@ async def search_documents(
         page=page,
         page_size=page_size,
     )
-    docs, total, facet_data = await search_svc.search_documents(db, ctx.domain.id, f)
+    docs, total, facet_data = await search_svc.search_documents(db, [ctx.domain.id], f)
     return DocumentList(
         items=[await document_out(db, d) for d in docs],
         total=total,

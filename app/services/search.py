@@ -7,6 +7,7 @@ PostgreSQL: `to_tsvector('russian', …)` for the body + `pg_trgm`-backed
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -94,16 +95,41 @@ class Facets:
     status: dict[str, int]
 
 
-def _tag_subquery(domain_id: uuid.UUID, slug: str) -> Select:
-    return (
-        select(DocumentTag.document_id)
-        .join(Tag, Tag.id == DocumentTag.tag_id)
-        .where(Tag.domain_id == domain_id, Tag.slug == slug)
-    )
+TagIndex = dict[str, list[uuid.UUID]]
 
 
-def _apply(stmt: Select, domain_id: uuid.UUID, f: SearchFilters, *, pg: bool) -> Select:
-    stmt = stmt.where(Document.domain_id == domain_id)
+async def _tag_name_index(db: AsyncSession, domain_ids: Sequence[uuid.UUID]) -> TagIndex:
+    """``{lowercased tag name: [tag ids across domain_ids]}`` — built once per search.
+
+    Tags match by *name*, case-insensitively, not by slug: a document's tags
+    always come from its own domain's vocabulary, so this composes correctly
+    across domains without needing shared ids — and it's what a caller
+    actually has on hand (nobody types a slug). Slugs stay an internal detail
+    of tag CRUD / uniqueness (docs/architecture.md §7). Folded in Python, not
+    SQL — SQLite's (and a `C`-locale Postgres's) ``lower()`` only folds ASCII.
+    """
+    if not domain_ids:
+        return {}
+    idx: TagIndex = {}
+    rows = await db.execute(select(Tag.id, Tag.name).where(Tag.domain_id.in_(domain_ids)))
+    for tid, name in rows:
+        idx.setdefault(name.strip().lower(), []).append(tid)
+    return idx
+
+
+def _tag_doc_subquery(tag_ids: list[uuid.UUID]) -> Select:
+    return select(DocumentTag.document_id).where(DocumentTag.tag_id.in_(tag_ids))
+
+
+def _apply(
+    stmt: Select,
+    domain_ids: Sequence[uuid.UUID],
+    f: SearchFilters,
+    *,
+    pg: bool,
+    tag_index: TagIndex,
+) -> Select:
+    stmt = stmt.where(Document.domain_id.in_(domain_ids))
     if not f.include_trash:
         stmt = stmt.where(Document.deleted_at.is_(None))
     if f.status is not None:
@@ -145,13 +171,16 @@ def _apply(stmt: Select, domain_id: uuid.UUID, f: SearchFilters, *, pg: bool) ->
     if f.text_source is not None:
         stmt = stmt.where(Document.text_source == f.text_source)
 
-    for slug in f.tags_all:
-        stmt = stmt.where(Document.id.in_(_tag_subquery(domain_id, slug)))
+    def _ids(name: str) -> list[uuid.UUID]:
+        return tag_index.get(name.strip().lower(), [])
+
+    for name in f.tags_all:
+        stmt = stmt.where(Document.id.in_(_tag_doc_subquery(_ids(name))))
     if f.tags_any:
-        subs = [_tag_subquery(domain_id, s) for s in f.tags_any]
+        subs = [_tag_doc_subquery(_ids(n)) for n in f.tags_any]
         stmt = stmt.where(or_(*[Document.id.in_(s) for s in subs]))
-    for slug in f.tags_none:
-        stmt = stmt.where(Document.id.not_in(_tag_subquery(domain_id, slug)))
+    for name in f.tags_none:
+        stmt = stmt.where(Document.id.not_in(_tag_doc_subquery(_ids(name))))
 
     if f.q:
         like = f"%{f.q}%"
@@ -180,10 +209,15 @@ _SORTS = {
 
 
 async def search_documents(
-    db: AsyncSession, domain_id: uuid.UUID, f: SearchFilters
+    db: AsyncSession, domain_ids: Sequence[uuid.UUID], f: SearchFilters
 ) -> tuple[list[Document], int, Facets]:
+    if not domain_ids:
+        return [], 0, Facets(tags=[], types=[], status={})
+
     pg = _is_pg(db)
-    base = _apply(select(Document), domain_id, f, pg=pg)
+    needs_tags = bool(f.tags_all or f.tags_any or f.tags_none)
+    tag_index = await _tag_name_index(db, domain_ids) if needs_tags else {}
+    base = _apply(select(Document), domain_ids, f, pg=pg, tag_index=tag_index)
 
     total = int(await db.scalar(select(func.count()).select_from(base.subquery())) or 0)
 
@@ -197,7 +231,7 @@ async def search_documents(
     )
     docs = list(rows)
 
-    id_sub = _apply(select(Document.id), domain_id, f, pg=pg).subquery()
+    id_sub = _apply(select(Document.id), domain_ids, f, pg=pg, tag_index=tag_index).subquery()
 
     tag_rows = await db.execute(
         select(Tag.slug, Tag.name, func.count(DocumentTag.document_id))

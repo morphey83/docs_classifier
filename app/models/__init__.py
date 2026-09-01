@@ -24,6 +24,7 @@ from app.models.document import (
     UploadBatchItem,
 )
 from app.models.domain import Domain, DomainInvite, DomainMember
+from app.models.tglink import TgLinkToken
 from app.models.user import ApiKey, Session, User
 
 __all__ = [
@@ -51,6 +52,7 @@ __all__ = [
     "SetVisibility",
     "Tag",
     "TextSource",
+    "TgLinkToken",
     "UploadBatch",
     "UploadBatchItem",
     "User",

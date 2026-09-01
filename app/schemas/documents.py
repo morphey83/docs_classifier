@@ -34,6 +34,9 @@ class DocumentOut(BaseModel):
     uploaded_by: uuid.UUID
     deleted_at: datetime | None
     tags: list[TagOut] = []
+    # Populated only by the cross-domain search route (GET /documents) so a
+    # bot/UI result list is self-describing without an N+1 domain lookup.
+    domain_name: str | None = None
 
     model_config = {"from_attributes": True}
 

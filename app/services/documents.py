@@ -22,6 +22,7 @@ from app.models import (
     DocumentVersion,
     Domain,
     InboxDefer,
+    IndexStatus,
     User,
 )
 from app.util.time import utcnow
@@ -41,6 +42,22 @@ class NameConflict(Exception):
     def __init__(self, existing_id: uuid.UUID) -> None:
         super().__init__("a different document with this name already exists")
         self.existing_id = existing_id
+
+
+class DisallowedType(Exception):
+    def __init__(self, ext: str, mime: str, allowed: set[str]) -> None:
+        super().__init__(f"file type '{ext or mime}' is not allowed in this domain")
+        self.ext = ext
+        self.mime = mime
+        self.allowed = sorted(allowed)
+
+
+def effective_allowed_types(domain: Domain) -> set[str] | None:
+    """The domain's file-type allowlist (extensions, lowercased) or ``None`` = unrestricted."""
+    val = (domain.settings or {}).get("allowed_types")
+    if val is None:
+        return settings.default_allowed_types_set
+    return {str(v).strip().lower().lstrip(".") for v in val if str(v).strip()}
 
 
 @dataclass
@@ -109,6 +126,10 @@ async def ingest_upload(
     if blob is None or meta is None:
         assert stream is not None
         blob, meta = await store_and_probe(stream, original_name)
+
+    allowed = effective_allowed_types(domain)
+    if allowed is not None and meta.ext.lower().lstrip(".") not in allowed:
+        raise DisallowedType(meta.ext, meta.mime, allowed)
 
     used = await _domain_used_bytes(db, domain.id)
     quota = _quota_bytes(domain)
@@ -236,8 +257,11 @@ async def update_document(
     notes: str | None = None,
     clear_doc_date: bool = False,
 ) -> Document:
+    retitled = False
     if title is not None:
-        doc.title = title.strip() or doc.title
+        new_title = title.strip() or doc.title
+        retitled = new_title != doc.title
+        doc.title = new_title
     if clear_doc_date:
         doc.doc_date = None
     elif doc_date is not None:
@@ -245,6 +269,12 @@ async def update_document(
     if notes is not None:
         doc.notes = notes or None
     await db.flush()
+    if retitled and doc.index_status == IndexStatus.done:
+        # search_tsv is built from title + extracted_text and isn't otherwise
+        # refreshed on an edit — keep it in sync silently (docs/architecture.md §8).
+        from app.services.search import index_document
+
+        await index_document(db, doc, reparse=False)
     return doc
 
 

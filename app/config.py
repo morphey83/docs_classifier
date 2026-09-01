@@ -32,6 +32,23 @@ class Settings(BaseSettings):
     export_ttl_hours: int = 48
     set_archive_ttl_days: int = 7  # set-archive cache file lifetime
     public_download_rate_per_min: int = 60  # per-IP cap on GET /d/{token}
+    default_allowed_types: str | None = None  # comma-separated extensions; unset = unrestricted
+    tg_link_ttl_minutes: int = 15
+
+    # --- absolute links & the bot ------------------------------------------
+    # Scheme+host used to build every absolute link the app hands out (share
+    # links, the bot's deep-links, the account-linking page). Unset -> links
+    # stay relative. The one setting that changes when a real (sub)domain
+    # replaces the bare VDS IP.
+    public_base_url: str | None = None
+    telegram_bot_username: str | None = None  # without '@', for t.me/<name> deep-links
+
+    @property
+    def default_allowed_types_set(self) -> set[str] | None:
+        if not self.default_allowed_types:
+            return None
+        parts = self.default_allowed_types.split(",")
+        return {p.strip().lower().lstrip(".") for p in parts if p.strip()}
 
     # --- jobs / worker --------------------------------------------------
     # "queue": push to the SAQ (Postgres) queue for a worker to run.

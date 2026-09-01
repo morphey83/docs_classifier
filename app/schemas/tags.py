@@ -34,3 +34,10 @@ class TagOut(BaseModel):
     usage_count: int = 0
 
     model_config = {"from_attributes": True}
+
+
+class TagOption(BaseModel):
+    """A cross-domain tag-name option for filter pickers (GET /tags, §7)."""
+
+    name: str
+    usage_count: int

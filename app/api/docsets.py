@@ -46,6 +46,7 @@ from app.services import docsets as svc
 from app.services import domains as domains_svc
 from app.util import ratelimit
 from app.util.time import as_aware, utcnow
+from app.util.urls import absolute_url
 
 router = APIRouter(tags=["sets"])
 
@@ -320,7 +321,7 @@ def _link_out(link: DownloadLink) -> LinkOut:
     return LinkOut(
         id=link.id,
         token=link.token,
-        url=f"/d/{link.token}",
+        url=absolute_url(f"/d/{link.token}"),
         kind="one_time" if link.max_downloads == 1 else "permanent",
         max_downloads=link.max_downloads,
         download_count=link.download_count,

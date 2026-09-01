@@ -41,7 +41,7 @@ async def create_export(
         f = filters or SearchFilters()
         f.page = 1
         f.page_size = 100_000
-        docs, _total, _facets = await search_documents(db, domain.id, f)
+        docs, _total, _facets = await search_documents(db, [domain.id], f)
         ids = [d.id for d in docs]
     else:
         rows = await db.scalars(

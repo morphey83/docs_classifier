@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,34 @@ async def list_tags(db: AsyncSession, domain_id: uuid.UUID) -> list[tuple[Tag, i
         .order_by(Tag.name)
     )
     return list(rows.all())
+
+
+async def list_tags_across(
+    db: AsyncSession, domain_ids: Sequence[uuid.UUID]
+) -> list[tuple[str, int]]:
+    """Tag-name options for a filter picker, merged across ``domain_ids`` (§7).
+
+    Same-named tags in different domains' vocabularies are one option, with
+    usage summed; the displayed casing is whichever sorts first. Merged in
+    Python, not via SQL ``lower()`` — SQLite (and a `C`-locale Postgres) only
+    folds ASCII case, which would split e.g. "Договор" from "договор".
+    """
+    if not domain_ids:
+        return []
+    rows = await db.execute(
+        select(Tag.id, Tag.name, func.count(func.distinct(DocumentTag.document_id)))
+        .select_from(Tag)
+        .outerjoin(DocumentTag, DocumentTag.tag_id == Tag.id)
+        .where(Tag.domain_id.in_(domain_ids))
+        .group_by(Tag.id, Tag.name)
+    )
+    merged: dict[str, list] = {}  # lowercased name -> [display name, usage count]
+    for _tag_id, name, count in rows:
+        key = name.strip().lower()
+        entry = merged.setdefault(key, [name, 0])
+        entry[0] = min(entry[0], name)
+        entry[1] += count
+    return sorted(((name, count) for name, count in merged.values()), key=lambda x: (-x[1], x[0]))
 
 
 async def get_or_create_tag(

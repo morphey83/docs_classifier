@@ -13,6 +13,7 @@ from app.db import get_sessionmaker
 from app.ingest.archive import ArchiveError, Limits, iter_archive
 from app.models import DocSource, Domain, UploadBatch, UploadBatchItem, User
 from app.services.documents import (
+    DisallowedType,
     NameConflict,
     QuotaExceeded,
     ingest_upload,
@@ -99,6 +100,15 @@ async def process_archive(
                         entry_name=entry_name,
                         outcome="skipped",
                         note=f"name conflict with document {err.existing_id}",
+                    )
+                )
+            except DisallowedType as err:
+                db.add(
+                    UploadBatchItem(
+                        batch_id=batch.id,
+                        entry_name=entry_name,
+                        outcome="skipped_type",
+                        note=f"type '{err.ext or err.mime}' is not allowed in this domain",
                     )
                 )
             except QuotaExceeded:

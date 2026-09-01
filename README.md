@@ -10,7 +10,7 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
 
 ## Status
 
-**Phases 0–5 done.**
+**Phases 0–5 done, 6a (bot API groundwork) done.**
 
 - **0 skeleton** — config, async DB, Alembic, auth (session cookies), `/health`,
   SAQ worker stub, Docker Compose, tests.
@@ -41,8 +41,18 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
   → hard purge with blob refcount GC, expired export / set-archive files,
   orphan-blob sweep. Dedup uniqueness is now partial (trashed content doesn't
   block a re-upload).
+- **6a API groundwork** — `GET /documents` cross-domain search (`domain_id`
+  optional filter, omitted = every domain the caller belongs to), tag filters
+  now match by name (case-insensitive) so they compose across domains, `GET
+  /tags` aggregates tag-name options the same way; per-domain `allowed_types`
+  file-type policy (`415` on a disallowed direct upload, `skipped_type` batch
+  outcome for a disallowed archive entry); `PUBLIC_BASE_URL` makes share links
+  absolute; auto-reindex on a title edit; Telegram account linking
+  (`tg_link_token`, bidirectional, always verified via a deep-link round
+  trip) — `POST /auth/tg-link`, `GET /tg/link/{token}` (minimal standalone
+  page), `GET /tg/link/{token}/status`, `POST /tg/link/{token}/confirm`.
 
-Roadmap (§12 of the architecture doc): 6 bot · 7 web UI.
+Roadmap (§12 of the architecture doc): 6b bot · 7 web UI.
 
 ## Stack
 
