@@ -60,6 +60,31 @@ async def test_create_domain_and_overview(alice, web_domain):
     assert "Рабочий" in page.text and "owner" in page.text
 
 
+async def test_dashboard_table_has_counts_and_actions(alice, web_domain):
+    from tests.conftest import web_upload
+
+    await web_upload(alice, web_domain, "d1.txt")
+    home = (await alice.get("/")).text
+    assert "<table" in home and "Новый домен" in home
+    # per-domain action links
+    assert "/search?domain_id=" in home
+    assert f"/upload?domain={web_domain}" in home
+    assert f"/domains/{web_domain}/settings" in home  # owner → edit icon
+    assert f"/domains/{web_domain}/delete" in home  # owner → delete icon
+    assert "в очереди / всего" in home
+
+
+async def test_profile_menu_present_when_authed(alice):
+    home = (await alice.get("/")).text
+    assert "👤" in home and "профиль" in home
+    assert 'action="/logout"' in home
+
+
+async def test_profile_icon_links_to_login_when_anonymous(client):
+    r = await client.get("/login")
+    assert 'href="/login"' in r.text and "👤" in r.text
+
+
 async def test_foreign_domain_is_404(alice, bob, web_domain):
     assert (await bob.get(f"/domains/{web_domain}")).status_code == 404
 

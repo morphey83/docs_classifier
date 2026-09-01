@@ -34,6 +34,16 @@
     .results-head a.active { background: var(--pico-primary); color:#fff; }
     nav.pager { display:flex; gap:.5rem; margin-top:1rem; }
     th a { text-decoration:none; white-space:nowrap; }
+    .profile-menu { margin-bottom:0; }
+    .profile-menu > summary { padding:.3rem .6rem; }
+    .profile-menu > summary::after { display:none; }        /* hide pico's caret */
+    .profile-menu ul { min-width: 12rem; }
+    .icon-actions { display:flex; gap:.15rem; }
+    .icon-actions a, .icon-actions button {
+      text-decoration:none; padding:.15rem .35rem; border:0; background:none;
+      font-size:1rem; cursor:pointer; line-height:1; color:inherit; border-radius:.25rem; }
+    .icon-actions a:hover, .icon-actions button:hover { background: var(--pico-secondary-background); }
+    .icon-actions .danger:hover { background:#fee2e2; }
   </style>
   <script src="/static/htmx.min.js" defer></script>
 </head>
@@ -51,15 +61,22 @@
       </ul>
       <ul>
         {% if user %}
-          <li><a href="/profile" class="secondary">{{ user.username }}</a></li>
-          <li>
-            <form method="post" action="/logout" class="inline-form">
-              <input type="hidden" name="csrf_token" value="{{ csrf }}">
-              <button class="secondary outline" type="submit">Выйти</button>
-            </form>
-          </li>
+        <li>
+          <details class="dropdown profile-menu">
+            <summary role="button" class="secondary outline" aria-label="Профиль">👤</summary>
+            <ul dir="rtl">
+              <li><a href="/profile">{{ user.username }} — профиль</a></li>
+              <li>
+                <form method="post" action="/logout">
+                  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+                  <button class="secondary" type="submit">Выйти</button>
+                </form>
+              </li>
+            </ul>
+          </details>
+        </li>
         {% else %}
-          <li><a href="/login">Войти</a></li>
+        <li><a href="/login" role="button" class="secondary outline" aria-label="Войти">👤</a></li>
         {% endif %}
       </ul>
     </div>

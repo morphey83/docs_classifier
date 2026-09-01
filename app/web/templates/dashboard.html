@@ -1,27 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Домены — DocsClassifier{% endblock %}
+{% block title %}Домены{% endblock %}
 {% block content %}
 <hgroup>
   <h1>Домены</h1>
   <p class="muted">Рабочие пространства с документами, тегами и правами доступа.</p>
 </hgroup>
-
-{% if domains %}
-<div class="grid">
-  {% for d in domains %}
-  <article>
-    <header><a href="/domains/{{ d.domain.slug }}"><strong>{{ d.domain.name }}</strong></a></header>
-    <p class="muted">роль: {{ d.role }}{% if d.inbox %} · в очереди: {{ d.inbox }}{% endif %}</p>
-    <footer>
-      <a href="/search?domain_id={{ d.domain.id }}" role="button" class="outline">Найти</a>
-      <a href="/upload?domain={{ d.domain.slug }}" role="button" class="outline secondary">Загрузить</a>
-    </footer>
-  </article>
-  {% endfor %}
-</div>
-{% else %}
-<p class="muted">У вас пока нет доменов.</p>
-{% endif %}
 
 <article>
   <h3>Новый домен</h3>
@@ -31,4 +14,59 @@
     <button type="submit">Создать</button>
   </form>
 </article>
+
+{% if domains %}
+<figure style="overflow-x:auto">
+<table>
+  <thead>
+    <tr>
+      <th>Название</th>
+      <th title="пользователей с доступом">👥</th>
+      <th title="в очереди на сортировку / всего документов">в очереди / всего</th>
+      <th>Действия</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for d in domains %}
+    <tr>
+      <td>
+        <a href="/domains/{{ d.domain.slug }}"><strong>{{ d.domain.name }}</strong></a>
+        <br><span class="muted">роль: {{ d.role }}</span>
+      </td>
+      <td>{{ d.members }}</td>
+      <td>{{ d.queue }} / {{ d.total }}</td>
+      <td>
+        <div class="icon-actions">
+          {% if 'manage' in d.caps %}
+          <a href="/domains/{{ d.domain.slug }}/settings" title="Редактировать домен">✏️</a>
+          {% endif %}
+          <a href="/search?domain_id={{ d.domain.id }}" title="Поиск в этом домене">🔍</a>
+          {% if 'upload' in d.caps %}
+          <a href="/upload?domain={{ d.domain.slug }}" title="Загрузить в этот домен">⬆️</a>
+          {% endif %}
+          {% if 'own' in d.caps %}
+          <form method="post" action="/domains/{{ d.domain.slug }}/delete" class="inline-form"
+                onsubmit="return confirm('Удалить домен «{{ d.domain.name }}» со всеми документами? Это необратимо.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <button type="submit" class="danger" title="Удалить домен">🗑️</button>
+          </form>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</figure>
+
+{% if pages > 1 %}
+<nav class="pager">
+  {% if page > 1 %}<a role="button" class="outline" href="/?page={{ page - 1 }}">← назад</a>{% endif %}
+  <span class="muted">стр. {{ page }} / {{ pages }} · всего {{ total }}</span>
+  {% if page < pages %}<a role="button" class="outline" href="/?page={{ page + 1 }}">вперёд →</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<p class="muted">У вас пока нет доменов.</p>
+{% endif %}
 {% endblock %}
