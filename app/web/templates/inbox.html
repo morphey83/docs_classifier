@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% set d = view.domain %}
+{% block title %}Инбокс — {{ d.name }}{% endblock %}
+{% block content %}
+{% set active = 'inbox' %}
+{% include "_domain_nav.html" %}
+
+<hgroup>
+  <h1>Инбокс</h1>
+  <p class="muted">осталось: {{ remaining }}</p>
+</hgroup>
+
+{% if not doc %}
+<p class="flash ok">Инбокс пуст 🎉</p>
+<form method="post" action="/domains/{{ d.slug }}/inbox/undefer" class="inline-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <button class="outline secondary">Вернуть отложенные</button>
+</form>
+{% else %}
+<article>
+  <hgroup>
+    <h3><a href="/documents/{{ doc.id }}">{{ doc.title }}</a></h3>
+    <p class="muted">{{ doc.original_name }} · {{ doc.mime }} · {{ doc.size_bytes|humansize }}
+      · {{ doc.doc_date|shortdate }}</p>
+  </hgroup>
+
+  {% if doc_tags %}<p>{% for n in doc_tags|sort %}<span class="tag">{{ n }}</span>{% endfor %}</p>{% endif %}
+
+  {% if freq_tags %}
+  <p class="muted">частые: {% for n in freq_tags %}<span class="tag">{{ n }}</span>{% endfor %}</p>
+  {% endif %}
+
+  <form method="post" action="/domains/{{ d.slug }}/inbox/{{ doc.id }}/done">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Теги (через запятую)
+      <input name="tags" value="{{ doc_tags|join(', ') }}" autofocus placeholder="договор, 2024">
+    </label>
+    <button type="submit">✅ Готово</button>
+  </form>
+
+  <form method="post" action="/domains/{{ d.slug }}/inbox/{{ doc.id }}/defer" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button class="outline secondary">⏭ Отложить</button>
+  </form>
+</article>
+{% endif %}
+{% endblock %}

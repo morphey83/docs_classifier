@@ -28,7 +28,10 @@
 
 {% for doc in docs %}
 <article class="result">
-  <h4><a href="/documents/{{ doc.id }}">{{ doc.title }}</a></h4>
+  <h4>
+    {% if domain_names %}<span class="muted">[{{ domain_names.get(doc.domain_id, '?') }}]</span> {% endif %}
+    <a href="/documents/{{ doc.id }}">{{ doc.title }}</a>
+  </h4>
   <p class="muted">
     {{ doc.ext or (doc.mime.split('/')|last) }} ·
     {{ doc.doc_date|shortdate }} ·

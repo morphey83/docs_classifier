@@ -98,3 +98,23 @@ async def bob(client_factory) -> AsyncClient:
     c = client_factory()
     await register(c, "bob")
     return c
+
+
+# --- web-UI helpers (shared by tests/test_web*.py) ---------------------
+def web_csrf(html: str) -> str:
+    import re
+
+    m = re.search(r'name="csrf_token" value="([^"]+)"', html) or re.search(
+        r'"X-CSRF-Token": "([^"]+)"', html
+    )
+    assert m, "no CSRF token in page"
+    return m.group(1)
+
+
+@pytest_asyncio.fixture
+async def web_domain(alice) -> str:
+    """Create a domain through the web UI, return its slug."""
+    page = (await alice.get("/")).text
+    r = await alice.post("/domains", data={"name": "Рабочий", "csrf_token": web_csrf(page)})
+    assert r.status_code == 303
+    return r.headers["location"].rsplit("/", 1)[-1]

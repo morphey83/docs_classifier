@@ -16,8 +16,10 @@ from app.ingest import archive
 from app.jobs import dispatch
 from app.models import (
     BatchKind,
+    DocumentSet,
     DocumentTag,
     OcrStatus,
+    SetVisibility,
     Tag,
     UploadBatch,
     UploadBatchItem,
@@ -26,8 +28,10 @@ from app.models import (
 from app.ocr import engine as ocr_engine
 from app.ocr.tasks import ocr_document
 from app.rbac import Cap
+from app.services import docsets as docsets_svc
 from app.services import documents as docs_svc
 from app.services import tags as tags_svc
+from app.services import trash as trash_svc
 from app.services.ingest import process_archive
 from app.services.search import index_document
 from app.web.csrf import CsrfGuard
@@ -136,6 +140,7 @@ async def document_page(
             "doc": doc,
             "tags": await _tag_names(db, doc.id),
             "ocr_supported": ocr_engine.is_supported(doc.mime),
+            "sets": await docsets_svc.list_sets(db, doc.domain_id, user.id),
             "partial": "_doc_body.html",
         },
     )
@@ -219,6 +224,55 @@ async def document_index(
     return await _doc_fragment(request, db, user, document_id)
 
 
+@router.post("/documents/{document_id}/add-to-set")
+async def document_add_to_set(
+    request: Request,
+    document_id: uuid.UUID,
+    set_id: uuid.UUID = Form(...),
+    _: None = CsrfGuard,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    doc, view = await load_document(db, user, document_id)
+    s = await db.get(DocumentSet, set_id)
+    if s is None or s.domain_id != doc.domain_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "набор не найден")
+    if s.created_by != user.id and s.visibility != SetVisibility.domain:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "набор не найден")
+    await docsets_svc.add_items(db, s, [doc.id], actor=user)
+    return RedirectResponse(f"/documents/{document_id}", status_code=303)
+
+
+@router.post("/documents/{document_id}/delete")
+async def document_delete(
+    document_id: uuid.UUID,
+    _: None = CsrfGuard,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    doc, view = await load_document(db, user, document_id)
+    require_cap(view, Cap.delete)
+    await trash_svc.soft_delete(db, doc, user)
+    return RedirectResponse(f"/domains/{view.domain.slug}/search", status_code=303)
+
+
+@router.post("/documents/{document_id}/restore")
+async def document_restore(
+    request: Request,
+    document_id: uuid.UUID,
+    _: None = CsrfGuard,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    doc, view = await load_document(db, user, document_id)
+    require_cap(view, Cap.delete)
+    try:
+        await trash_svc.restore(db, doc)
+    except trash_svc.TrashError as err:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(err)) from err
+    return RedirectResponse(f"/documents/{document_id}", status_code=303)
+
+
 @router.get("/documents/{document_id}/download")
 async def document_download(
     document_id: uuid.UUID,
@@ -248,5 +302,6 @@ async def _doc_fragment(request: Request, db, user, document_id: uuid.UUID) -> R
             "doc": doc,
             "tags": await _tag_names(db, doc.id),
             "ocr_supported": ocr_engine.is_supported(doc.mime),
+            "sets": await docsets_svc.list_sets(db, doc.domain_id, user.id),
         },
     )

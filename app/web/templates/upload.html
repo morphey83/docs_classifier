@@ -2,11 +2,8 @@
 {% set d = view.domain %}
 {% block title %}Загрузка — {{ d.name }}{% endblock %}
 {% block content %}
-<nav aria-label="breadcrumb"><ul>
-  <li><a href="/">Домены</a></li>
-  <li><a href="/domains/{{ d.slug }}">{{ d.name }}</a></li>
-  <li>Загрузка</li>
-</ul></nav>
+{% set active = 'upload' %}
+{% include "_domain_nav.html" %}
 
 <h1>Загрузить документ или архив</h1>
 

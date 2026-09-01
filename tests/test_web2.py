@@ -1,0 +1,226 @@
+"""Phase 7b/7c — sets, inbox, tags, members, settings, trash, profile, global search."""
+
+from __future__ import annotations
+
+import re
+
+from tests.conftest import web_csrf
+
+
+async def _upload(client, slug, name, body=None):
+    body = body if body is not None else f"body of {name}".encode()
+    page = (await client.get(f"/domains/{slug}/upload")).text
+    await client.post(
+        f"/domains/{slug}/upload",
+        data={"csrf_token": web_csrf(page)},
+        files={"file": (name, body, "text/plain")},
+    )
+
+
+async def _doc_id(client, slug):
+    p = await client.get(f"/domains/{slug}/search", headers={"HX-Request": "true"})
+    return re.search(r"/documents/([0-9a-f-]{36})", p.text).group(1)
+
+
+# --- sets ---------------------------------------------------------
+async def test_set_lifecycle(alice, web_domain):
+    await _upload(alice, web_domain, "s1.txt")
+    doc_id = await _doc_id(alice, web_domain)
+
+    page = (await alice.get(f"/domains/{web_domain}/sets")).text
+    r = await alice.post(
+        f"/domains/{web_domain}/sets", data={"name": "Подборка", "csrf_token": web_csrf(page)}
+    )
+    assert r.status_code == 303
+    set_id = r.headers["location"].rsplit("/", 1)[-1]
+
+    doc_page = (await alice.get(f"/documents/{doc_id}")).text
+    add = await alice.post(
+        f"/documents/{doc_id}/add-to-set",
+        data={"set_id": set_id, "csrf_token": web_csrf(doc_page)},
+    )
+    assert add.status_code == 303
+
+    detail = await alice.get(f"/domains/{web_domain}/sets/{set_id}")
+    assert "s1" in detail.text
+
+    rm = await alice.post(
+        f"/domains/{web_domain}/sets/{set_id}/items/{doc_id}/remove",
+        data={"csrf_token": web_csrf(detail.text)},
+    )
+    assert rm.status_code == 303
+
+
+async def test_set_share_link_and_revoke(alice, web_domain):
+    await _upload(alice, web_domain, "sh.txt")
+    doc_id = await _doc_id(alice, web_domain)
+    page = (await alice.get(f"/domains/{web_domain}/sets")).text
+    set_id = (
+        await alice.post(
+            f"/domains/{web_domain}/sets", data={"name": "L", "csrf_token": web_csrf(page)}
+        )
+    ).headers["location"].rsplit("/", 1)[-1]
+    dp = (await alice.get(f"/documents/{doc_id}")).text
+    await alice.post(
+        f"/documents/{doc_id}/add-to-set", data={"set_id": set_id, "csrf_token": web_csrf(dp)}
+    )
+
+    detail = (await alice.get(f"/domains/{web_domain}/sets/{set_id}")).text
+    r = await alice.post(
+        f"/domains/{web_domain}/sets/{set_id}/links",
+        data={"kind": "one_time", "csrf_token": web_csrf(detail)},
+    )
+    assert r.status_code == 303
+
+    detail2 = await alice.get(f"/domains/{web_domain}/sets/{set_id}")
+    assert "/d/" in detail2.text
+    link_id = re.search(r"/links/([0-9a-f-]{36})/revoke", detail2.text).group(1)
+    rv = await alice.post(f"/links/{link_id}/revoke", data={"csrf_token": web_csrf(detail2.text)})
+    assert rv.status_code == 303
+
+
+# --- inbox -------------------------------------------------------
+async def test_inbox_tag_and_advance(alice, web_domain):
+    await _upload(alice, web_domain, "i1.txt")
+    await _upload(alice, web_domain, "i2.txt")
+
+    page = await alice.get(f"/domains/{web_domain}/inbox")
+    assert "осталось: 2" in page.text
+    doc_id = re.search(r"/inbox/([0-9a-f-]{36})/done", page.text).group(1)
+
+    r = await alice.post(
+        f"/domains/{web_domain}/inbox/{doc_id}/done",
+        data={"tags": "готово", "csrf_token": web_csrf(page.text)},
+    )
+    assert r.status_code == 303
+    page2 = await alice.get(f"/domains/{web_domain}/inbox")
+    assert "осталось: 1" in page2.text
+
+
+# --- tag vocabulary --------------------------------------------
+async def test_tag_vocabulary_crud(alice, web_domain):
+    page = (await alice.get(f"/domains/{web_domain}/tags")).text
+    r = await alice.post(
+        f"/domains/{web_domain}/tags", data={"name": "Контракт", "csrf_token": web_csrf(page)}
+    )
+    assert r.status_code == 303
+
+    listing = await alice.get(f"/domains/{web_domain}/tags")
+    assert "Контракт" in listing.text
+    tag_id = re.search(r"/tags/([0-9a-f-]{36})/delete", listing.text).group(1)
+
+    upd = await alice.post(
+        f"/domains/{web_domain}/tags/{tag_id}",
+        data={"name": "Договор", "color": "", "csrf_token": web_csrf(listing.text)},
+    )
+    assert upd.status_code == 303
+    assert "Договор" in (await alice.get(f"/domains/{web_domain}/tags")).text
+
+
+# --- members ---------------------------------------------------
+async def test_members_add_and_role_change(alice, bob, web_domain):
+    page = (await alice.get(f"/domains/{web_domain}/members")).text
+    r = await alice.post(
+        f"/domains/{web_domain}/members",
+        data={"username": "bob", "role": "viewer", "csrf_token": web_csrf(page)},
+    )
+    assert r.status_code == 303
+
+    listing = await alice.get(f"/domains/{web_domain}/members")
+    assert "bob" in listing.text
+    bob_id = re.search(r"/members/([0-9a-f-]{36})/remove", listing.text).group(1)
+
+    ch = await alice.post(
+        f"/domains/{web_domain}/members/{bob_id}",
+        data={"role": "editor", "csrf_token": web_csrf(listing.text)},
+    )
+    assert ch.status_code == 303
+    rm = await alice.post(
+        f"/domains/{web_domain}/members/{bob_id}/remove",
+        data={"csrf_token": web_csrf(listing.text)},
+    )
+    assert rm.status_code == 303
+
+
+async def test_members_page_forbidden_for_viewer(alice, bob, web_domain):
+    page = (await alice.get(f"/domains/{web_domain}/members")).text
+    await alice.post(
+        f"/domains/{web_domain}/members",
+        data={"username": "bob", "role": "viewer", "csrf_token": web_csrf(page)},
+    )
+    assert (await bob.get(f"/domains/{web_domain}/members")).status_code == 403
+
+
+# --- settings + trash ----------------------------------------
+async def test_settings_save_allowed_types(alice, web_domain):
+    page = (await alice.get(f"/domains/{web_domain}/settings")).text
+    r = await alice.post(
+        f"/domains/{web_domain}/settings",
+        data={
+            "name": "Рабочий",
+            "allowed_types": "pdf, txt",
+            "auto_ocr": "on",
+            "csrf_token": web_csrf(page),
+        },
+    )
+    assert r.status_code == 303
+    # a disallowed type is now rejected on upload
+    up = (await alice.get(f"/domains/{web_domain}/upload")).text
+    bad = await alice.post(
+        f"/domains/{web_domain}/upload",
+        data={"csrf_token": web_csrf(up)},
+        files={"file": ("x.png", b"nope", "image/png")},
+    )
+    assert "не разрешён" in bad.text
+
+
+async def test_trash_restore_flow(alice, web_domain):
+    await _upload(alice, web_domain, "del.txt")
+    doc_id = await _doc_id(alice, web_domain)
+    dp = (await alice.get(f"/documents/{doc_id}")).text
+    r = await alice.post(f"/documents/{doc_id}/delete", data={"csrf_token": web_csrf(dp)})
+    assert r.status_code == 303
+
+    trash = await alice.get(f"/domains/{web_domain}/trash")
+    assert "del" in trash.text
+    rs = await alice.post(f"/documents/{doc_id}/restore", data={"csrf_token": web_csrf(trash.text)})
+    assert rs.status_code == 303
+    assert "Корзина пуста" in (await alice.get(f"/domains/{web_domain}/trash")).text
+
+
+# --- profile + global search --------------------------------
+async def test_profile_and_tg_link(alice):
+    page = await alice.get("/profile")
+    assert page.status_code == 200 and "Подключить Telegram" in page.text
+    r = await alice.post("/profile/tg-link", data={"csrf_token": web_csrf(page.text)})
+    assert r.status_code == 303 and "tg_token=" in r.headers["location"]
+    after = await alice.get(r.headers["location"])
+    assert "/start " in after.text
+
+
+async def test_password_change(alice):
+    page = (await alice.get("/profile")).text
+    r = await alice.post(
+        "/profile/password",
+        data={
+            "current": "correct horse!",
+            "new_password": "brandnewpass9",
+            "csrf_token": web_csrf(page),
+        },
+    )
+    assert r.status_code == 303 and r.headers["location"] == "/profile?pw=ok"
+
+
+async def test_global_search_spans_domains(alice):
+    home = (await alice.get("/")).text
+    a = (
+        await alice.post("/domains", data={"name": "GA", "csrf_token": web_csrf(home)})
+    ).headers["location"].rsplit("/", 1)[-1]
+    b = (
+        await alice.post("/domains", data={"name": "GB", "csrf_token": web_csrf(home)})
+    ).headers["location"].rsplit("/", 1)[-1]
+    await _upload(alice, a, "ga-doc.txt")
+    await _upload(alice, b, "gb-doc.txt")
+
+    r = await alice.get("/search?q=doc", headers={"HX-Request": "true"})
+    assert "[GA]" in r.text and "[GB]" in r.text

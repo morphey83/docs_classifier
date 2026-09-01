@@ -1,0 +1,22 @@
+{% set d = view.domain %}
+{% set active = active|default('') %}
+<nav aria-label="breadcrumb"><ul>
+  <li><a href="/">Домены</a></li>
+  <li><a href="/domains/{{ d.slug }}">{{ d.name }}</a></li>
+  {% if crumb %}<li>{{ crumb }}</li>{% endif %}
+</ul></nav>
+
+<nav class="domain-tabs">
+  <a href="/domains/{{ d.slug }}/search" {{ 'aria-current=page' if active == 'search' }}>Поиск</a>
+  <a href="/domains/{{ d.slug }}/inbox" {{ 'aria-current=page' if active == 'inbox' }}>Инбокс</a>
+  <a href="/domains/{{ d.slug }}/sets" {{ 'aria-current=page' if active == 'sets' }}>Наборы</a>
+  <a href="/domains/{{ d.slug }}/tags" {{ 'aria-current=page' if active == 'tags' }}>Теги</a>
+  <a href="/domains/{{ d.slug }}/upload" {{ 'aria-current=page' if active == 'upload' }}>Загрузка</a>
+  {% if view.has('delete') %}
+  <a href="/domains/{{ d.slug }}/trash" {{ 'aria-current=page' if active == 'trash' }}>Корзина</a>
+  {% endif %}
+  {% if view.has('manage') %}
+  <a href="/domains/{{ d.slug }}/members" {{ 'aria-current=page' if active == 'members' }}>Участники</a>
+  <a href="/domains/{{ d.slug }}/settings" {{ 'aria-current=page' if active == 'settings' }}>Настройки</a>
+  {% endif %}
+</nav>

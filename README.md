@@ -10,7 +10,7 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
 
 ## Status
 
-**Phases 0–6 done, 7a (web UI core) done.**
+**Phases 0–7 done — the app is feature-complete.**
 
 - **0 skeleton** — config, async DB, Alembic, auth (session cookies), `/health`,
   SAQ worker stub, Docker Compose, tests.
@@ -60,17 +60,21 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
   (send file, edit tags / title, request OCR / index, add to a set); `/sets`
   lists sets and hands back the archive (as a file ≤ 50 MB or a share link).
   Current domain + last search persist in `bot_user_state`.
-- **7a web UI** (HTMX + Jinja, `app/web/`, served at `/`) — login / register /
-  logout (session cookie + signed CSRF token); dashboard of your domains;
-  domain overview; faceted **search** (filter form + live HTMX results +
-  facets + pagination); document page with inline tag / title / notes edits
-  and OCR / index buttons; upload (file or archive, with batch results and
-  name-conflict resolution). Vendored `pico.css` + `htmx` (no CDN, no build).
+- **7 web UI** (HTMX + Jinja, `app/web/`, served at `/`; vendored `pico.css` +
+  `htmx`, no CDN, no build; session cookie + signed CSRF) —
   **The JSON API moved under `/api`** (`/d/{token}`, `/tg/link/*`, `/health`
   stay at the root).
-
-Roadmap (§12): 7b sets / inbox / tag-vocabulary UI · 7c members / settings /
-trash / profile.
+  - **7a** login / register / logout; dashboard; domain overview; faceted
+    search (filter form + live HTMX results + facets + pager); document page
+    (inline tag / title / notes edits, OCR / index); upload (file or archive,
+    batch results, name-conflict resolution).
+  - **7b** document sets (list / detail / items / archive download / share
+    links); inbox card-by-card processing; per-domain tag-vocabulary
+    management (create / rename / recolour / merge / delete); `/search`
+    across every domain you belong to.
+  - **7c** members + role changes + invites; domain settings
+    (`allowed_types`, auto-OCR / auto-index, quotas, retention, …);
+    trash (restore / owner purge); profile (Telegram linking, password).
 
 ## Stack
 

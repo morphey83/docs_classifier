@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% set d = view.domain %}
+{% block title %}{{ set.name }} — {{ d.name }}{% endblock %}
+{% block content %}
+{% set active = 'sets' %}
+{% set crumb = set.name %}
+{% include "_domain_nav.html" %}
+
+<hgroup>
+  <h1>{{ set.name }}</h1>
+  <p class="muted">{{ set.item_count }} документов · {{ 'общий' if set.visibility == 'domain' else 'личный' }}</p>
+</hgroup>
+
+{% if request.query_params.get('building') %}
+<p class="flash ok">Архив готовится — обновите страницу через несколько секунд и нажмите «Скачать» снова.</p>
+{% endif %}
+
+<p>
+  <a href="/domains/{{ d.slug }}/sets/{{ set.id }}/archive" role="button" class="outline">⬇️ Скачать архив</a>
+  {% if view.has('download') %}
+  <form method="post" action="/domains/{{ d.slug }}/sets/{{ set.id }}/links" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button name="kind" value="one_time" class="outline secondary">🔗 разовая ссылка</button>
+    {% if view.has('write') %}
+    <button name="kind" value="permanent" class="outline secondary">🔗 постоянная</button>
+    {% endif %}
+  </form>
+  {% endif %}
+</p>
+
+{% if links %}
+<h4>Ссылки</h4>
+<table>
+  <thead><tr><th>ссылка</th><th>тип</th><th>скачано</th><th></th></tr></thead>
+  <tbody>
+  {% for link, url in links %}
+    <tr>
+      <td><small>{{ url }}</small></td>
+      <td>{{ 'одноразовая' if link.max_downloads == 1 else 'постоянная' }}</td>
+      <td>{{ link.download_count }}{% if link.max_downloads %}/{{ link.max_downloads }}{% endif %}</td>
+      <td>
+        <form method="post" action="/links/{{ link.id }}/revoke" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <button class="outline contrast">отозвать</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h4>Документы</h4>
+{% for doc in docs %}
+<article class="result">
+  <a href="/documents/{{ doc.id }}">{{ doc.title }}</a>
+  <span class="muted">· {{ doc.doc_date|shortdate }} · {{ doc.size_bytes|humansize }}</span>
+  {% for name in tag_map.get(doc.id, [])|sort %}<span class="tag">{{ name }}</span>{% endfor %}
+  {% if can_edit %}
+  <form method="post" action="/domains/{{ d.slug }}/sets/{{ set.id }}/items/{{ doc.id }}/remove" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button class="outline contrast" style="padding:.1rem .5rem;">убрать</button>
+  </form>
+  {% endif %}
+</article>
+{% else %}
+<p class="muted">В наборе нет документов. Добавляйте их со страницы документа или из поиска.</p>
+{% endfor %}
+
+{% if can_edit %}
+<hr>
+<form method="post" action="/domains/{{ d.slug }}/sets/{{ set.id }}/delete"
+      onsubmit="return confirm('Удалить набор?')">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <button class="outline contrast">Удалить набор</button>
+</form>
+{% endif %}
+{% endblock %}

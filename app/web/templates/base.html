@@ -23,6 +23,10 @@
     .flash { padding:.6rem 1rem; border-radius:var(--pico-border-radius); margin-bottom:1rem; }
     .flash.ok  { background:#dcfce7; color:#166534; }
     .flash.err { background:#fee2e2; color:#991b1b; }
+    nav.domain-tabs { display:flex; gap:.25rem; flex-wrap:wrap; margin:.5rem 0 1.5rem;
+      border-bottom:1px solid var(--pico-muted-border-color); }
+    nav.domain-tabs a { padding:.4rem .8rem; text-decoration:none; border-bottom:2px solid transparent; }
+    nav.domain-tabs a[aria-current] { border-bottom-color: var(--pico-primary); font-weight:600; }
   </style>
   <script src="/static/htmx.min.js" defer></script>
 </head>
@@ -34,7 +38,8 @@
       </ul>
       <ul>
         {% if user %}
-          <li class="muted">{{ user.username }}</li>
+          <li><a href="/search" class="secondary">Поиск везде</a></li>
+          <li><a href="/profile" class="secondary">{{ user.username }}</a></li>
           <li>
             <form method="post" action="/logout" class="inline-form">
               <input type="hidden" name="csrf_token" value="{{ csrf }}">

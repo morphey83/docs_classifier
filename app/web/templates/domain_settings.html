@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% set d = view.domain %}
+{% block title %}Настройки — {{ d.name }}{% endblock %}
+{% block content %}
+{% set active = 'settings' %}
+{% include "_domain_nav.html" %}
+
+<h1>Настройки домена</h1>
+
+<form method="post" action="/domains/{{ d.slug }}/settings">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+
+  <label>Название <input name="name" value="{{ d.name }}" required maxlength="120"></label>
+  <label>Описание <textarea name="description" rows="2">{{ d.description or '' }}</textarea></label>
+
+  <fieldset>
+    <label><input type="checkbox" name="auto_ocr" {{ 'checked' if s.get('auto_ocr') }}> авто-OCR при загрузке</label>
+    <label><input type="checkbox" name="auto_index" {{ 'checked' if s.get('auto_index') }}> авто-индексация при загрузке</label>
+    <label><input type="checkbox" name="allow_public_links" {{ 'checked' if s.get('allow_public_links', True) }}> разрешить публичные ссылки</label>
+  </fieldset>
+
+  <label>Язык OCR по умолчанию
+    <input name="default_ocr_lang" value="{{ s.get('default_ocr_lang', '') }}" placeholder="rus+eng">
+  </label>
+  <label>Разрешённые типы файлов (расширения через запятую; пусто = любые)
+    <input name="allowed_types" value="{{ (s.get('allowed_types') or [])|join(', ') }}" placeholder="pdf, docx, png">
+  </label>
+  <label>При конфликте имён в архиве
+    <select name="archive_on_conflict">
+      <option value="skip" {{ 'selected' if s.get('archive_on_conflict') != 'new' }}>пропускать</option>
+      <option value="new" {{ 'selected' if s.get('archive_on_conflict') == 'new' }}>грузить как отдельный</option>
+    </select>
+  </label>
+
+  <div class="grid">
+    <label>Квота хранилища, МБ (макс. {{ caps.quota }})
+      <input name="storage_quota_mb" type="number" min="0" max="{{ caps.quota }}"
+             value="{{ s.get('storage_quota_mb', caps.quota) }}">
+    </label>
+    <label>Макс. загрузка, МБ (макс. {{ caps.upload }})
+      <input name="max_upload_mb" type="number" min="0" max="{{ caps.upload }}"
+             value="{{ s.get('max_upload_mb', caps.upload) }}">
+    </label>
+  </div>
+  <div class="grid">
+    <label>Хранить корзину, дней
+      <input name="trash_retention_days" type="number" min="0"
+             value="{{ s.get('trash_retention_days', caps.trash) }}">
+    </label>
+    <label>Хранить архив набора, дней
+      <input name="set_archive_ttl_days" type="number" min="0" value="{{ s.get('set_archive_ttl_days', 7) }}">
+    </label>
+  </div>
+
+  <button type="submit">Сохранить</button>
+</form>
+
+{% if is_owner %}
+<hr>
+<h4>Опасная зона</h4>
+<form method="post" action="/domains/{{ d.slug }}/delete"
+      onsubmit="return confirm('Удалить домен «{{ d.name }}» со всеми документами? Это необратимо.')">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <button class="contrast">Удалить домен</button>
+</form>
+{% endif %}
+{% endblock %}

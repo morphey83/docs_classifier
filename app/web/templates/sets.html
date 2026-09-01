@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% set d = view.domain %}
+{% block title %}Наборы — {{ d.name }}{% endblock %}
+{% block content %}
+{% set active = 'sets' %}
+{% include "_domain_nav.html" %}
+
+<h1>Наборы документов</h1>
+
+{% if sets %}
+<div class="grid">
+  {% for s in sets %}
+  <article>
+    <header><a href="/domains/{{ d.slug }}/sets/{{ s.id }}"><strong>{{ s.name }}</strong></a></header>
+    <p class="muted">{{ s.item_count }} док. · {{ 'общий' if s.visibility == 'domain' else 'личный' }}</p>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">Наборов пока нет. Добавляйте документы из поиска.</p>
+{% endif %}
+
+<article>
+  <h3>Новый набор</h3>
+  <form method="post" action="/domains/{{ d.slug }}/sets">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input name="name" placeholder="Название набора" required maxlength="200">
+    <label><input type="checkbox" name="visibility" value="domain"> виден всем участникам домена</label>
+    <button type="submit">Создать</button>
+  </form>
+</article>
+{% endblock %}

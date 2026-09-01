@@ -7,9 +7,30 @@
   <p class="muted">{{ doc.original_name }} · {{ doc.mime }} · {{ doc.size_bytes|humansize }}</p>
 </hgroup>
 
+{% if doc.deleted_at %}
+<p class="flash err">Документ в корзине (удалён {{ doc.deleted_at|datetimefmt }}).
+  {% if view.has('delete') %}
+  <form method="post" action="/documents/{{ doc.id }}/restore" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button class="outline">Восстановить</button>
+  </form>
+  {% endif %}
+</p>
+{% endif %}
+
 <p>
   {% if can_download %}
   <a href="/documents/{{ doc.id }}/download" role="button" class="outline">Скачать оригинал</a>
+  {% endif %}
+  {% if sets and view.has('view') %}
+  <form method="post" action="/documents/{{ doc.id }}/add-to-set" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <select name="set_id" required>
+      <option value="" disabled selected>➕ в набор…</option>
+      {% for s in sets %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+    </select>
+    <button class="outline secondary">Добавить</button>
+  </form>
   {% endif %}
 </p>
 
@@ -67,3 +88,12 @@
   <tr><td>версия</td><td>{{ doc.version }}</td></tr>
   <tr><td>sha256</td><td><small>{{ doc.sha256 }}</small></td></tr>
 </table>
+
+{% if view.has('delete') and not doc.deleted_at %}
+<hr>
+<form method="post" action="/documents/{{ doc.id }}/delete"
+      onsubmit="return confirm('Переместить документ в корзину?')">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <button class="outline contrast">Удалить в корзину</button>
+</form>
+{% endif %}
