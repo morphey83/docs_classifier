@@ -84,6 +84,9 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
   - **7f** search-filter polish (extension picker from real data,
     humanised status, no facet block); vendored Lucide-style SVG icon
     set (`app/web/static/icons.svg`) replacing the emoji.
+  - **7g** tagging modal redesign (full-width preview, editable name
+    field, one-line chips, Отложить/Готово row); the bot now sends image
+    documents as photo cards, including in `/find` results.
 
 ## Stack
 
