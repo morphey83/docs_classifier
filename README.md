@@ -75,12 +75,18 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
   - **7c** members + role changes + invites; domain settings
     (`allowed_types`, auto-OCR / auto-index, quotas, retention, …);
     trash (restore / owner purge); profile (Telegram linking, password).
+  - **7e** "Очередь на сортировку" is a domain-filterable table of every
+    unlabelled document; a modal card tags them one by one ("Готово,
+    дальше" loads the next and refreshes the table). Image documents get
+    a cached WebP thumbnail (`app/services/thumbs.py`,
+    `GET /documents/{id}/thumb`), shown on the document page, the inbox
+    card, and the bot's `/inbox` prompt.
 
 ## Stack
 
 Python 3.12 · FastAPI · PostgreSQL 16 · SQLAlchemy 2 (async) · Alembic ·
 SAQ (Postgres-backed jobs, no Redis) · aiogram 3 (bot, long-polling) ·
-Caddy · Docker Compose.
+Pillow (thumbnails) · Caddy · Docker Compose.
 
 The bot runs as an opt-in compose service:
 
