@@ -81,6 +81,9 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
     a cached WebP thumbnail (`app/services/thumbs.py`,
     `GET /documents/{id}/thumb`), shown on the document page, the inbox
     card, and the bot's `/inbox` prompt.
+  - **7f** search-filter polish (extension picker from real data,
+    humanised status, no facet block); vendored Lucide-style SVG icon
+    set (`app/web/static/icons.svg`) replacing the emoji.
 
 ## Stack
 
