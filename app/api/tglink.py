@@ -15,7 +15,7 @@ These ``/tg/link/*`` routes are mounted at the site root (not under ``/api``)
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,12 +44,17 @@ async def link_status(token: str, db: AsyncSession = Depends(get_session)) -> Tg
 
 @router.post("/tg/link/{token}/confirm")
 async def confirm_link(
-    token: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)
+    token: str,
+    background: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
 ) -> dict[str, bool]:
     try:
-        await svc.confirm_bot_initiated(db, token, user)
+        tok = await svc.confirm_bot_initiated(db, token, user)
     except svc.TgLinkError as err:
         raise HTTPException(status.HTTP_409_CONFLICT, str(err)) from err
+    if tok.tg_id is not None:
+        background.add_task(svc.notify_account_linked, tok.tg_id, user.username)
     return {"linked": True}
 
 

@@ -5,8 +5,9 @@ from __future__ import annotations
 from aiogram.filters.callback_data import CallbackData
 
 
-class DomainCb(CallbackData, prefix="dm"):
-    id: str  # domain uuid, or "none" to clear
+class DomCb(CallbackData, prefix="dc"):
+    verb: str  # open | setcur | rename | members | addmember | leave | list
+    id: str  # domain uuid (or "-" for verb="list")
 
 
 class PageCb(CallbackData, prefix="pg"):

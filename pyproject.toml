@@ -17,8 +17,8 @@ ignore = ["B008"]  # FastAPI Depends() in defaults
 "tests/*" = ["S101", "RUF001", "RUF002", "RUF003"]
 # inline HTML/JS page — its Cyrillic UI text and markup lines aren't Python style
 "app/api/tglink.py" = ["E501", "RUF001"]
-# the bot is Russian-facing: user-visible strings are full of Cyrillic
-"app/bot/**" = ["RUF001", "RUF002", "RUF003"]
+# the bot is Russian-facing: Cyrillic UI strings + long inline keyboard rows
+"app/bot/**" = ["RUF001", "RUF002", "RUF003", "E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -9,6 +9,7 @@ import pytest_asyncio
 from aiogram import Bot
 from aiogram.methods import TelegramMethod
 from aiogram.types import (
+    CallbackQuery,
     Chat,
     Message,
     Update,
@@ -121,5 +122,43 @@ async def test_domain_command_lists_memberships(linked):
     alice, _ = linked
     await alice.post("/api/domains", json={"name": "OnlyOne"})
     bot, dp = RecordingBot(), build_dispatcher()
-    await dp.feed_update(bot, _message_update("/domain"))
-    assert any("OnlyOne" in t for t in bot.button_texts())
+    await dp.feed_update(bot, _message_update("/domains"))
+    labels = bot.button_texts()
+    assert any("OnlyOne" in t for t in labels)
+    assert any("Создать домен" in t for t in labels)
+
+
+def _callback_update(data: str, uid: int = TG_ID) -> Update:
+    return Update(
+        update_id=2,
+        callback_query=CallbackQuery(
+            id="cb1",
+            from_user=TgUser(id=uid, is_bot=False, first_name="Alice", username="alice"),
+            chat_instance="ci",
+            data=data,
+            message=Message(
+                message_id=5,
+                date=datetime.now(tz=UTC),
+                chat=Chat(id=uid, type="private"),
+                from_user=TgUser(id=1, is_bot=True, first_name="bot"),
+                text="…",
+            ),
+        ),
+    )
+
+
+async def test_create_domain_from_bot(linked):
+    alice, _ = linked
+    bot, dp = RecordingBot(), build_dispatcher()
+    await dp.feed_update(bot, _callback_update("dom:new"))
+    await dp.feed_update(bot, _message_update("Личный архив"))
+    assert any("создан" in t for t in bot.texts())
+
+    listed = (await alice.get("/api/domains")).json()
+    assert any(d["name"] == "Личный архив" for d in listed)
+
+
+async def test_notify_account_linked_noop_without_token():
+    from app.services.tglink import notify_account_linked
+
+    await notify_account_linked(123, "alice")  # BOT_TOKEN unset in tests → no-op, no raise

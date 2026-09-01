@@ -44,6 +44,9 @@ async def _run() -> None:
     )
     dp = build_dispatcher()
     me = await bot.get_me()
+    from app.bot.menu import ROOT_COMMANDS
+
+    await bot.set_my_commands(ROOT_COMMANDS)
     log.info("bot @%s starting (long-polling)", me.username)
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 

@@ -97,6 +97,32 @@ async def confirm_bot_initiated(db: AsyncSession, token: str, user: User) -> TgL
     return tok
 
 
+async def notify_account_linked(tg_id: int, username: str) -> None:
+    """Best-effort: tell the Telegram user the link succeeded (bot-initiated flow).
+
+    The bot process never sees this confirmation — the web finished the
+    handshake — so the web nudges the chat back to a working state.
+    """
+    if not settings.bot_token:
+        return
+    try:
+        from aiogram import Bot
+
+        from app.bot.menu import HELP, root_kb
+
+        bot = Bot(settings.bot_token)
+        try:
+            await bot.send_message(
+                tg_id,
+                f"Готово — этот Telegram привязан к аккаунту «{username}».\n\n{HELP}",
+                reply_markup=root_kb(),
+            )
+        finally:
+            await bot.session.close()
+    except Exception:  # pragma: no cover - notification is not critical
+        pass
+
+
 async def confirm_web_initiated(
     db: AsyncSession, token: str, *, tg_id: int, tg_username: str | None
 ) -> User:
