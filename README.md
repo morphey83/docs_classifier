@@ -24,12 +24,30 @@ SAQ (Postgres-backed jobs, no Redis) · aiogram 3 (bot) · Caddy · Docker Compo
 
 ## Run
 
+### On a server (Docker)
+
 ```bash
 cp .env.example .env      # set SECRET_KEY, POSTGRES_PASSWORD, DATABASE_URL
 docker compose up --build -d
 ```
 
 `web` runs `alembic upgrade head` on start. API docs at `http://127.0.0.1:8000/docs`.
+
+### Locally, no Docker (SQLite)
+
+Needs only the dev virtualenv. A local `.env` pointing at SQLite is enough:
+
+```
+DEBUG=true
+SECRET_KEY=local-dev
+DATABASE_URL=sqlite+aiosqlite:///./dev.db
+COOKIE_SECURE=false
+```
+
+```bash
+alembic upgrade head                       # creates dev.db
+uvicorn app.main:app --reload              # http://127.0.0.1:8000/docs
+```
 
 ## Develop
 
