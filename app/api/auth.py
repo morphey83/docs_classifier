@@ -9,7 +9,9 @@ from app.config import settings
 from app.db import get_session
 from app.models import User
 from app.schemas.auth import LoginIn, RegisterIn, UserOut
+from app.schemas.tglink import TgLinkCreateOut
 from app.security import get_current_user
+from app.services import tglink as tglink_svc
 from app.services.users import (
     RegistrationError,
     authenticate,
@@ -17,6 +19,7 @@ from app.services.users import (
     delete_session,
     register_user,
 )
+from app.util.urls import bot_deep_link
 
 router = APIRouter()
 
@@ -91,3 +94,14 @@ async def logout(
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+@router.post("/tg-link", response_model=TgLinkCreateOut, status_code=status.HTTP_201_CREATED)
+async def create_tg_link(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)
+) -> TgLinkCreateOut:
+    """Web-initiated Telegram linking: returns a token + bot deep-link (§8)."""
+    if user.tg_id is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "this account already has a linked Telegram")
+    tok = await tglink_svc.create_web_initiated(db, user)
+    return TgLinkCreateOut(token=tok.token, deep_link=bot_deep_link(tok.token))

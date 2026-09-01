@@ -1,7 +1,7 @@
 # DocsClassifier — architecture & requirements
 
-Status: **phases 0–6 built.** Design locked. Only the web UI (§7 / phase 7) is left.
-Last updated: 2026-09-01 (rev 4 — cross-domain search, Telegram linking, allowed file types).
+Status: **phases 0–6 + 7a built.** Design locked. Web-UI phases 7b / 7c remain.
+Last updated: 2026-09-01 (rev 5 — API moved to /api, HTMX+Jinja web UI at /).
 
 ---
 
@@ -332,6 +332,11 @@ dedup). Derived files: `DATA_DIR/derived/<h>/…`.
 
 ## 6. API surface (sketch)
 
+The JSON API is served under **`/api`** (e.g. `POST /api/auth/login`); the
+server-rendered web UI (§12 phase 7) owns the site root. Short public paths
+— `/d/{token}` (share downloads), `/tg/link/*` (linking page), `/health` —
+stay at the root. Paths below omit the `/api` prefix for brevity.
+
 ```
 POST   /auth/register            POST /auth/login    POST /auth/logout
 GET    /auth/me
@@ -637,7 +642,9 @@ non-deleted documents + its trash + its export artifacts.
 | **5 trash & lifecycle** ✅ | `DELETE /documents/{id}` soft-delete (`delete` cap) → `GET /domains/{d}/trash` + `?include_trash=true`; `POST /documents/{id}/restore` (409 if content is active again); `POST /domains/{d}/trash/purge` owner-only; `cleanup` SAQ cron (`app/services/cleanup.py`, nightly) — per-domain trash retention → `hard_purge` (explicit child-row deletes + blob refcount GC), expired ad-hoc exports removed row+file, expired set-archive files cleared (row+links kept), orphan-blob disk sweep; dedup unique index made partial (`WHERE deleted_at IS NULL`, migration 0006) so trashed content doesn't block re-upload; `uploaded_at` gains a Python µs default for stable inbox FIFO |
 | **6a API groundwork** ✅ | cross-domain search core (`search_documents(db, domain_ids, f)`) + `GET /documents` (`domain_id` optional filter) alongside unchanged `GET /domains/{d}/documents`; tag filters match by name, case-insensitively, folded in **Python** not SQL (`func.lower()` only folds ASCII on SQLite / a `C`-locale Postgres) — one `Tag` fetch per search, not per filter; `GET /tags` aggregates tag-name options the same way; `allowed_types` policy (§3.1): `DisallowedType` in `ingest_upload` → `415` on direct upload, `skipped_type` batch-item outcome for an archive entry; `PUBLIC_BASE_URL` (`app/util/urls.py::absolute_url`) makes `LinkOut.url` absolute; auto-reindex on a title edit when already indexed; `tg_link_token` (migration 0007) + bidirectional linking service (`app/services/tglink.py`) + `POST /auth/tg-link` + minimal standalone `GET /tg/link/{token}` page (inline HTML/JS, no build step) + `.../status` + `.../confirm` |
 | **6b bot** ✅ | `app/bot/` — aiogram 3, long-polling, own process (`python -m app.bot`), shares the DB + `app/services/*` directly. `DbSessionMiddleware` + `LinkedUserMiddleware` (tg_id → `User`). `/start` both linking directions (`tglink` service); `/domain` (persisted in `bot_user_state`, migration 0008); file/photo/archive upload → inbox (`ingest_upload` / inline `process_archive`, `DisallowedType` + `skipped_type` surfaced); `/inbox` FSM tagging loop; `/find` cross-domain via `search_documents(db, member_domain_ids, …)` + `parse_query` mini-syntax + `PageCb` paging + persisted last query; per-result `DocCb` actions (send file from the shared blob volume, tags/title via FSM, OCR/index via `dispatch(None, …)`, add-to-set); `/sets` → `ensure_current_archive` + `create_share_link` (both extracted to `app/services/docsets.py`, shared with the API), ≤ 50 MB file-or-link choice. `dispatch()` grew a background=None branch for the bot. aiogram callback_data ≤ 64 B: doc-scoped verbs carry the uuid, two-object actions stash one side in FSM. |
-| **7 web UI** | HTMX + Jinja — *separate design round* |
+| **7a web UI core** ✅ | `app/web/` (Jinja2 + vendored pico.css/htmx, no build), served at `/`; **the JSON API moved to `/api`** (`/d/{token}`, `/tg/link/*`, `/health` stay at root); session-cookie auth + signed CSRF (`itsdangerous`), `AuthRequired` → 303 to `/login?next=`; dashboard / create-domain / domain overview / faceted **search** (filter form → HTMX `#results` partial via `HX-Request`, facets, pager, `request.url.include_query_params` links) / document page (inline tag/title/notes edits + OCR/index buttons, HTMX `#doc` swap) / upload (single + archive batch, name-conflict resolution) |
+| **7b web UI** | sets (list/detail/items/archive/links), inbox card flow, per-domain tag-vocabulary management, cross-domain `GET /search` |
+| **7c web UI** | members + invites, domain settings, trash, profile (Telegram linking, API keys, password) |
 
 Deliberately **out of scope for 6a/6b**: push notifications when an async job
 (OCR/index/archive build) finishes — the bot re-shows current status when the

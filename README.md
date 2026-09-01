@@ -10,7 +10,7 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
 
 ## Status
 
-**Phases 0–6 done.**
+**Phases 0–6 done, 7a (web UI core) done.**
 
 - **0 skeleton** — config, async DB, Alembic, auth (session cookies), `/health`,
   SAQ worker stub, Docker Compose, tests.
@@ -60,8 +60,17 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
   (send file, edit tags / title, request OCR / index, add to a set); `/sets`
   lists sets and hands back the archive (as a file ≤ 50 MB or a share link).
   Current domain + last search persist in `bot_user_state`.
+- **7a web UI** (HTMX + Jinja, `app/web/`, served at `/`) — login / register /
+  logout (session cookie + signed CSRF token); dashboard of your domains;
+  domain overview; faceted **search** (filter form + live HTMX results +
+  facets + pagination); document page with inline tag / title / notes edits
+  and OCR / index buttons; upload (file or archive, with batch results and
+  name-conflict resolution). Vendored `pico.css` + `htmx` (no CDN, no build).
+  **The JSON API moved under `/api`** (`/d/{token}`, `/tg/link/*`, `/health`
+  stay at the root).
 
-Roadmap (§12 of the architecture doc): 7 web UI.
+Roadmap (§12): 7b sets / inbox / tag-vocabulary UI · 7c members / settings /
+trash / profile.
 
 ## Stack
 

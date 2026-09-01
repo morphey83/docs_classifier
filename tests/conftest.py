@@ -79,7 +79,7 @@ async def client(client_factory) -> AsyncClient:
 
 async def register(c: AsyncClient, username: str, password: str = "correct horse!") -> dict:
     r = await c.post(
-        "/auth/register",
+        "/api/auth/register",
         json={"username": username, "email": f"{username}@example.com", "password": password},
     )
     assert r.status_code == 201, r.text

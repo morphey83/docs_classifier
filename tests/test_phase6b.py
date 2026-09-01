@@ -85,7 +85,7 @@ def test_result_line_has_domain_meta_tags_badges():
 # --- persisted per-user bot state -------------------------------------
 @pytest_asyncio.fixture
 async def alice_user(alice):
-    me = (await alice.get("/auth/me")).json()
+    me = (await alice.get("/api/auth/me")).json()
     return uuid.UUID(me["id"])
 
 
@@ -103,7 +103,7 @@ async def test_state_roundtrip(alice_user):
 
 
 async def test_clear_dangling_domain(alice, alice_user):
-    d = (await alice.post("/domains", json={"name": "D"})).json()
+    d = (await alice.post("/api/domains", json={"name": "D"})).json()
     async with get_sessionmaker()() as db:
         await bot_state.set_current_domain(db, alice_user, uuid.UUID(d["id"]))
         await db.commit()
@@ -119,18 +119,18 @@ async def test_clear_dangling_domain(alice, alice_user):
 
 # --- shared set service ----------------------------------------------
 async def test_create_share_link_service_enforces_caps(alice, bob):
-    d = (await alice.post("/domains", json={"name": "SL"})).json()
-    bob_me = (await bob.get("/auth/me")).json()
+    d = (await alice.post("/api/domains", json={"name": "SL"})).json()
+    bob_me = (await bob.get("/api/auth/me")).json()
     await alice.post(
-        f"/domains/{d['id']}/members", json={"username": bob_me["username"], "role": "viewer"}
+        f"/api/domains/{d['id']}/members", json={"username": bob_me["username"], "role": "viewer"}
     )
     r = await alice.post(
-        f"/domains/{d['id']}/uploads", files={"file": ("a.txt", b"a", "text/plain")}
+        f"/api/domains/{d['id']}/uploads", files={"file": ("a.txt", b"a", "text/plain")}
     )
     doc_id = r.json()["document"]["id"]
     s = (
         await alice.post(
-            f"/domains/{d['id']}/sets", json={"name": "s", "document_ids": [doc_id]}
+            f"/api/domains/{d['id']}/sets", json={"name": "s", "document_ids": [doc_id]}
         )
     ).json()
 

@@ -1,0 +1,69 @@
+{% set can_write = view.has('write') %}
+{% set can_process = view.has('process') %}
+{% set can_download = view.has('download') %}
+
+<hgroup>
+  <h1>{{ doc.title }}</h1>
+  <p class="muted">{{ doc.original_name }} · {{ doc.mime }} · {{ doc.size_bytes|humansize }}</p>
+</hgroup>
+
+<p>
+  {% if can_download %}
+  <a href="/documents/{{ doc.id }}/download" role="button" class="outline">Скачать оригинал</a>
+  {% endif %}
+</p>
+
+<h4>Теги</h4>
+<p>
+  {% for name in tags %}<span class="tag">{{ name }}</span>{% else %}<span class="muted">нет тегов</span>{% endfor %}
+</p>
+{% if can_write %}
+<form hx-post="/documents/{{ doc.id }}/tags" hx-target="#doc" class="grid">
+  <input name="tags" value="{{ tags|join(', ') }}" placeholder="через запятую; пустое поле снимет все">
+  <button type="submit">Сохранить теги</button>
+</form>
+{% endif %}
+
+<h4>Обработка</h4>
+<table class="meta">
+  <tr><td>текст</td><td>{{ doc.text_source }}</td></tr>
+  <tr><td>индексация</td><td>{{ doc.index_status }}{% if doc.indexed_at %} · {{ doc.indexed_at|datetimefmt }}{% endif %}</td></tr>
+  <tr><td>OCR</td><td>{{ doc.ocr_status }}{% if doc.ocr_at %} · {{ doc.ocr_at|datetimefmt }}{% endif %}</td></tr>
+</table>
+{% if can_process %}
+<p>
+  <button hx-post="/documents/{{ doc.id }}/index" hx-target="#doc" class="outline secondary">
+    {{ 'Переиндексировать' if doc.indexed_at else 'Проиндексировать' }}
+  </button>
+  {% if ocr_supported and not doc.ocr_at %}
+  <button hx-post="/documents/{{ doc.id }}/ocr" hx-target="#doc" class="outline secondary">Распознать (OCR)</button>
+  {% elif not ocr_supported %}
+  <span class="muted">OCR недоступен для этого типа</span>
+  {% endif %}
+</p>
+{% endif %}
+
+<h4>Свойства</h4>
+{% if can_write %}
+<form method="post" action="/documents/{{ doc.id }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <label>Название <input name="title" value="{{ doc.title }}" required maxlength="500"></label>
+  <label>Дата документа
+    <input name="doc_date" type="date" value="{{ doc.doc_date.date().isoformat() if doc.doc_date else '' }}">
+  </label>
+  <label>Заметки <textarea name="notes" rows="3">{{ doc.notes or '' }}</textarea></label>
+  <button type="submit">Сохранить</button>
+</form>
+{% else %}
+<table class="meta">
+  <tr><td>дата документа</td><td>{{ doc.doc_date|shortdate }}</td></tr>
+  <tr><td>заметки</td><td>{{ doc.notes or '—' }}</td></tr>
+</table>
+{% endif %}
+
+<table class="meta">
+  <tr><td>статус</td><td>{{ doc.status }}</td></tr>
+  <tr><td>загружен</td><td>{{ doc.uploaded_at|datetimefmt }}</td></tr>
+  <tr><td>версия</td><td>{{ doc.version }}</td></tr>
+  <tr><td>sha256</td><td><small>{{ doc.sha256 }}</small></td></tr>
+</table>

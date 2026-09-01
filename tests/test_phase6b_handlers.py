@@ -58,7 +58,7 @@ class RecordingBot(Bot):
 @pytest_asyncio.fixture
 async def linked(alice):
     """Link alice's account to a fake Telegram id, return (client, user_id)."""
-    me = (await alice.get("/auth/me")).json()
+    me = (await alice.get("/api/auth/me")).json()
     async with get_sessionmaker()() as db:
         u = await db.get(User, uuid.UUID(me["id"]))
         u.tg_id = TG_ID
@@ -99,14 +99,14 @@ async def test_find_without_query_prompts(linked):
 
 async def test_find_returns_results_across_domains(linked):
     alice, _uid = linked
-    a = (await alice.post("/domains", json={"name": "Alpha"})).json()
-    b = (await alice.post("/domains", json={"name": "Beta"})).json()
+    a = (await alice.post("/api/domains", json={"name": "Alpha"})).json()
+    b = (await alice.post("/api/domains", json={"name": "Beta"})).json()
     await alice.post(
-        f"/domains/{a['id']}/uploads",
+        f"/api/domains/{a['id']}/uploads",
         files={"file": ("contract-alpha.txt", b"alpha contract", "text/plain")},
     )
     await alice.post(
-        f"/domains/{b['id']}/uploads",
+        f"/api/domains/{b['id']}/uploads",
         files={"file": ("contract-beta.txt", b"beta contract", "text/plain")},
     )
 
@@ -119,7 +119,7 @@ async def test_find_returns_results_across_domains(linked):
 
 async def test_domain_command_lists_memberships(linked):
     alice, _ = linked
-    await alice.post("/domains", json={"name": "OnlyOne"})
+    await alice.post("/api/domains", json={"name": "OnlyOne"})
     bot, dp = RecordingBot(), build_dispatcher()
     await dp.feed_update(bot, _message_update("/domain"))
     assert any("OnlyOne" in t for t in bot.button_texts())

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set d = view.domain %}
+{% block title %}{{ d.name }} — DocsClassifier{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ul>
+  <li><a href="/">Домены</a></li>
+  <li>{{ d.name }}</li>
+</ul></nav>
+
+<hgroup>
+  <h1>{{ d.name }}</h1>
+  <p class="muted">ваша роль: {{ view.role }}</p>
+</hgroup>
+
+<div class="grid">
+  <article>
+    <h4>{{ doc_total }}</h4>
+    <p class="muted">документов</p>
+    <a href="/domains/{{ d.slug }}/search" role="button" class="outline">Поиск</a>
+  </article>
+  <article>
+    <h4>{{ inbox }}</h4>
+    <p class="muted">в инбоксе</p>
+    <a href="/domains/{{ d.slug }}/inbox" role="button" class="outline secondary">Обработать</a>
+  </article>
+  <article>
+    <h4>{{ tag_count }}</h4>
+    <p class="muted">тегов</p>
+  </article>
+</div>
+
+<p>
+  <a href="/domains/{{ d.slug }}/upload" role="button">Загрузить документ или архив</a>
+</p>
+{% endblock %}

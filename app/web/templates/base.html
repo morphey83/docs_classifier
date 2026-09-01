@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}DocsClassifier{% endblock %}</title>
+  <link rel="stylesheet" href="/static/pico.min.css">
+  <style>
+    body { padding-block: 0; }
+    main.container { padding-block: 1.5rem 4rem; }
+    nav.topbar { border-bottom: 1px solid var(--pico-muted-border-color); }
+    nav.topbar .container { padding-block: .4rem; }
+    .muted { color: var(--pico-muted-color); }
+    .tag { display:inline-block; padding:.05rem .5rem; margin:.1rem; border-radius:1rem;
+           background: var(--pico-secondary-background); font-size:.8rem; white-space:nowrap; }
+    .facet a { text-decoration:none; }
+    .grid-search { display:grid; grid-template-columns: 15rem 1fr; gap: 1.5rem; align-items:start; }
+    @media (max-width: 800px) { .grid-search { grid-template-columns: 1fr; } }
+    .result { padding:.6rem 0; border-bottom:1px solid var(--pico-muted-border-color); }
+    .result h4 { margin-bottom:.2rem; }
+    .inline-form { display:inline; }
+    table.meta td:first-child { width: 12rem; color: var(--pico-muted-color); }
+    .flash { padding:.6rem 1rem; border-radius:var(--pico-border-radius); margin-bottom:1rem; }
+    .flash.ok  { background:#dcfce7; color:#166534; }
+    .flash.err { background:#fee2e2; color:#991b1b; }
+  </style>
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
+  <nav class="topbar">
+    <div class="container">
+      <ul>
+        <li><strong><a href="/" class="contrast">DocsClassifier</a></strong></li>
+      </ul>
+      <ul>
+        {% if user %}
+          <li class="muted">{{ user.username }}</li>
+          <li>
+            <form method="post" action="/logout" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf }}">
+              <button class="secondary outline" type="submit">Выйти</button>
+            </form>
+          </li>
+        {% else %}
+          <li><a href="/login">Войти</a></li>
+        {% endif %}
+      </ul>
+    </div>
+  </nav>
+  <main class="container">
+    {% if flash %}<div class="flash {{ flash_kind or 'ok' }}">{{ flash }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

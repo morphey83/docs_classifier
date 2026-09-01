@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% set d = view.domain %}
+{% block title %}Поиск — {{ d.name }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ul>
+  <li><a href="/">Домены</a></li>
+  <li><a href="/domains/{{ d.slug }}">{{ d.name }}</a></li>
+  <li>Поиск</li>
+</ul></nav>
+
+<div class="grid-search">
+  <form id="filters" method="get" action="/domains/{{ d.slug }}/search"
+        hx-get="/domains/{{ d.slug }}/search" hx-target="#results" hx-push-url="true"
+        hx-trigger="submit, input changed delay:400ms, change delay:200ms">
+    <label>Запрос
+      <input type="search" name="q" value="{{ f.q }}" placeholder="слова из названия / текста">
+    </label>
+    <label>Теги (через запятую)
+      <input name="tags" value="{{ f.tags }}" placeholder="договор, 2024">
+    </label>
+    <label>Тип (расширение)
+      <input name="type" value="{{ f.type }}" placeholder="pdf">
+    </label>
+    <label>Статус
+      <select name="status">
+        <option value="" {{ 'selected' if not f.status }}>любой</option>
+        <option value="inbox" {{ 'selected' if f.status == 'inbox' }}>инбокс</option>
+        <option value="tagged" {{ 'selected' if f.status == 'tagged' }}>размечен</option>
+        <option value="archived" {{ 'selected' if f.status == 'archived' }}>архив</option>
+      </select>
+    </label>
+    <label>Сортировка
+      <select name="sort">
+        {% for key, label in sorts.items() %}
+        <option value="{{ key }}" {{ 'selected' if f.sort == key }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <fieldset>
+      <label><input type="checkbox" name="has_ocr" value="yes" {{ 'checked' if f.has_ocr == 'yes' }}> распознан (OCR)</label>
+      <label><input type="checkbox" name="has_index" value="yes" {{ 'checked' if f.has_index == 'yes' }}> проиндексирован</label>
+    </fieldset>
+    <button type="submit">Искать</button>
+  </form>
+
+  <div id="results">
+    {% include "_results.html" %}
+  </div>
+</div>
+{% endblock %}

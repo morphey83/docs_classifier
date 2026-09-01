@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Домены — DocsClassifier{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>Домены</h1>
+  <p class="muted">Рабочие пространства с документами, тегами и правами доступа.</p>
+</hgroup>
+
+{% if domains %}
+<div class="grid">
+  {% for d in domains %}
+  <article>
+    <header><a href="/domains/{{ d.domain.slug }}"><strong>{{ d.domain.name }}</strong></a></header>
+    <p class="muted">роль: {{ d.role }}</p>
+    <p>
+      {% if d.inbox %}<a href="/domains/{{ d.domain.slug }}/inbox">📥 в инбоксе: {{ d.inbox }}</a>
+      {% else %}<span class="muted">инбокс пуст</span>{% endif %}
+    </p>
+    <footer>
+      <a href="/domains/{{ d.domain.slug }}/search" role="button" class="outline">Поиск</a>
+      <a href="/domains/{{ d.domain.slug }}/upload" role="button" class="outline secondary">Загрузить</a>
+    </footer>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">У вас пока нет доменов.</p>
+{% endif %}
+
+<article>
+  <h3>Новый домен</h3>
+  <form method="post" action="/domains" class="grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input name="name" placeholder="Название домена" required maxlength="120">
+    <button type="submit">Создать</button>
+  </form>
+</article>
+{% endblock %}

@@ -5,12 +5,12 @@ Two independent handshakes, one token table (`app/services/tglink.py`):
 - Bot-initiated (`/start`, no payload) — the bot creates the token; the human
   opens ``GET /tg/link/{token}`` in a browser, logs in or registers, and hits
   "confirm" (``POST /tg/link/{token}/confirm``, authed).
-- Web-initiated (profile page) — ``POST /auth/tg-link`` (authed) creates the
-  token and returns a bot deep-link; the bot consumes it directly (in-process,
-  no HTTP call) when it receives ``/start <token>``.
+- Web-initiated (profile page) — ``POST /api/auth/tg-link`` (authed, in
+  ``app/api/auth.py``) creates the token and returns a bot deep-link; the bot
+  consumes it directly (in-process) when it receives ``/start <token>``.
 
-The linking page is intentionally minimal — not the app shell (Phase 7 is a
-separate design round) — self-contained HTML/CSS/JS, no build step.
+These ``/tg/link/*`` routes are mounted at the site root (not under ``/api``)
+— the page is a small self-contained HTML/CSS/JS flow, no build step.
 """
 
 from __future__ import annotations
@@ -21,23 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models import User
-from app.schemas.tglink import TgLinkCreateOut, TgLinkStatusOut
+from app.schemas.tglink import TgLinkStatusOut
 from app.security import get_current_user
 from app.services import tglink as svc
 from app.util.time import as_aware, utcnow
-from app.util.urls import bot_deep_link
 
 router = APIRouter(tags=["telegram-link"])
-
-
-@router.post("/auth/tg-link", response_model=TgLinkCreateOut, status_code=status.HTTP_201_CREATED)
-async def create_web_initiated_link(
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)
-) -> TgLinkCreateOut:
-    if user.tg_id is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "this account already has a linked Telegram")
-    tok = await svc.create_web_initiated(db, user)
-    return TgLinkCreateOut(token=tok.token, deep_link=bot_deep_link(tok.token))
 
 
 @router.get("/tg/link/{token}/status", response_model=TgLinkStatusOut)
@@ -108,7 +97,7 @@ async function api(path, opts) {
 }
 
 async function whoAmI() {
-  const r = await api("/auth/me");
+  const r = await api("/api/auth/me");
   return r.ok ? r.body : null;
 }
 
@@ -166,7 +155,7 @@ function renderAuthForm() {
       '<button id="submit">Войти</button>';
     document.getElementById("submit").onclick = async function () {
       err.textContent = "";
-      const r = await api("/auth/login", {method: "POST", body: JSON.stringify({
+      const r = await api("/api/auth/login", {method: "POST", body: JSON.stringify({
         login: document.getElementById("login").value,
         password: document.getElementById("password").value
       })});
@@ -184,7 +173,7 @@ function renderAuthForm() {
       '<button id="submit">Создать аккаунт</button>';
     document.getElementById("submit").onclick = async function () {
       err.textContent = "";
-      const r = await api("/auth/register", {method: "POST", body: JSON.stringify({
+      const r = await api("/api/auth/register", {method: "POST", body: JSON.stringify({
         username: document.getElementById("username").value,
         email: document.getElementById("email").value,
         password: document.getElementById("password").value

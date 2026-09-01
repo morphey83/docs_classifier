@@ -46,6 +46,8 @@ from app.util.time import as_aware, utcnow
 from app.util.urls import absolute_url
 
 router = APIRouter(tags=["sets"])
+# Mounted at the site root (not /api) — share links must stay short.
+public_router = APIRouter(tags=["share"])
 
 
 # --- helpers ----------------------------------------------------------
@@ -342,8 +344,8 @@ async def revoke_link(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# --- public download (no auth) -----------------------------------
-@router.get("/d/{token}")
+# --- public download (no auth, mounted at root) -----------------
+@public_router.get("/d/{token}")
 async def public_download(
     token: str,
     request: Request,
