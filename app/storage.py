@@ -46,6 +46,15 @@ def artifact_path(artifact_id: str) -> Path:
     return artifacts_dir() / f"{artifact_id}.zip"
 
 
+def set_archive_name(set_id: str) -> str:
+    """Stable file name for a document set's archive cache (§15)."""
+    return f"set-{set_id}.zip"
+
+
+def set_archive_path(set_id: str) -> Path:
+    return artifacts_dir() / set_archive_name(str(set_id))
+
+
 def derived_dir(sha256: str) -> Path:
     d = settings.data_dir / "derived" / sha256[:2] / sha256[2:4] / sha256
     d.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 # DocsClassifier — architecture & requirements
 
-Status: **design complete — all decisions locked.** No code yet.
+Status: **phases 0–4 built.** Design locked.
 Last updated: 2026-09-01 (rev 3 — sets & share links, Caddy).
 
 ---
@@ -508,7 +508,7 @@ non-deleted documents + its trash + its export artifacts.
 | **1 core** ✅ | domains, members, invites, 6 roles → capability deps; single-file upload with dedup / replace / new (§13) + quota; content-addressed blob storage; document CRUD + `doc_date` extraction (pdf/office); inbox queue with per-user defer; flat tags CRUD + merge + assignment |
 | **2 ingest + search** ✅ | archive upload → background extraction (zip/tar stdlib, 7z py7zr, rar rarfile+unar) with bomb/traversal guards + nested recursion; `upload_batch` + `upload_batch_item` (per-entry outcomes); opt-in `POST /documents/{id}/index` → parse text + PG `search_tsv` (SQLite → `ILIKE`); faceted search with tag/type/status facet counts; `POST /domains/{d}/exports` → `artifact` (zip + manifest.json/csv), authed `GET /artifacts/{id}[/download]` |
 | **3 OCR** ✅ | SAQ worker on Postgres (`app/worker.py`) + `job_mode=inline` for dev/tests (`app/jobs.dispatch`); `POST /documents/{id}/ocr` + per-domain `auto_ocr` (image / image-only PDF only, else 422/unsupported); ocrmypdf for PDFs, pytesseract for images; `ocr_status`/`ocr_at`/`ocr_lang` + `has_ocr` filter; re-indexes with the OCR text; searchable-PDF sidecar under `DATA_DIR/derived/`. Archive extraction + artifact builds also moved onto `dispatch`. |
-| **4 sets & sharing** | document sets (§15); set content hash + `build_set_archive` job (lazy build, rebuild-on-change, overwrite in place); transparent `GET …/sets/{s}/archive[/download]` (202 while building); `download_link` bound to the set's stable artifact + public `GET /d/{token}` (permanent / one-time, rights re-checked); `cleanup` purges expired archive files |
+| **4 sets & sharing** ✅ | document sets (§15) with `private`/`domain` visibility + idempotent items; `set_content_hash` + `build_set_archive` job (lazy build, rebuild-on-change, overwrite in place, `set-<id>.zip`); transparent `GET …/sets/{s}/archive[/download]` (200 when current, else 202 while building); `Artifact.content_hash` col (migration 0005); `download_link` bound to the set's stable artifact + public `GET /d/{token}` (permanent needs `write` / one-time needs `download`, rights + `allow_public_links` + owner's `download` re-checked each hit, per-IP rate limit). Expired-file purge by `cleanup` is Phase 5 — until then a passed `expires_at` just triggers a rebuild on next access. |
 | **5 trash & lifecycle** | soft-delete → Корзина; 30-day auto-purge (`cleanup` job); owner force-purge; restore-on-reupload (§14); `document_version` on replace; blob refcount GC |
 | **6 bot** | aiogram bot: account linking, upload, inbox processing, `/find`, sets, export |
 | **7 web UI** | HTMX + Jinja — *separate design round* |

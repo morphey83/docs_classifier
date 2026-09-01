@@ -10,7 +10,7 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
 
 ## Status
 
-**Phases 0–1 done.**
+**Phases 0–4 done.**
 
 - **0 skeleton** — config, async DB, Alembic, auth (session cookies), `/health`,
   SAQ worker stub, Docker Compose, tests.
@@ -28,9 +28,15 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
   dev; `POST /documents/{id}/ocr` + per-domain `auto_ocr` (ocrmypdf / tesseract);
   `ocr_status` / `ocr_at` fields + `has_ocr` search filter; searchable-PDF
   sidecars.
+- **4 sets & sharing** — hand-curated document sets (`private` / `domain`
+  visibility); the set archive is a rebuild-on-demand cache keyed by a
+  deterministic set-content hash — `GET …/sets/{s}/archive/download` streams it
+  when current, else `202 {status:"building"}` and a rebuild is queued;
+  permanent / one-time share links bound to the set's stable artifact, served by
+  the public `GET /d/{token}` with rights re-checked every hit
+  (`allow_public_links`, per-IP rate limit); per-domain `set_archive_ttl_days`.
 
-Roadmap (§12 of the architecture doc): 4 sets & sharing ·
-5 trash & lifecycle · 6 bot · 7 web UI.
+Roadmap (§12 of the architecture doc): 5 trash & lifecycle · 6 bot · 7 web UI.
 
 ## Stack
 

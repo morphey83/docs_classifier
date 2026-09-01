@@ -7,6 +7,7 @@ from app.models.artifact import (
     DownloadLink,
 )
 from app.models.base import Base
+from app.models.docset import DocumentSet, DocumentSetItem, SetVisibility
 from app.models.document import (
     BatchKind,
     DocSource,
@@ -35,6 +36,8 @@ __all__ = [
     "DocSource",
     "DocStatus",
     "Document",
+    "DocumentSet",
+    "DocumentSetItem",
     "DocumentTag",
     "DocumentVersion",
     "Domain",
@@ -45,6 +48,7 @@ __all__ = [
     "IndexStatus",
     "OcrStatus",
     "Session",
+    "SetVisibility",
     "Tag",
     "TextSource",
     "UploadBatch",

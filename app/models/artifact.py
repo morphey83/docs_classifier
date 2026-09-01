@@ -42,6 +42,8 @@ class Artifact(Base):
     source_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)  # set_id, for set_archive
     status: Mapped[ArtifactStatus] = mapped_column(_status_enum, default=ArtifactStatus.building)
     storage_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # For set_archive: the set content hash the current file was built from (§15).
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     size_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
     item_count: Mapped[int] = mapped_column(Integer, default=0)
     missing_count: Mapped[int] = mapped_column(Integer, default=0)

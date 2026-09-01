@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     default_domain_quota_mb: int = 5000
     default_trash_retention_days: int = 30
     export_ttl_hours: int = 48
+    set_archive_ttl_days: int = 7  # set-archive cache file lifetime
+    public_download_rate_per_min: int = 60  # per-IP cap on GET /d/{token}
 
     # --- jobs / worker --------------------------------------------------
     # "queue": push to the SAQ (Postgres) queue for a worker to run.

@@ -115,7 +115,15 @@ async def _tags_by_document(
 
 
 def _write_zip(artifact_id: str, docs: list[Document], tag_map: dict) -> tuple[str, int]:
-    path = storage.artifact_path(artifact_id)
+    return write_document_zip(storage.artifact_path(artifact_id), docs, tag_map)
+
+
+def write_document_zip(path, docs: list[Document], tag_map: dict) -> tuple[str, int]:
+    """Write ``docs`` (+ manifest.json/csv) to the zip at ``path``.
+
+    ``tag_map`` maps ``document.id`` -> list of tag names. Returns
+    ``(file_name, size_bytes)``. Shared by ad-hoc exports and set archives.
+    """
     used: set[str] = set()
     manifest: list[dict] = []
 
