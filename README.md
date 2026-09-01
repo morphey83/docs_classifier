@@ -10,7 +10,7 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
 
 ## Status
 
-**Phases 0–4 done.**
+**Phases 0–5 done.**
 
 - **0 skeleton** — config, async DB, Alembic, auth (session cookies), `/health`,
   SAQ worker stub, Docker Compose, tests.
@@ -35,8 +35,14 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
   permanent / one-time share links bound to the set's stable artifact, served by
   the public `GET /d/{token}` with rights re-checked every hit
   (`allow_public_links`, per-IP rate limit); per-domain `set_archive_ttl_days`.
+- **5 trash & lifecycle** — `DELETE /documents/{id}` soft-delete → `GET
+  /domains/{d}/trash` (also `?include_trash=true`); `POST …/restore`; owner-only
+  `POST /domains/{d}/trash/purge`; nightly `cleanup` SAQ cron — trash retention
+  → hard purge with blob refcount GC, expired export / set-archive files,
+  orphan-blob sweep. Dedup uniqueness is now partial (trashed content doesn't
+  block a re-upload).
 
-Roadmap (§12 of the architecture doc): 5 trash & lifecycle · 6 bot · 7 web UI.
+Roadmap (§12 of the architecture doc): 6 bot · 7 web UI.
 
 ## Stack
 

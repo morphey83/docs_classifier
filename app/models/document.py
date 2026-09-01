@@ -11,15 +11,18 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, uuid_pk
+from app.util.time import utcnow
 
 
 class DocStatus(StrEnum):
@@ -153,8 +156,10 @@ class Document(Base):
         ForeignKey("upload_batch.id", ondelete="SET NULL"), nullable=True
     )
     uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id", ondelete="SET NULL"))
+    # Python-side default too: sub-second precision keeps the inbox FIFO order
+    # stable (SQLite's CURRENT_TIMESTAMP only has 1-second resolution).
     uploaded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), default=utcnow, server_default=func.now()
     )
 
     deleted_at: Mapped[datetime | None] = mapped_column(
@@ -168,7 +173,19 @@ class Document(Base):
         secondary="document_tag", lazy="selectin", order_by="Tag.name"
     )
 
-    __table_args__ = (UniqueConstraint("domain_id", "sha256", name="uq_document_domain_id_sha256"),)
+    # Dedup guard: at most one *active* document per (domain, content). Trashed
+    # rows are exempt so a re-upload of trashed content can still be ingested
+    # (docs/architecture.md §5).
+    __table_args__ = (
+        Index(
+            "uq_document_domain_id_sha256",
+            "domain_id",
+            "sha256",
+            unique=True,
+            sqlite_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
 
 
 class Tag(Base, TimestampMixin):

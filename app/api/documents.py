@@ -50,6 +50,7 @@ from app.schemas.uploads import BatchDetail, BatchItemOut, BatchOut
 from app.services import documents as svc
 from app.services import search as search_svc
 from app.services import tags as tags_svc
+from app.services import trash as trash_svc
 from app.services.ingest import process_archive
 
 
@@ -247,6 +248,31 @@ async def inbox_next(
     return await document_out(db, doc) if doc else None
 
 
+@router.get("/domains/{domain_id}/trash", response_model=DocumentList)
+async def list_trash(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    ctx: DomainCtx = Depends(require(Cap.view)),
+    db: AsyncSession = Depends(get_session),
+) -> DocumentList:
+    docs, total = await trash_svc.list_trash(
+        db, ctx.domain.id, page=page, page_size=page_size
+    )
+    return DocumentList(
+        items=[await document_out(db, d) for d in docs],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post("/domains/{domain_id}/trash/purge")
+async def purge_trash(
+    ctx: DomainCtx = Depends(require(Cap.own)), db: AsyncSession = Depends(get_session)
+) -> dict[str, int]:
+    return {"purged": await trash_svc.purge_domain_trash(db, ctx.domain.id)}
+
+
 @router.post("/domains/{domain_id}/inbox/undefer")
 async def inbox_undefer(
     ctx: DomainCtx = Depends(require(Cap.write)), db: AsyncSession = Depends(get_session)
@@ -352,3 +378,24 @@ async def defer(
 ) -> Response:
     await svc.defer_document(db, ctx.document, ctx.user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/documents/{document_id}")
+async def delete_document(
+    ctx: DocCtx = Depends(require_doc(Cap.delete)),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    await trash_svc.soft_delete(db, ctx.document, ctx.user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/documents/{document_id}/restore", response_model=DocumentOut)
+async def restore_document(
+    ctx: DocCtx = Depends(require_doc(Cap.delete)),
+    db: AsyncSession = Depends(get_session),
+) -> DocumentOut:
+    try:
+        await trash_svc.restore(db, ctx.document)
+    except trash_svc.TrashError as err:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(err)) from err
+    return await document_out(db, ctx.document)

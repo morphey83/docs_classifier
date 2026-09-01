@@ -7,8 +7,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from saq import CronJob
+
 from app.jobs import get_queue
 from app.ocr.tasks import ocr_document
+from app.services.cleanup import run_cleanup as _run_cleanup
 from app.services.docsets import build_set_archive as _build_set_archive
 from app.services.export import build_artifact as _build_artifact
 from app.services.ingest import process_archive as _process_archive
@@ -26,8 +29,19 @@ async def process_archive(ctx: dict[str, Any], **kwargs: Any) -> None:
     await _process_archive(**kwargs)
 
 
+async def cleanup(ctx: dict[str, Any]) -> dict[str, int]:
+    return await _run_cleanup()
+
+
 settings_dict = {
     "queue": get_queue(),
-    "functions": [ocr_document, build_artifact, build_set_archive, process_archive],
+    "functions": [
+        ocr_document,
+        build_artifact,
+        build_set_archive,
+        process_archive,
+        cleanup,
+    ],
+    "cron_jobs": [CronJob(cleanup, cron="17 3 * * *")],  # nightly
     "concurrency": 2,
 }

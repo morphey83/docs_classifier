@@ -1,6 +1,6 @@
 # DocsClassifier — architecture & requirements
 
-Status: **phases 0–4 built.** Design locked.
+Status: **phases 0–5 built.** Design locked.
 Last updated: 2026-09-01 (rev 3 — sets & share links, Caddy).
 
 ---
@@ -292,8 +292,10 @@ audit_log(id, domain_id?, actor_id, action, target_type, target_id,
 job(…)                                    # SAQ table(s)
 ```
 
-Uniqueness: `document (domain_id, sha256)` where `deleted_at IS NULL` — the
-dedup guard (§13).
+Uniqueness: partial unique index `document (domain_id, sha256)` where
+`deleted_at IS NULL` — the dedup guard (§13). Trashed rows are exempt, so
+re-uploading content that is sitting in the trash under a different name still
+ingests as a new document. (migration 0006)
 
 Blob storage: `DATA_DIR/blobs/<h[0:2]>/<h[2:4]>/<h>` (content-addressed,
 dedup). Derived files: `DATA_DIR/derived/<h>/…`.
@@ -509,7 +511,7 @@ non-deleted documents + its trash + its export artifacts.
 | **2 ingest + search** ✅ | archive upload → background extraction (zip/tar stdlib, 7z py7zr, rar rarfile+unar) with bomb/traversal guards + nested recursion; `upload_batch` + `upload_batch_item` (per-entry outcomes); opt-in `POST /documents/{id}/index` → parse text + PG `search_tsv` (SQLite → `ILIKE`); faceted search with tag/type/status facet counts; `POST /domains/{d}/exports` → `artifact` (zip + manifest.json/csv), authed `GET /artifacts/{id}[/download]` |
 | **3 OCR** ✅ | SAQ worker on Postgres (`app/worker.py`) + `job_mode=inline` for dev/tests (`app/jobs.dispatch`); `POST /documents/{id}/ocr` + per-domain `auto_ocr` (image / image-only PDF only, else 422/unsupported); ocrmypdf for PDFs, pytesseract for images; `ocr_status`/`ocr_at`/`ocr_lang` + `has_ocr` filter; re-indexes with the OCR text; searchable-PDF sidecar under `DATA_DIR/derived/`. Archive extraction + artifact builds also moved onto `dispatch`. |
 | **4 sets & sharing** ✅ | document sets (§15) with `private`/`domain` visibility + idempotent items; `set_content_hash` + `build_set_archive` job (lazy build, rebuild-on-change, overwrite in place, `set-<id>.zip`); transparent `GET …/sets/{s}/archive[/download]` (200 when current, else 202 while building); `Artifact.content_hash` col (migration 0005); `download_link` bound to the set's stable artifact + public `GET /d/{token}` (permanent needs `write` / one-time needs `download`, rights + `allow_public_links` + owner's `download` re-checked each hit, per-IP rate limit). Expired-file purge by `cleanup` is Phase 5 — until then a passed `expires_at` just triggers a rebuild on next access. |
-| **5 trash & lifecycle** | soft-delete → Корзина; 30-day auto-purge (`cleanup` job); owner force-purge; restore-on-reupload (§14); `document_version` on replace; blob refcount GC |
+| **5 trash & lifecycle** ✅ | `DELETE /documents/{id}` soft-delete (`delete` cap) → `GET /domains/{d}/trash` + `?include_trash=true`; `POST /documents/{id}/restore` (409 if content is active again); `POST /domains/{d}/trash/purge` owner-only; `cleanup` SAQ cron (`app/services/cleanup.py`, nightly) — per-domain trash retention → `hard_purge` (explicit child-row deletes + blob refcount GC), expired ad-hoc exports removed row+file, expired set-archive files cleared (row+links kept), orphan-blob disk sweep; dedup unique index made partial (`WHERE deleted_at IS NULL`, migration 0006) so trashed content doesn't block re-upload; `uploaded_at` gains a Python µs default for stable inbox FIFO |
 | **6 bot** | aiogram bot: account linking, upload, inbox processing, `/find`, sets, export |
 | **7 web UI** | HTMX + Jinja — *separate design round* |
 

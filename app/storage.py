@@ -110,3 +110,18 @@ def open_blob(sha256: str) -> BinaryIO:
 
 def delete_blob(sha256: str) -> None:
     blob_path(sha256).unlink(missing_ok=True)
+
+
+def remove_derived(sha256: str) -> None:
+    """Delete the derived-files directory (OCR sidecars, …) for a blob, if any."""
+    d = settings.data_dir / "derived" / sha256[:2] / sha256[2:4] / sha256
+    if d.is_dir():
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def list_blob_hashes() -> list[str]:
+    """Every blob currently on disk, by hash. Used by the cleanup sweep."""
+    root = _blobs_root()
+    if not root.is_dir():
+        return []
+    return [p.name for p in root.rglob("*") if p.is_file() and len(p.name) == 64]
