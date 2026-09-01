@@ -86,7 +86,8 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
     set (`app/web/static/icons.svg`) replacing the emoji.
   - **7g** tagging modal redesign (full-width preview, editable name
     field, one-line chips, Отложить/Готово row); the bot now sends image
-    documents as photo cards, including in `/find` results.
+    documents as photo cards, including in `/find` results; web search
+    results show image thumbnails; readable tag chips.
 
 ## Stack
 
