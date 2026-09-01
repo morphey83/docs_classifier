@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.models import DocStatus, DocumentTag, Tag, User
+from app.models import DocStatus, Document, DocumentTag, Tag, User
 from app.services import domains as domains_svc
 from app.services import search as search_svc
 from app.web.deps import current_user
@@ -46,6 +46,23 @@ def _status(value: str | None) -> DocStatus | None:
         return DocStatus(value) if value else None
     except ValueError:
         return None
+
+
+async def _distinct_exts(db: AsyncSession, domain_ids: list[uuid.UUID]) -> list[str]:
+    """Extensions actually present in the caller's documents — feeds the filter."""
+    if not domain_ids:
+        return []
+    rows = await db.scalars(
+        select(Document.ext)
+        .where(
+            Document.domain_id.in_(domain_ids),
+            Document.deleted_at.is_(None),
+            Document.ext.is_not(None),
+            Document.ext != "",
+        )
+        .distinct()
+    )
+    return sorted({e.lower() for e in rows})
 
 
 async def _tags_by_doc(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, list[str]]:
@@ -100,7 +117,7 @@ async def search(
         page=max(1, int(p.get("page") or 1)),
         page_size=PAGE_SIZE,
     )
-    docs, total, facets = await search_svc.search_documents(db, scope_ids, f)
+    docs, total, _facets = await search_svc.search_documents(db, scope_ids, f)
 
     ctx = {
         "partial": "_results.html",
@@ -111,7 +128,7 @@ async def search(
         "total": total,
         "page": f.page,
         "pages": max(1, -(-total // PAGE_SIZE)),
-        "facets": facets,
+        "ext_options": await _distinct_exts(db, list(dom_by_id)),
         "sorts": SORTS,
         "view": view,
         "domains": [d for d, _ in memberships],

@@ -38,9 +38,18 @@ def datetimefmt(value: datetime | None) -> str:
     return value.strftime("%Y-%m-%d %H:%M") if value else "—"
 
 
+_STATUS_RU = {"inbox": "в очереди", "tagged": "размечен", "archived": "архив"}
+
+
+def statusfmt(value: object) -> str:
+    key = getattr(value, "value", value)
+    return _STATUS_RU.get(str(key), str(key))
+
+
 templates.env.filters["humansize"] = humansize
 templates.env.filters["shortdate"] = shortdate
 templates.env.filters["datetimefmt"] = datetimefmt
+templates.env.filters["statusfmt"] = statusfmt
 
 
 def render(

@@ -19,9 +19,9 @@
     {{ doc.ext or (doc.mime.split('/')|last) }} ·
     {{ doc.doc_date|shortdate }} ·
     {{ doc.size_bytes|humansize }} ·
-    {{ doc.status }}
+    {{ doc.status|statusfmt }}
     {% if doc.ocr_at %} · OCR{% endif %}
-    {% if doc.indexed_at %} · индекс{% endif %}
+    {% if doc.indexed_at %} · Indexed{% endif %}
   </p>
   {% for name in tag_map.get(doc.id, [])|sort %}<span class="tag">{{ name }}</span>{% endfor %}
 </article>

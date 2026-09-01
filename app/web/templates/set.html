@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as ic %}
 {% set d = view.domain %}
 {% block title %}{{ set.name }} — {{ d.name }}{% endblock %}
 {% block content %}
@@ -16,13 +17,13 @@
 {% endif %}
 
 <p>
-  <a href="/domains/{{ d.slug }}/sets/{{ set.id }}/archive" role="button" class="outline">⬇️ Скачать архив</a>
+  <a href="/domains/{{ d.slug }}/sets/{{ set.id }}/archive" role="button" class="outline">{{ ic.icon('download') }} Скачать архив</a>
   {% if view.has('download') %}
   <form method="post" action="/domains/{{ d.slug }}/sets/{{ set.id }}/links" class="inline-form">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <button name="kind" value="one_time" class="outline secondary">🔗 разовая ссылка</button>
+    <button name="kind" value="one_time" class="outline secondary">{{ ic.icon('link') }} разовая ссылка</button>
     {% if view.has('write') %}
-    <button name="kind" value="permanent" class="outline secondary">🔗 постоянная</button>
+    <button name="kind" value="permanent" class="outline secondary">{{ ic.icon('link') }} постоянная</button>
     {% endif %}
   </form>
   {% endif %}

@@ -76,13 +76,13 @@ async def test_dashboard_table_has_counts_and_actions(alice, web_domain):
 
 async def test_profile_menu_present_when_authed(alice):
     home = (await alice.get("/")).text
-    assert "👤" in home and "профиль" in home
+    assert "icons.svg#user" in home and "профиль" in home
     assert 'action="/logout"' in home
 
 
 async def test_profile_icon_links_to_login_when_anonymous(client):
     r = await client.get("/login")
-    assert 'href="/login"' in r.text and "👤" in r.text
+    assert 'href="/login"' in r.text and "icons.svg#user" in r.text
 
 
 async def test_foreign_domain_is_404(alice, bob, web_domain):
@@ -128,6 +128,18 @@ async def test_search_domain_filter(alice):
 async def test_search_empty_status_param_ok(alice, web_domain):
     r = await alice.get("/search?status=&q=&type=", headers={"HX-Request": "true"})
     assert r.status_code == 200
+
+
+async def test_search_type_filter_lists_existing_extensions(alice, web_domain):
+    await _upload(alice, web_domain, "a.txt")
+    await _upload(alice, web_domain, "b.md")
+    page = (await alice.get("/search")).text
+    # the type filter is a <select> built from real extensions, no free-text input
+    assert '<select name="type">' in page
+    assert ">txt</option>" in page and ">md</option>" in page
+    # facets block and the "архив" status option are gone
+    assert "Фасеты" not in page
+    assert ">архив</option>" not in page
 
 
 # --- document ----------------------------------------------------

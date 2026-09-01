@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as ic %}
 {% block title %}Домены{% endblock %}
 {% block content %}
 <hgroup>
@@ -21,7 +22,7 @@
   <thead>
     <tr>
       <th>Название</th>
-      <th title="пользователей с доступом">👥</th>
+      <th title="пользователей с доступом">{{ ic.icon('users') }}</th>
       <th title="в очереди на сортировку / всего документов">в очереди / всего</th>
       <th>Действия</th>
     </tr>
@@ -38,17 +39,17 @@
       <td>
         <div class="icon-actions">
           {% if 'manage' in d.caps %}
-          <a href="/domains/{{ d.domain.slug }}/settings" title="Редактировать домен">✏️</a>
+          <a href="/domains/{{ d.domain.slug }}/settings" title="Настройки домена">{{ ic.icon('settings') }}</a>
           {% endif %}
-          <a href="/search?domain_id={{ d.domain.id }}" title="Поиск в этом домене">🔍</a>
+          <a href="/search?domain_id={{ d.domain.id }}" title="Поиск в этом домене">{{ ic.icon('search') }}</a>
           {% if 'upload' in d.caps %}
-          <a href="/upload?domain={{ d.domain.slug }}" title="Загрузить в этот домен">⬆️</a>
+          <a href="/upload?domain={{ d.domain.slug }}" title="Загрузить в этот домен">{{ ic.icon('upload') }}</a>
           {% endif %}
           {% if 'own' in d.caps %}
           <form method="post" action="/domains/{{ d.domain.slug }}/delete" class="inline-form"
                 onsubmit="return confirm('Удалить домен «{{ d.domain.name }}» со всеми документами? Это необратимо.')">
             <input type="hidden" name="csrf_token" value="{{ csrf }}">
-            <button type="submit" class="danger" title="Удалить домен">🗑️</button>
+            <button type="submit" class="danger" title="Удалить домен">{{ ic.icon('trash') }}</button>
           </form>
           {% endif %}
         </div>

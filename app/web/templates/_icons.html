@@ -1,0 +1,4 @@
+{#- inline reference to the vendored SVG sprite (app/web/static/icons.svg) -#}
+{% macro icon(name) -%}
+<svg class="icon" aria-hidden="true" focusable="false"><use href="/static/icons.svg#{{ name }}"/></svg>
+{%- endmacro %}

@@ -30,7 +30,7 @@
       <td>{{ doc.ext or (doc.mime.split('/')|last) }}</td>
       <td>{{ doc.doc_date|shortdate }}</td>
       <td>{{ doc.size_bytes|humansize }}</td>
-      <td>{{ doc.status }}{% if doc.ocr_at %} · OCR{% endif %}{% if doc.indexed_at %} · идx{% endif %}</td>
+      <td>{{ doc.status|statusfmt }}{% if doc.ocr_at %} · OCR{% endif %}{% if doc.indexed_at %} · Indexed{% endif %}</td>
       <td>{% for name in tag_map.get(doc.id, [])|sort %}<span class="tag">{{ name }}</span>{% endfor %}</td>
     </tr>
   {% endfor %}

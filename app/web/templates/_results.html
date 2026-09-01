@@ -1,36 +1,15 @@
 {% import "_macros.html" as m with context %}
+{% import "_icons.html" as ic %}
 
 <div class="results-head">
   <span class="muted">Найдено: {{ total }}{% if pages > 1 %} · стр. {{ page }}/{{ pages }}{% endif %}</span>
   <span class="spacer"></span>
   <span class="muted">вид:</span>
   <a hx-get="{{ m.qs(view='cards') }}" hx-target="#results" hx-push-url="true"
-     class="{{ 'active' if view != 'table' }}">карточки</a>
+     title="Карточки" class="{{ 'active' if view != 'table' }}">{{ ic.icon('grid') }}карточки</a>
   <a hx-get="{{ m.qs(view='table') }}" hx-target="#results" hx-push-url="true"
-     class="{{ 'active' if view == 'table' }}">таблица</a>
+     title="Таблица" class="{{ 'active' if view == 'table' }}">{{ ic.icon('list') }}таблица</a>
 </div>
-
-{% if facets and (facets.tags or facets.types) %}
-<details>
-  <summary class="muted">Фасеты</summary>
-  {% if facets.tags %}
-  <p class="facet">теги:
-    {% for t in facets.tags[:15] %}
-      <a class="tag" hx-get="{{ m.qs(tags=t.name, page=1) }}" hx-target="#results"
-         hx-push-url="true">{{ t.name }} ({{ t.count }})</a>
-    {% endfor %}
-  </p>
-  {% endif %}
-  {% if facets.types %}
-  <p class="facet">типы:
-    {% for t in facets.types[:10] %}
-      <a class="tag" hx-get="{{ m.qs(type=(t.mime.split('/')|last), page=1) }}"
-         hx-target="#results" hx-push-url="true">{{ t.mime }} ({{ t.count }})</a>
-    {% endfor %}
-  </p>
-  {% endif %}
-</details>
-{% endif %}
 
 {% if total == 0 %}
 <p>Ничего не найдено.</p>

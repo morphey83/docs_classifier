@@ -31,7 +31,7 @@
   <form method="post" action="/documents/{{ doc.id }}/add-to-set" class="inline-form">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <select name="set_id" required>
-      <option value="" disabled selected>➕ в набор…</option>
+      <option value="" disabled selected>+ в набор…</option>
       {% for s in sets %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
     </select>
     <button class="outline secondary">Добавить</button>
