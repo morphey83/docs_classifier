@@ -1,7 +1,7 @@
 # DocsClassifier — architecture & requirements
 
-Status: **draft — most decisions locked, one open item.** No code yet.
-Last updated: 2026-09-01 (rev 2).
+Status: **design complete — all decisions locked.** No code yet.
+Last updated: 2026-09-01 (rev 3 — sets & share links, Caddy).
 
 ---
 
@@ -21,10 +21,10 @@ Last updated: 2026-09-01 (rev 2).
 | Telegram large files | Accept the ~20 MB Bot API cap. Bigger uploads via web only. No self-hosted Bot API server. |
 | UI | **HTMX + Jinja**, server-rendered, same FastAPI app. (Details in a later round.) |
 | At-rest encryption | Not in scope. |
+| Reverse proxy | **No proxy / no domain on the VDS yet** → compose ships its own **Caddy**. Interim: `tls internal` (self-signed) for IP access; once a (sub)domain points at the VDS, one Caddyfile line switches to real Let's Encrypt TLS. A free `*.duckdns.org` name + Caddy DNS-01 also works. |
+| Document sets | Persistent hand-curated collections → build an immutable archive **artifact** → download, or share via a **permanent / one-time link** (`GET /d/{token}`). See §15. |
 
-**Still open:** reverse proxy — is there already one on the VDS (nginx / Caddy /
-Traefik for other services), or does our compose ship its own Caddy? And what
-hostname / subdomain? (See §4 and the Caddy note in chat.)
+All open questions resolved. Design phase complete once this rev is acked.
 
 ---
 
@@ -166,14 +166,21 @@ status (processing|done|partial), error, uploaded_at`.
 
 ### 3.3 Search — see §7.
 
-### 3.4 Export
+### 3.4 Export & sets
 
-- `POST /domains/{d}/exports` with either a filter (same params as search) or an
-  explicit id list. Requires `download`.
-- Small result → streamed zip response. Large → async job producing a
-  time-limited download link.
-- Zip contains the originals (name collisions de-duplicated) + `manifest.json`
-  and `manifest.csv` with every document's metadata and tags.
+Two ways to get files out, both producing an **artifact** (a built zip on disk,
+§15):
+
+- **Ad-hoc export** — `POST /domains/{d}/exports` with a filter or an id list.
+  One-shot; the artifact expires after `EXPORT_TTL_HOURS`.
+- **Document set** — a persistent, hand-curated collection the user fills over
+  many sessions ("добавить в набор"), then archives on demand. See **§15**.
+
+Every artifact zip contains the originals (name collisions de-duplicated) +
+`manifest.json` and `manifest.csv` (metadata + tags per document); trashed /
+purged documents are skipped and listed in the manifest. Download directly
+(authed) or via a **share link** — permanent or one-time (§15).
+Requires `download`.
 
 ### 3.5 OCR (optional, on demand)
 
@@ -215,7 +222,7 @@ affordable; see §7 for the reasoning and the growth path.)
 ## 4. Component / deployment view
 
 ```
-                    ┌─────────── reverse proxy (Caddy or existing) ── TLS
+                    ┌─────────── Caddy (auto-TLS; self-signed until a domain)
                     │
         ┌───────────▼──────────┐        ┌──────────────────┐
         │  web  (FastAPI+HTMX) │        │  bot (aiogram 3) │
@@ -236,9 +243,9 @@ affordable; see §7 for the reasoning and the growth path.)
      └──────────────┘   └──────────────┘
 ```
 
-Compose services: **`db`, `web`, `worker`, `bot`** + `caddy` (if we don't plug
-into an existing proxy). **No Redis, no separate search service.**
-Volumes: `pgdata`, `docdata`.
+Compose services: **`db`, `web`, `worker`, `bot`, `caddy`**.
+**No Redis, no separate search service.**
+Volumes: `pgdata`, `docdata`, `caddydata` (certs).
 
 ---
 
@@ -266,8 +273,16 @@ document_tag(document_id, tag_id, assigned_by, assigned_at)
 upload_batch(id, domain_id, uploaded_by, source_filename, kind, item_count,
              conflict_count, status, error, uploaded_at)
 
-export_job(id, domain_id, requested_by, filter_jsonb, status, artifact_key?,
-           item_count, expires_at, created_at)
+document_set(id, domain_id, name, description, visibility (private|domain),
+             created_by, item_count, created_at, updated_at)
+document_set_item(set_id, document_id, added_by, added_at, position)   # uniq(set,doc)
+
+artifact(id, domain_id, kind (adhoc_export|set_archive), source_id,
+         format (zip), status (building|ready|failed), storage_key?, size_bytes,
+         item_count, missing_count, snapshot_jsonb, requested_by, created_at,
+         expires_at?)                       # replaces export_job
+download_link(id, artifact_id, token, max_downloads?, download_count,
+              expires_at?, revoked_at?, created_by, created_at, last_downloaded_at)
 
 audit_log(id, domain_id?, actor_id, action, target_type, target_id,
           detail_jsonb, at)
@@ -309,9 +324,23 @@ POST   /documents/{id}/ocr               POST /documents/{id}/index
 
 GET    /domains/{d}/inbox/next           GET /domains/{d}/inbox        # count/list
 GET    /domains/{d}/tags                 POST /domains/{d}/tags
-PATCH  /domains/{d}/tags/{id}            DELETE /domains/{d}/tags/{id}   # merge?
+PATCH  /domains/{d}/tags/{id}            DELETE /domains/{d}/tags/{id}
+POST   /domains/{d}/tags/{id}/merge      # into another tag
 
-POST   /domains/{d}/exports              GET /exports/{id}   GET /exports/{id}/download
+# --- document sets (§15) ---
+GET    /domains/{d}/sets                 POST /domains/{d}/sets
+GET    /domains/{d}/sets/{s}             PATCH /domains/{d}/sets/{s}   DELETE …
+POST   /domains/{d}/sets/{s}/items       # body: {document_ids:[…]} — idempotent add
+DELETE /domains/{d}/sets/{s}/items/{doc}
+POST   /domains/{d}/sets/{s}/archives    # -> artifact (build job)
+
+# --- artifacts & links (§15) ---
+GET    /artifacts/{id}                   GET /artifacts/{id}/download   # authed
+POST   /artifacts/{id}/links             # {kind: permanent|one_time, expires_at?}
+DELETE /links/{id}                       # revoke
+GET    /d/{token}                        # PUBLIC download, no auth
+
+POST   /domains/{d}/exports              # ad-hoc: filter/id-list -> artifact
 ```
 
 All list endpoints return facet aggregates (tag histogram, type histogram,
@@ -384,9 +413,10 @@ Separate container, shares DB + `app/services/*`. Acts as the linked user.
   with an inline keyboard: frequent tags as buttons, "＋ new tag" (free text
   reply), "skip", "done". Loops until the inbox is empty.
 - **Search**: `/find договор #контрагент type:pdf 2024` → paginated results,
-  tap a result to receive the file.
-- **Export**: pick a saved search or the last `/find` → bot sends the zip (or a
-  link if large).
+  each with a "➕ в набор" button; tap a result to receive the file.
+- **Sets**: `/sets` → list; open one → "📦 сформировать архив" → bot sends the
+  zip, or a share link if it is large / the user asks for one.
+- **Export**: the last `/find` → "📦 архив" → same as above.
 
 ---
 
@@ -399,8 +429,8 @@ Separate container, shares DB + `app/services/*`. Acts as the linked user.
 | `parse_text` | pdf (pymupdf), docx (python-docx), xlsx (openpyxl), pptx, txt/csv/md, html, eml/msg |
 | `ocr_document` | manual request or `auto_ocr` |
 | `index_document` | manual request or `auto_index` |
-| `build_export` | large export request |
-| `cleanup` | expired exports, purge past retention, orphan blobs (refcount = 0) |
+| `build_artifact` | ad-hoc export **or** set-archive request — zips a snapshot + manifest |
+| `cleanup` | expired artifacts (unless pinned by a live permanent link), trash past retention, orphan blobs (refcount = 0) |
 
 Queue: **SAQ on Postgres** — no Redis. Worker image carries the OCR + archive
 native deps.
@@ -453,9 +483,14 @@ non-deleted documents + its trash + its export artifacts.
 - Blobs are opaque; original names only in DB. **No at-rest encryption** (out of
   scope).
 - `audit_log` for uploads, deletes, replaces, member/role changes, exports,
+  set-archive builds, **share-link create / revoke**, **public downloads**,
   trash purges.
+- Public share links (`GET /d/{token}`): 192-bit token, IP rate-limited,
+  revocable, optional expiry; `allow_public_links` domain kill-switch.
 - Backups: `pg_dump` + `tar` of `DATA_DIR`, one volume set.
-- Rate limiting on auth + upload endpoints.
+- Rate limiting on auth, upload, and `/d/{token}` endpoints.
+- **TLS**: Caddy. Self-signed (`tls internal`) until a domain is pointed at the
+  VDS; automatic Let's Encrypt after.
 
 ---
 
@@ -467,9 +502,10 @@ non-deleted documents + its trash + its export artifacts.
 | **1 core** | domains, members, invites, 6 roles → capability checks; single-file upload with dedup/replace (§13); document CRUD + content-addressed storage; metadata & `doc_date` extraction; inbox queue; flat tags CRUD + assignment |
 | **2 ingest + search** | archive upload & extraction (zip/7z/rar/tar via libarchive); upload batches + conflict report; text parsing; opt-in `index` → `search_tsv`; faceted search + facet counts + `pg_trgm` fuzzy; export (zip + manifest) |
 | **3 OCR** | OCR worker (ocrmypdf/tesseract, concurrency 1); manual + `auto_ocr`; `ocr_*` fields & filters; searchable-PDF sidecars |
-| **4 trash & lifecycle** | soft-delete → Корзина; 30-day auto-purge (`cleanup` job); owner force-purge; restore-on-reupload (§14); `document_version` on replace; blob refcount GC |
-| **5 bot** | aiogram bot: account linking, upload, inbox processing, `/find`, export |
-| **6 web UI** | HTMX + Jinja — *separate design round* |
+| **4 sets & sharing** | document sets (§15); `build_artifact` job; ad-hoc export as artifact; `download_link` + public `GET /d/{token}` (permanent / one-time); artifact TTL + link pinning |
+| **5 trash & lifecycle** | soft-delete → Корзина; 30-day auto-purge (`cleanup` job); owner force-purge; restore-on-reupload (§14); `document_version` on replace; blob refcount GC |
+| **6 bot** | aiogram bot: account linking, upload, inbox processing, `/find`, sets, export |
+| **7 web UI** | HTMX + Jinja — *separate design round* |
 
 Cross-cutting throughout: tests, audit log, quota enforcement.
 
@@ -497,6 +533,86 @@ Upload of file `F` (hash `H`, name `N`) into domain `D`:
 Archive entries can't prompt: the batch carries `archive_on_conflict`
 (`skip` default, or `new`); every conflict is counted in
 `upload_batch.conflict_count` and listed on the batch page for manual handling.
+
+---
+
+## 15. Document sets & shareable archives
+
+### Concept
+
+A **document set** (`набор`) is a persistent, hand-curated list of documents
+that a user fills incrementally: run a search → tick some results →
+**"добавить в набор"** → pick an existing set or create a new one. Distinct from
+a search filter (dynamic) and from an ad-hoc export (one-shot).
+
+When the set is ready, the user **generates an archive** from it and either
+downloads it directly or creates a **share link** — *permanent* or *one-time*.
+
+### Model
+
+- `document_set` — `domain_id`, `name`, `description`, `visibility`
+  (`private` to creator, or `domain` = visible to all members),
+  `created_by`, `item_count`.
+- `document_set_item` — `(set_id, document_id)` unique (idempotent add),
+  `added_by`, `added_at`, `position` (manual reorder). If the document is later
+  trashed the item stays but is flagged stale; on blob purge it is removed.
+- `artifact` — a built zip on disk (`kind = set_archive`, `source_id = set_id`;
+  or `kind = adhoc_export`). Holds a **snapshot** (`snapshot_jsonb`: the exact
+  document ids + versions at build time) so the file is immutable even if the
+  set changes afterwards. `status`, `size_bytes`, `item_count`, `missing_count`,
+  `expires_at`.
+- `download_link` — `artifact_id`, opaque `token` (≈192-bit, URL-safe),
+  `max_downloads` (`1` = one-time, `NULL` = unlimited), `expires_at` (nullable),
+  `download_count`, `revoked_at`, `last_downloaded_at`, `created_by`.
+
+### Workflow
+
+1. Search results carry checkboxes → **"добавить в набор"** → dialog lists the
+   user's open sets (+ editable `domain`-visible sets) or **"＋ создать набор"**.
+2. Duplicates are ignored. Toast: *добавлено N в «набор X»*.
+3. **Наборы** section: each set with its count; open a set to review, reorder,
+   remove items, edit name/visibility.
+4. In a set → **"Сформировать архив"** → enqueues `build_artifact` →
+   `artifact(building → ready)`. The set keeps a history of its artifacts (by
+   date); re-generating makes a new one.
+5. On a ready artifact: **"Скачать"** (authed) and **"Создать ссылку"** →
+   choose *постоянная* (`max_downloads=NULL`, `expires_at=NULL`) /
+   *одноразовая* (`max_downloads=1`, optional expiry) / *с истечением* (custom
+   `expires_at`).
+6. Links are managed on the set: list, copy, see download count, **revoke**.
+
+### Public download — `GET /d/{token}`
+
+No auth. Checks, in order: link not `revoked`, not past `expires_at`,
+`download_count < max_downloads` (or unlimited); artifact `ready` and not
+expired. Then streams the file (`Content-Disposition: attachment;
+filename="<set> <date>.zip"`), increments `download_count`, sets
+`last_downloaded_at`. IP rate-limited. A one-time link is dead after the first
+completed download.
+
+### Permissions
+
+| action | capability |
+|---|---|
+| create / edit own set, add/remove items | `view` |
+| edit a `domain`-visible set someone else made | `manage` (or be the creator) |
+| generate an archive | `download` |
+| create a **one-time** link | `download` |
+| create a **permanent** link | `write` *(a standing public URL is a bigger commitment)* |
+| revoke a link | link creator, or `manage` |
+
+Domain setting `allow_public_links` (default `true`) — owner can switch off all
+link creation. Every link create / revoke / public download is in `audit_log`.
+
+### Lifecycle interplay
+
+- An `artifact` normally expires after `EXPORT_TTL_HOURS` (ad-hoc) or a longer
+  set-archive TTL, and the `cleanup` job deletes the zip.
+- **A live, non-expiring `download_link` pins its artifact** — `cleanup` skips
+  any artifact that still has an active permanent link. Revoke the link (or it
+  expires) → the artifact becomes eligible for cleanup again.
+- Deleting a set does **not** delete already-built artifacts or their links
+  (they were snapshots); it just removes the curation list.
 
 ---
 
