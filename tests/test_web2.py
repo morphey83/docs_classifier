@@ -144,6 +144,12 @@ async def test_image_thumbnail(alice, web_domain):
     r = await alice.get(f"/documents/{doc_id}/thumb")
     assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
 
+    # image results carry a thumbnail in both search views
+    cards = await alice.get("/search", headers={"HX-Request": "true"})
+    assert f"/documents/{doc_id}/thumb" in cards.text
+    table = await alice.get("/search?view=table", headers={"HX-Request": "true"})
+    assert f"/documents/{doc_id}/thumb" in table.text
+
 
 # --- tag vocabulary --------------------------------------------
 async def test_tag_vocabulary_crud(alice, web_domain):
