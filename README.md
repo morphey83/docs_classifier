@@ -24,8 +24,12 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
   extraction with bomb guards; upload batches with per-entry outcomes;
   opt-in body-text indexing (`POST /documents/{id}/index`); faceted search
   with facet counts; `POST /domains/{d}/exports` → zip + manifest artifact.
+- **3 OCR** — SAQ worker (Postgres) with a `JOB_MODE=inline` fallback for
+  dev; `POST /documents/{id}/ocr` + per-domain `auto_ocr` (ocrmypdf / tesseract);
+  `ocr_status` / `ocr_at` fields + `has_ocr` search filter; searchable-PDF
+  sidecars.
 
-Roadmap (§12 of the architecture doc): 3 OCR · 4 sets & sharing ·
+Roadmap (§12 of the architecture doc): 4 sets & sharing ·
 5 trash & lifecycle · 6 bot · 7 web UI.
 
 ## Stack

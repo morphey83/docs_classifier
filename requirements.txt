@@ -13,5 +13,8 @@ py7zr==0.22.0        # 7z archives (Linux wheels; skips cleanly if unimportable)
 rarfile==4.2         # rar archives — needs `unar` in the image
 python-docx==1.1.2
 openpyxl==3.1.5
+Pillow==11.0.0
+pytesseract==0.3.13    # needs the `tesseract` binary in the image
+ocrmypdf==16.7.0       # needs tesseract + ghostscript + qpdf (Docker only)
 saq==0.22.4
 psycopg[binary,pool]==3.2.3

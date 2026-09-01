@@ -32,13 +32,18 @@ def _limits() -> Limits:
 
 async def process_archive(
     *,
-    batch_id: uuid.UUID,
+    batch_id: str | uuid.UUID,
     archive_sha256: str,
     archive_kind: str,
-    domain_id: uuid.UUID,
-    uploader_id: uuid.UUID,
+    domain_id: str | uuid.UUID,
+    uploader_id: str | uuid.UUID,
     conflict_mode: ArchiveConflictMode,
 ) -> None:
+    batch_id, domain_id, uploader_id = (
+        uuid.UUID(str(batch_id)),
+        uuid.UUID(str(domain_id)),
+        uuid.UUID(str(uploader_id)),
+    )
     sm = get_sessionmaker()
     async with sm() as db:
         batch = await db.get(UploadBatch, batch_id)

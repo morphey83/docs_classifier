@@ -8,6 +8,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 os.environ.setdefault("COOKIE_SECURE", "false")
 os.environ.setdefault("SECRET_KEY", "test-secret")
 os.environ.setdefault("DEBUG", "true")
+os.environ.setdefault("JOB_MODE", "inline")
 
 from collections.abc import AsyncGenerator, Callable
 from pathlib import Path

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import storage
 from app.db import get_session
 from app.deps import DomainCtx, require
+from app.jobs import dispatch
 from app.models import Artifact, ArtifactStatus, User
 from app.rbac import Cap
 from app.schemas.exports import ArtifactOut, ExportCreate
@@ -48,9 +49,10 @@ async def create_export_route(
     artifact = await create_export(
         db, ctx.domain, ctx.user, filters=filters, doc_ids=body.document_ids
     )
-    aid = artifact.id
-    background.add_task(build_artifact, aid)
-    return ArtifactOut.model_validate(artifact)
+    out = ArtifactOut.model_validate(artifact)
+    await db.commit()  # persist before the job (queue mode) picks it up
+    await dispatch(background, "build_artifact", build_artifact, artifact_id=artifact.id)
+    return out
 
 
 async def _load_artifact(db: AsyncSession, artifact_id: uuid.UUID, user: User) -> Artifact:

@@ -15,7 +15,15 @@ from app.db import dispose_engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.data_dir.mkdir(parents=True, exist_ok=True)
+    queue = None
+    if settings.job_mode == "queue":
+        from app.jobs import get_queue
+
+        queue = get_queue()
+        await queue.connect()
     yield
+    if queue is not None:
+        await queue.disconnect()
     await dispose_engine()
 
 

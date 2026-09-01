@@ -6,10 +6,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# unar: rar extraction (rarfile shells out to it). OCR deps (tesseract, …)
-# are added in phase 3.
+# unar: rar extraction. tesseract/ghostscript/qpdf: OCR (ocrmypdf + pytesseract).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends unar \
+    && apt-get install -y --no-install-recommends \
+        unar \
+        tesseract-ocr tesseract-ocr-rus tesseract-ocr-eng \
+        ghostscript qpdf pngquant unpaper \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

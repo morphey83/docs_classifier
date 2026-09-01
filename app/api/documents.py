@@ -24,13 +24,18 @@ from app.api._common import document_out
 from app.db import get_session
 from app.deps import DocCtx, DomainCtx, require, require_doc
 from app.ingest import archive
+from app.jobs import dispatch
 from app.models import (
     BatchKind,
     DocStatus,
+    Document,
+    OcrStatus,
     TextSource,
     UploadBatch,
     UploadBatchItem,
 )
+from app.ocr import engine as ocr_engine
+from app.ocr.tasks import ocr_document
 from app.rbac import Cap
 from app.schemas.documents import (
     DocumentList,
@@ -46,6 +51,14 @@ from app.services import documents as svc
 from app.services import search as search_svc
 from app.services import tags as tags_svc
 from app.services.ingest import process_archive
+
+
+async def _maybe_auto_ocr(background, db, domain, doc: Document) -> None:
+    if (domain.settings or {}).get("auto_ocr") and ocr_engine.is_supported(doc.mime):
+        doc.ocr_status = OcrStatus.pending
+        await db.flush()
+        await dispatch(background, "ocr_document", ocr_document, document_id=doc.id)
+
 
 router = APIRouter(tags=["documents"])
 
@@ -77,7 +90,10 @@ async def upload(
             if on_conflict == "new"
             else ((ctx.domain.settings or {}).get("archive_on_conflict", "skip"))
         )
-        background.add_task(
+        await db.commit()  # persist the batch before the job (queue mode) reads it
+        await dispatch(
+            background,
+            "process_archive",
             process_archive,
             batch_id=batch.id,
             archive_sha256=blob.sha256,
@@ -116,6 +132,8 @@ async def upload(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail={"error": "quota_exceeded", "used": err.used, "quota": err.quota},
         ) from err
+    if result.outcome in ("created", "new_from_conflict", "replaced"):
+        await _maybe_auto_ocr(background, db, ctx.domain, result.document)
     return UploadResult(outcome=result.outcome, document=await document_out(db, result.document))
 
 
@@ -170,6 +188,7 @@ async def search_documents(
     uploaded_to: datetime | None = None,
     uploaded_by: uuid.UUID | None = None,
     has_index: bool | None = None,
+    has_ocr: bool | None = None,
     text_source: TextSource | None = None,
     include_trash: bool = Query(default=False),
     sort: str = Query(default="uploaded_at"),
@@ -195,6 +214,7 @@ async def search_documents(
         uploaded_to=uploaded_to,
         uploaded_by=uploaded_by,
         has_index=has_index,
+        has_ocr=has_ocr,
         text_source=text_source,
         include_trash=include_trash,
         sort=sort,
@@ -276,6 +296,26 @@ async def index_document(
     db: AsyncSession = Depends(get_session),
 ) -> DocumentOut:
     await search_svc.index_document(db, ctx.document, reparse=reparse)
+    return await document_out(db, ctx.document)
+
+
+@router.post("/documents/{document_id}/ocr", response_model=DocumentOut)
+async def request_ocr(
+    background: BackgroundTasks,
+    lang: str | None = Query(default=None, description="e.g. rus+eng"),
+    ctx: DocCtx = Depends(require_doc(Cap.process)),
+    db: AsyncSession = Depends(get_session),
+) -> DocumentOut:
+    if not ocr_engine.is_supported(ctx.document.mime):
+        ctx.document.ocr_status = OcrStatus.unsupported
+        await db.commit()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"OCR does not support {ctx.document.mime}",
+        )
+    ctx.document.ocr_status = OcrStatus.pending
+    await db.flush()
+    await dispatch(background, "ocr_document", ocr_document, document_id=ctx.document.id, lang=lang)
     return await document_out(db, ctx.document)
 
 

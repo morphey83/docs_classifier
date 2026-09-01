@@ -52,11 +52,20 @@ class IndexStatus(StrEnum):
     failed = "failed"
 
 
+class OcrStatus(StrEnum):
+    none = "none"
+    pending = "pending"
+    done = "done"
+    failed = "failed"
+    unsupported = "unsupported"
+
+
 _status_enum = Enum(DocStatus, name="doc_status", native_enum=False, length=16)
 _source_enum = Enum(DocSource, name="doc_source", native_enum=False, length=16)
 _batch_kind_enum = Enum(BatchKind, name="batch_kind", native_enum=False, length=16)
 _text_source_enum = Enum(TextSource, name="text_source", native_enum=False, length=16)
 _index_status_enum = Enum(IndexStatus, name="index_status", native_enum=False, length=16)
+_ocr_status_enum = Enum(OcrStatus, name="ocr_status", native_enum=False, length=16)
 
 
 class UploadBatch(Base):
@@ -132,6 +141,13 @@ class Document(Base):
     indexed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
+    ocr_status: Mapped[OcrStatus] = mapped_column(
+        _ocr_status_enum, default=OcrStatus.none, server_default="none"
+    )
+    ocr_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    ocr_lang: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     upload_batch_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("upload_batch.id", ondelete="SET NULL"), nullable=True

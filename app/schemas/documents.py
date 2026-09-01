@@ -7,7 +7,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.models import DocSource, DocStatus, IndexStatus, TextSource
+from app.models import DocSource, DocStatus, IndexStatus, OcrStatus, TextSource
 from app.schemas.tags import TagOut
 
 
@@ -28,6 +28,8 @@ class DocumentOut(BaseModel):
     text_source: TextSource
     index_status: IndexStatus
     indexed_at: datetime | None
+    ocr_status: OcrStatus
+    ocr_at: datetime | None
     uploaded_at: datetime
     uploaded_by: uuid.UUID
     deleted_at: datetime | None

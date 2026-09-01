@@ -46,6 +46,12 @@ def artifact_path(artifact_id: str) -> Path:
     return artifacts_dir() / f"{artifact_id}.zip"
 
 
+def derived_dir(sha256: str) -> Path:
+    d = settings.data_dir / "derived" / sha256[:2] / sha256[2:4] / sha256
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def blob_path(sha256: str) -> Path:
     return _blobs_root() / sha256[:2] / sha256[2:4] / sha256
 

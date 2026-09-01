@@ -77,6 +77,9 @@ class SearchFilters:
     has_index: bool | None = None
     indexed_from: datetime | None = None
     indexed_to: datetime | None = None
+    has_ocr: bool | None = None
+    ocr_from: datetime | None = None
+    ocr_to: datetime | None = None
     text_source: TextSource | None = None
     include_trash: bool = False
     sort: str = "uploaded_at"
@@ -131,6 +134,14 @@ def _apply(stmt: Select, domain_id: uuid.UUID, f: SearchFilters, *, pg: bool) ->
         stmt = stmt.where(Document.indexed_at >= f.indexed_from)
     if f.indexed_to is not None:
         stmt = stmt.where(Document.indexed_at <= f.indexed_to)
+    if f.has_ocr is True:
+        stmt = stmt.where(Document.ocr_at.is_not(None))
+    if f.has_ocr is False:
+        stmt = stmt.where(Document.ocr_at.is_(None))
+    if f.ocr_from is not None:
+        stmt = stmt.where(Document.ocr_at >= f.ocr_from)
+    if f.ocr_to is not None:
+        stmt = stmt.where(Document.ocr_at <= f.ocr_to)
     if f.text_source is not None:
         stmt = stmt.where(Document.text_source == f.text_source)
 
@@ -164,6 +175,7 @@ _SORTS = {
     "size": Document.size_bytes.desc(),
     "title": Document.title.asc(),
     "indexed_at": Document.indexed_at.desc().nulls_last(),
+    "ocr_at": Document.ocr_at.desc().nulls_last(),
 }
 
 

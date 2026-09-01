@@ -67,7 +67,8 @@ async def create_export(
     return artifact
 
 
-async def build_artifact(artifact_id: uuid.UUID) -> None:
+async def build_artifact(artifact_id: str | uuid.UUID) -> None:
+    artifact_id = uuid.UUID(str(artifact_id))
     sm = get_sessionmaker()
     async with sm() as db:
         artifact = await db.get(Artifact, artifact_id)

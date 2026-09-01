@@ -31,8 +31,12 @@ class Settings(BaseSettings):
     default_trash_retention_days: int = 30
     export_ttl_hours: int = 48
 
-    # --- worker ----------------------------------------------------------
-    redis_url: str | None = None  # unused; SAQ runs on Postgres
+    # --- jobs / worker --------------------------------------------------
+    # "queue": push to the SAQ (Postgres) queue for a worker to run.
+    # "inline": run in a FastAPI BackgroundTask (dev without a worker; tests).
+    job_mode: str = "queue"
+    ocr_default_lang: str = "rus+eng"
+    ocr_image_max_px: int = 2500
 
     @property
     def sync_database_url(self) -> str:
