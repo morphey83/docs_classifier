@@ -3,40 +3,45 @@
 {% block content %}
 <hgroup>
   <h1>Очередь на сортировку</h1>
-  <p class="muted">документы из всех ваших доменов, ожидающие разметки · осталось: {{ remaining }}</p>
+  <p class="muted">неразмеченные документы из всех ваших доменов</p>
 </hgroup>
 
-{% if not doc %}
-<p class="flash ok">Очередь пуста 🎉</p>
-<form method="post" action="/inbox/undefer" class="inline-form">
-  <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <button class="outline secondary">Вернуть отложенные</button>
+<form method="get" action="/inbox" hx-get="/inbox/table" hx-target="#inbox-table"
+      hx-trigger="change" hx-push-url="true" style="max-width:22rem">
+  <label>Домен
+    <select name="domain_id">
+      <option value="" {{ 'selected' if not picked }}>все</option>
+      {% for d in domains %}
+      <option value="{{ d.id }}" {{ 'selected' if picked == d.id|string }}>{{ d.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
 </form>
-{% else %}
-<article>
-  <hgroup>
-    <h3><a href="/documents/{{ doc.id }}">{{ doc.title }}</a></h3>
-    <p class="muted">[{{ doc_domain }}] · {{ doc.original_name }} · {{ doc.mime }}
-      · {{ doc.size_bytes|humansize }} · {{ doc.doc_date|shortdate }}</p>
-  </hgroup>
 
-  {% if doc_tags %}<p>{% for n in doc_tags|sort %}<span class="tag">{{ n }}</span>{% endfor %}</p>{% endif %}
-  {% if freq_tags %}
-  <p class="muted">частые: {% for n in freq_tags %}<span class="tag">{{ n }}</span>{% endfor %}</p>
-  {% endif %}
+<div id="inbox-table"
+     hx-get="/inbox/table?domain_id={{ picked }}"
+     hx-trigger="inbox-refresh from:body"
+     hx-target="this">
+  {% include "_inbox_table.html" %}
+</div>
 
-  <form method="post" action="/inbox/{{ doc.id }}/done">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <label>Теги (через запятую)
-      <input name="tags" value="{{ doc_tags|join(', ') }}" autofocus placeholder="договор, 2024">
-    </label>
-    <button type="submit">✅ Готово</button>
-  </form>
+<dialog id="tagdlg">
+  <article style="max-width:640px">
+    <header>
+      <button aria-label="Закрыть" rel="prev" onclick="closeTag()"></button>
+      <strong>Разметка</strong>
+    </header>
+    <div id="tagcard"></div>
+  </article>
+</dialog>
 
-  <form method="post" action="/inbox/{{ doc.id }}/defer" class="inline-form">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <button class="outline secondary">⏭ Отложить</button>
-  </form>
-</article>
-{% endif %}
+<script>
+  function openTag() { document.getElementById('tagdlg').showModal(); }
+  function closeTag() { document.getElementById('tagdlg').close(); }
+  document.body.addEventListener('htmx:afterSwap', function (e) {
+    if (e.detail.target.id !== 'tagcard') return;
+    if (e.detail.target.querySelector('[data-doc]')) openTag();
+    if (e.detail.target.querySelector('[data-empty]')) { /* keep open, shows "пусто" */ }
+  });
+</script>
 {% endblock %}

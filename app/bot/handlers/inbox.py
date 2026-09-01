@@ -10,6 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import storage
 from app.bot import state as state_svc
 from app.bot.callbacks import InboxCb
 from app.bot.flows import Edit
@@ -21,6 +22,7 @@ from app.rbac import Cap
 from app.services import documents as docs_svc
 from app.services import domains as domains_svc
 from app.services import tags as tags_svc
+from app.services import thumbs
 
 router = Router(name="inbox")
 
@@ -56,11 +58,20 @@ async def _next(target, state: FSMContext, db, domain: Domain, user: User) -> No
         return
     await state.set_state(Edit.inbox_tags)
     await state.update_data(doc=str(doc.id), domain=str(domain.id))
-    await target.answer(
+
+    text = (
         result_line(doc, domain.name, [])
-        + "\n\nОтправьте теги через запятую, либо жмите кнопку:",
-        reply_markup=inbox_kb(str(doc.id)),
+        + "\n\nОтправьте теги через запятую, либо жмите кнопку:"
     )
+    kb = inbox_kb(str(doc.id))
+    if thumbs.can_thumb(doc.mime, doc.ext):
+        from aiogram.types import FSInputFile
+
+        preview = await thumbs.ensure_thumb(doc.sha256) or storage.blob_path(doc.sha256)
+        if preview.is_file() and preview.stat().st_size <= 9 * 1024 * 1024:
+            await target.answer_photo(FSInputFile(preview), caption=text, reply_markup=kb)
+            return
+    await target.answer(text, reply_markup=kb)
 
 
 @router.message(Edit.inbox_tags, F.text)

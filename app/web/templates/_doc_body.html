@@ -7,6 +7,11 @@
   <p class="muted">{{ doc.original_name }} · {{ doc.mime }} · {{ doc.size_bytes|humansize }}</p>
 </hgroup>
 
+{% if doc.mime.startswith('image/') %}
+<img src="/documents/{{ doc.id }}/thumb" alt="превью"
+     style="max-width:100%;max-height:45vh;border-radius:.4rem;display:block;margin:.3rem 0 1rem">
+{% endif %}
+
 {% if doc.deleted_at %}
 <p class="flash err">Документ в корзине (удалён {{ doc.deleted_at|datetimefmt }}).
   {% if view.has('delete') %}

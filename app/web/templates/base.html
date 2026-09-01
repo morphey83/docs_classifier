@@ -53,6 +53,19 @@
       font-size:1rem; cursor:pointer; line-height:1; color:inherit; border-radius:.25rem; }
     .icon-actions a:hover, .icon-actions button:hover { background: var(--pico-secondary-background); }
     .icon-actions .danger:hover { background:#fee2e2; }
+    .freq-tags { display:flex; flex-wrap:wrap; gap:.35rem; margin:.2rem 0 1rem; }
+    .freq-tags .freq {
+      padding:.15rem .7rem; border-radius:1rem; font-size:.82rem; line-height:1.4;
+      cursor:pointer; transition:none;
+      background:#fff; border:1px solid var(--pico-primary);
+      color:var(--pico-primary); -webkit-text-fill-color:var(--pico-primary); }
+    .freq-tags .freq:hover:not(:disabled) {
+      background:var(--pico-primary); color:#fff; -webkit-text-fill-color:#fff; }
+    .freq-tags .freq:disabled {   /* tag already picked — "spent" */
+      background:#f1f3f5; border:1px dashed #ced4da;
+      color:#868e96; -webkit-text-fill-color:#868e96;
+      text-decoration:line-through; cursor:default; opacity:1; }
+    #tagdlg article { margin:0; }
   </style>
   <script src="/static/htmx.min.js" defer></script>
 </head>

@@ -312,6 +312,23 @@ async def document_download(
     return FileResponse(path, media_type=doc.mime, filename=doc.original_name)
 
 
+@router.get("/documents/{document_id}/thumb")
+async def document_thumb(
+    document_id: uuid.UUID,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> FileResponse:
+    from app.services import thumbs
+
+    doc, _view = await load_document(db, user, document_id)
+    if not thumbs.can_thumb(doc.mime, doc.ext):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "нет превью для этого типа")
+    path = await thumbs.ensure_thumb(doc.sha256)
+    if path is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "превью недоступно")
+    return FileResponse(path, media_type="image/webp")
+
+
 async def _doc_fragment(request: Request, db, user, document_id: uuid.UUID) -> Response:
     # Persist this request's changes, then re-read so an inline job's commit
     # (a separate session, e.g. OCR) is reflected and all columns are loaded

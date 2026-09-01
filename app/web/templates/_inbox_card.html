@@ -1,0 +1,74 @@
+{% if not doc %}
+<div data-empty="1">
+  <p class="flash ok">Очередь пуста 🎉</p>
+  <button onclick="closeTag()">Закрыть</button>
+</div>
+{% else %}
+<div data-doc="{{ doc.id }}">
+  <hgroup>
+    <h4><a href="/documents/{{ doc.id }}" target="_blank">{{ doc.title }}</a></h4>
+    <p class="muted">[{{ domain.name }}] · {{ doc.original_name }} ·
+      {{ doc.mime }} · {{ doc.size_bytes|humansize }} · {{ doc.doc_date|shortdate }}</p>
+  </hgroup>
+
+  {% if is_image %}
+  <img src="/documents/{{ doc.id }}/thumb" alt="превью"
+       style="max-width:100%;max-height:42vh;border-radius:.4rem;display:block;margin:.4rem 0">
+  {% endif %}
+
+  {% if cur_tags %}<p>{% for n in cur_tags|sort %}<span class="tag">{{ n }}</span>{% endfor %}</p>{% endif %}
+
+  {% if freq %}
+  <p class="muted" style="margin-bottom:.2rem">частые теги:</p>
+  <div class="freq-tags">
+    {% for name in freq %}
+    <button type="button" class="freq" data-tag="{{ name }}">{{ name }}</button>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form hx-post="/inbox/{{ doc.id }}/done" hx-target="#tagcard">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input type="hidden" name="domain_id" value="{{ picked }}">
+    <input name="tags" id="tagfield" autocomplete="off" autofocus
+           value="{{ cur_tags|join(', ') }}" placeholder="теги через запятую">
+    <div role="group">
+      <button type="submit">Готово, дальше →</button>
+      <button type="button" hx-post="/inbox/{{ doc.id }}/defer" hx-target="#tagcard"
+              hx-include="closest form" class="secondary outline">Отложить</button>
+      <button type="button" class="secondary" onclick="closeTag()">Закрыть</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(function () {
+  var field = document.getElementById('tagfield');
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.freq-tags .freq'));
+  function cur() {
+    return field.value.split(',').map(function (s) { return s.trim().toLowerCase(); })
+      .filter(Boolean);
+  }
+  function sync() {
+    var have = cur();
+    chips.forEach(function (c) {
+      var used = have.indexOf(c.dataset.tag.toLowerCase()) !== -1;
+      c.classList.toggle('used', used);
+      c.disabled = used;
+    });
+  }
+  chips.forEach(function (c) {
+    c.addEventListener('click', function () {
+      if (cur().indexOf(c.dataset.tag.toLowerCase()) === -1) {
+        var v = field.value.trim().replace(/,\s*$/, '');
+        field.value = (v ? v + ', ' : '') + c.dataset.tag;
+      }
+      sync();
+      field.focus();
+    });
+  });
+  field.addEventListener('input', sync);
+  sync();
+})();
+</script>
+{% endif %}

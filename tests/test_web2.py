@@ -72,22 +72,65 @@ async def test_set_share_link_and_revoke(alice, web_domain):
     assert rv.status_code == 303
 
 
-# --- inbox -------------------------------------------------------
-async def test_inbox_tag_and_advance(alice, web_domain):
+# --- inbox (table + modal tagging) --------------------------------
+async def test_inbox_table_and_modal_tagging(alice, web_domain):
     await _upload(alice, web_domain, "i1.txt")
     await _upload(alice, web_domain, "i2.txt")
 
     page = await alice.get("/inbox")
-    assert "осталось: 2" in page.text
-    doc_id = re.search(r"/inbox/([0-9a-f-]{36})/done", page.text).group(1)
+    assert "в очереди: 2" in page.text
+    assert "Разметить" in page.text and "<dialog" in page.text
+
+    card = await alice.get("/inbox/card", headers={"HX-Request": "true"})
+    doc_id = re.search(r'data-doc="([0-9a-f-]{36})"', card.text).group(1)
+    assert 'class="freq' in card.text or "частые" not in card.text  # chips section optional
 
     r = await alice.post(
         f"/inbox/{doc_id}/done",
-        data={"tags": "готово", "csrf_token": web_csrf(page.text)},
+        data={"tags": "готово", "domain_id": "", "csrf_token": web_csrf(card.text)},
+        headers={"HX-Request": "true"},
     )
-    assert r.status_code == 303
-    page2 = await alice.get("/inbox")
-    assert "осталось: 1" in page2.text
+    assert r.status_code == 200
+    assert r.headers.get("HX-Trigger") == "inbox-refresh"
+    assert "data-doc" in r.text  # the next card
+
+    table = await alice.get("/inbox/table", headers={"HX-Request": "true"})
+    assert "в очереди: 1" in table.text
+
+
+async def test_inbox_defer_advances(alice, web_domain):
+    await _upload(alice, web_domain, "d1.txt")
+    await _upload(alice, web_domain, "d2.txt")
+    card = await alice.get("/inbox/card", headers={"HX-Request": "true"})
+    doc_id = re.search(r'data-doc="([0-9a-f-]{36})"', card.text).group(1)
+
+    r = await alice.post(
+        f"/inbox/{doc_id}/defer",
+        data={"domain_id": "", "csrf_token": web_csrf(card.text)},
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200 and r.headers.get("HX-Trigger") == "inbox-refresh"
+    # deferred doc drops out of this user's queue
+    table = await alice.get("/inbox/table", headers={"HX-Request": "true"})
+    assert "в очереди: 1" in table.text
+
+
+async def test_image_thumbnail(alice, web_domain):
+    from io import BytesIO
+
+    from PIL import Image
+
+    buf = BytesIO()
+    Image.new("RGB", (120, 90), (30, 120, 200)).save(buf, "PNG")
+    up = (await alice.get(f"/upload?domain={web_domain}")).text
+    await alice.post(
+        "/upload",
+        data={"domain": web_domain, "csrf_token": web_csrf(up)},
+        files={"file": ("pic.png", buf.getvalue(), "image/png")},
+    )
+    doc_id = await _doc_id(alice, web_domain)
+    r = await alice.get(f"/documents/{doc_id}/thumb")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
 
 
 # --- tag vocabulary --------------------------------------------
