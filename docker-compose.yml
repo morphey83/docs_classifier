@@ -40,6 +40,18 @@ services:
       db:
         condition: service_healthy
 
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: ["python", "-m", "app.bot"]
+    volumes:
+      - docdata:/data          # reads blobs directly to send files
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["bot"]           # `docker compose --profile bot up` once BOT_TOKEN is set
+
 volumes:
   pgdata:
   docdata:

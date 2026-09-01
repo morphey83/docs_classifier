@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     # replaces the bare VDS IP.
     public_base_url: str | None = None
     telegram_bot_username: str | None = None  # without '@', for t.me/<name> deep-links
+    bot_token: str | None = None  # from @BotFather — the `bot` service (§8)
+    bot_search_page_size: int = 5
 
     @property
     def default_allowed_types_set(self) -> set[str] | None:

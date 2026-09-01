@@ -9,6 +9,12 @@ os.environ.setdefault("COOKIE_SECURE", "false")
 os.environ.setdefault("SECRET_KEY", "test-secret")
 os.environ.setdefault("DEBUG", "true")
 os.environ.setdefault("JOB_MODE", "inline")
+# Neutralise deployment-only settings that a local dev .env might carry, so
+# tests see stock defaults regardless of the developer's .env.
+os.environ.setdefault("PUBLIC_BASE_URL", "")
+os.environ.setdefault("TELEGRAM_BOT_USERNAME", "")
+os.environ.setdefault("BOT_TOKEN", "")
+os.environ.setdefault("DEFAULT_ALLOWED_TYPES", "")
 
 from collections.abc import AsyncGenerator, Callable
 from pathlib import Path

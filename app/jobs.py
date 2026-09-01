@@ -38,7 +38,11 @@ async def dispatch(
     /,
     **kwargs: Any,
 ) -> None:
-    if settings.job_mode == "inline" and background is not None:
-        background.add_task(fn, **kwargs)
+    if settings.job_mode == "inline":
+        if background is not None:
+            background.add_task(fn, **kwargs)
+        else:
+            # No FastAPI request in flight (e.g. the bot) — just run it now.
+            await fn(**{k: _plain(v) for k, v in kwargs.items()})
         return
     await get_queue().enqueue(name, **{k: _plain(v) for k, v in kwargs.items()})

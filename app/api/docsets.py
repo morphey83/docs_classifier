@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import secrets
 import uuid
-from datetime import timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse, JSONResponse
@@ -16,7 +14,6 @@ from app.api._common import document_out
 from app.config import settings
 from app.db import get_session
 from app.deps import DomainCtx, require
-from app.jobs import dispatch
 from app.models import (
     Artifact,
     ArtifactKind,
@@ -110,61 +107,7 @@ async def _set_detail(db: AsyncSession, set_obj: DocumentSet) -> SetDetail:
     return SetDetail(**base.model_dump(), items=items)
 
 
-async def _ensure_current(
-    db: AsyncSession,
-    background: BackgroundTasks | None,
-    domain: Domain,
-    set_obj: DocumentSet,
-    *,
-    requested_by: uuid.UUID | None,
-) -> tuple[Artifact, str]:
-    """Compare the live set hash to the cached artifact; queue a rebuild if stale."""
-    docs = await svc.set_documents(db, set_obj.id)
-    tags = await svc.tags_by_doc(db, [d.id for d in docs])
-    current = svc.set_content_hash(docs, tags)
-
-    artifact = await svc.get_set_artifact(db, set_obj.id)
-    if artifact is None:
-        artifact = Artifact(
-            domain_id=domain.id,
-            kind=ArtifactKind.set_archive,
-            source_id=set_obj.id,
-            status=ArtifactStatus.building,
-            requested_by=requested_by,
-        )
-        db.add(artifact)
-        await db.flush()
-
-    ttl_days = int(
-        (domain.settings or {}).get("set_archive_ttl_days", settings.set_archive_ttl_days)
-    )
-    path = storage.set_archive_path(str(set_obj.id))
-    expired = artifact.expires_at is not None and as_aware(artifact.expires_at) <= utcnow()
-    file_ok = bool(artifact.storage_key) and path.is_file()
-    fresh = (
-        artifact.content_hash == current
-        and artifact.status == ArtifactStatus.ready
-        and file_ok
-        and not expired
-    )
-    if fresh:
-        return artifact, current
-
-    building_this = (
-        artifact.status == ArtifactStatus.building
-        and (artifact.snapshot or {}).get("target_hash") == current
-        and not expired
-    )
-    if not building_this:
-        artifact.status = ArtifactStatus.building
-        artifact.error = None
-        artifact.expires_at = utcnow() + timedelta(days=ttl_days)
-        artifact.snapshot = {**(artifact.snapshot or {}), "target_hash": current}
-        await db.commit()
-        await dispatch(
-            background, "build_set_archive", svc.build_set_archive, set_id=set_obj.id
-        )
-    return artifact, current
+_ensure_current = svc.ensure_current_archive
 
 
 # --- set CRUD --------------------------------------------------------
@@ -345,25 +288,19 @@ async def create_link(
     db: AsyncSession = Depends(get_session),
 ) -> LinkOut:
     s = await _load_set(db, ctx, set_id)
-    if not (ctx.domain.settings or {}).get("allow_public_links", True):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "public links are disabled for this domain")
-    if body.kind == "permanent" and not ctx.has(Cap.write):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "a permanent link needs 'write'")
-    if body.kind == "one_time" and not ctx.has(Cap.download):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "a link needs 'download'")
-    if body.expires_at is not None and as_aware(body.expires_at) <= utcnow():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "expires_at is in the past")
-
-    artifact, _ = await _ensure_current(db, background, ctx.domain, s, requested_by=ctx.user.id)
-    link = DownloadLink(
-        artifact_id=artifact.id,
-        token=secrets.token_urlsafe(24),
-        max_downloads=1 if body.kind == "one_time" else None,
-        expires_at=body.expires_at,
-        created_by=ctx.user.id,
-    )
-    db.add(link)
-    await db.flush()
+    try:
+        link = await svc.create_share_link(
+            db,
+            background,
+            domain=ctx.domain,
+            set_obj=s,
+            user=ctx.user,
+            role=ctx.role,
+            kind=body.kind,
+            expires_at=body.expires_at,
+        )
+    except svc.SetError as err:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(err)) from err
     return _link_out(link)
 
 

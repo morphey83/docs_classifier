@@ -10,7 +10,7 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
 
 ## Status
 
-**Phases 0–5 done, 6a (bot API groundwork) done.**
+**Phases 0–6 done.**
 
 - **0 skeleton** — config, async DB, Alembic, auth (session cookies), `/health`,
   SAQ worker stub, Docker Compose, tests.
@@ -51,13 +51,30 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
   (`tg_link_token`, bidirectional, always verified via a deep-link round
   trip) — `POST /auth/tg-link`, `GET /tg/link/{token}` (minimal standalone
   page), `GET /tg/link/{token}/status`, `POST /tg/link/{token}/confirm`.
+- **6b Telegram bot** (`python -m app.bot`, aiogram 3, long-polling) —
+  shares the DB and `app/services/*` directly. `/start` links the account
+  (both directions); `/domain` picks the upload target; send a file / archive
+  → the domain's inbox (with allowed-type feedback); `/inbox` walks the queue
+  tagging as you go; `/find` is cross-domain with a mini-syntax
+  (`#tag type:pdf 2024 ocr:yes`) and paged results, each with inline actions
+  (send file, edit tags / title, request OCR / index, add to a set); `/sets`
+  lists sets and hands back the archive (as a file ≤ 50 MB or a share link).
+  Current domain + last search persist in `bot_user_state`.
 
-Roadmap (§12 of the architecture doc): 6b bot · 7 web UI.
+Roadmap (§12 of the architecture doc): 7 web UI.
 
 ## Stack
 
 Python 3.12 · FastAPI · PostgreSQL 16 · SQLAlchemy 2 (async) · Alembic ·
-SAQ (Postgres-backed jobs, no Redis) · aiogram 3 (bot) · Caddy · Docker Compose.
+SAQ (Postgres-backed jobs, no Redis) · aiogram 3 (bot, long-polling) ·
+Caddy · Docker Compose.
+
+The bot runs as an opt-in compose service:
+
+```bash
+# set BOT_TOKEN, TELEGRAM_BOT_USERNAME, PUBLIC_BASE_URL in .env
+docker compose --profile bot up -d --build
+```
 
 ## Run
 

@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 import uuid
+from datetime import datetime, timedelta
+from typing import Literal
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app import storage
+from app.config import settings
 from app.db import get_sessionmaker
+from app.jobs import dispatch
 from app.models import (
     Artifact,
     ArtifactKind,
@@ -21,11 +26,16 @@ from app.models import (
     DocumentSetItem,
     DocumentTag,
     Domain,
+    DownloadLink,
     SetVisibility,
     Tag,
     User,
 )
+from app.rbac import ROLE_CAPS, Cap, Role
 from app.services.export import write_document_zip
+from app.util.time import as_aware, utcnow
+
+LinkKind = Literal["permanent", "one_time"]
 
 
 class SetError(ValueError):
@@ -193,6 +203,109 @@ async def get_set_artifact(db: AsyncSession, set_id: uuid.UUID) -> Artifact | No
             Artifact.source_id == set_id,
         )
     )
+
+
+# --- ensure-current (shared by the API and the bot, §15) --------------
+async def ensure_current_archive(
+    db: AsyncSession,
+    background,
+    domain: Domain,
+    set_obj: DocumentSet,
+    *,
+    requested_by: uuid.UUID | None,
+) -> tuple[Artifact, str]:
+    """Compare the live set hash to the cached artifact; queue a rebuild if stale.
+
+    ``background`` is a FastAPI ``BackgroundTasks`` from a request, or ``None``
+    (the bot) — ``dispatch`` handles both.
+    """
+    docs = await set_documents(db, set_obj.id)
+    tags = await tags_by_doc(db, [d.id for d in docs])
+    current = set_content_hash(docs, tags)
+
+    artifact = await get_set_artifact(db, set_obj.id)
+    if artifact is None:
+        artifact = Artifact(
+            domain_id=domain.id,
+            kind=ArtifactKind.set_archive,
+            source_id=set_obj.id,
+            status=ArtifactStatus.building,
+            requested_by=requested_by,
+        )
+        db.add(artifact)
+        await db.flush()
+
+    ttl_days = int(
+        (domain.settings or {}).get("set_archive_ttl_days", settings.set_archive_ttl_days)
+    )
+    path = storage.set_archive_path(str(set_obj.id))
+    expired = artifact.expires_at is not None and as_aware(artifact.expires_at) <= utcnow()
+    file_ok = bool(artifact.storage_key) and path.is_file()
+    fresh = (
+        artifact.content_hash == current
+        and artifact.status == ArtifactStatus.ready
+        and file_ok
+        and not expired
+    )
+    if fresh:
+        return artifact, current
+
+    building_this = (
+        artifact.status == ArtifactStatus.building
+        and (artifact.snapshot or {}).get("target_hash") == current
+        and not expired
+    )
+    if not building_this:
+        artifact.status = ArtifactStatus.building
+        artifact.error = None
+        artifact.expires_at = utcnow() + timedelta(days=ttl_days)
+        artifact.snapshot = {**(artifact.snapshot or {}), "target_hash": current}
+        await db.commit()
+        await dispatch(background, "build_set_archive", build_set_archive, set_id=set_obj.id)
+    return artifact, current
+
+
+def archive_is_ready(artifact: Artifact, current_hash: str) -> bool:
+    return (
+        artifact.status == ArtifactStatus.ready
+        and artifact.content_hash == current_hash
+        and storage.set_archive_path(str(artifact.source_id)).is_file()
+    )
+
+
+# --- share links (shared by the API and the bot, §15) ----------------
+async def create_share_link(
+    db: AsyncSession,
+    background,
+    *,
+    domain: Domain,
+    set_obj: DocumentSet,
+    user: User,
+    role: Role,
+    kind: LinkKind,
+    expires_at: datetime | None = None,
+) -> DownloadLink:
+    caps = ROLE_CAPS[role]
+    if not (domain.settings or {}).get("allow_public_links", True):
+        raise SetError("public links are disabled for this domain")
+    if kind == "permanent" and Cap.write not in caps:
+        raise SetError("a permanent link needs 'write' in the domain")
+    if kind == "one_time" and Cap.download not in caps:
+        raise SetError("a link needs 'download' in the domain")
+
+    artifact, _ = await ensure_current_archive(
+        db, background, domain, set_obj, requested_by=user.id
+    )
+    link = DownloadLink(
+        artifact_id=artifact.id,
+        token=secrets.token_urlsafe(24),
+        max_downloads=1 if kind == "one_time" else None,
+        expires_at=expires_at,
+        created_by=user.id,
+    )
+    db.add(link)
+    await db.flush()
+    return link
 
 
 # --- the (re)build job -------------------------------------------------
