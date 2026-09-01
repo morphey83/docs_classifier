@@ -1,0 +1,3 @@
+{% macro qs() -%}
+{{ request.url.include_query_params(**kwargs) }}
+{%- endmacro %}

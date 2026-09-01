@@ -1,95 +1,110 @@
-"""Web UI: the inbox — process documents one card at a time."""
+"""Web UI: "Очередь на сортировку" — the inbox across every domain you can tag."""
 
 from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.rbac import Cap
+from app.rbac import ROLE_CAPS, Cap, Role
 from app.services import documents as docs_svc
+from app.services import domains as domains_svc
 from app.services import tags as tags_svc
 from app.web.csrf import CsrfGuard
-from app.web.deps import DomainView, domain_by_slug, require_cap
+from app.web.deps import current_user
 from app.web.search import _tags_by_doc
 from app.web.templating import render
 
 router = APIRouter()
 
 
-@router.get("/domains/{slug}/inbox")
+async def _taggable_domains(db: AsyncSession, user):
+    """(domain, role) pairs where the user may process the inbox (write cap)."""
+    out = {}
+    for domain, member in await domains_svc.list_memberships(db, user):
+        if Cap.write in ROLE_CAPS[Role(member.role)]:
+            out[domain.id] = domain
+    return out
+
+
+async def _doc_domain(db, user, document_id: uuid.UUID):
+    doc = await docs_svc.get_document(db, document_id)
+    if doc is None:
+        return None, None
+    doms = await _taggable_domains(db, user)
+    return doc, doms.get(doc.domain_id)
+
+
+@router.get("/inbox")
 async def inbox_page(
     request: Request,
-    view: DomainView = Depends(domain_by_slug),
+    user=Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
-    require_cap(view, Cap.write)
-    user = request.state.user
-    doc = await docs_svc.next_inbox_document(db, view.domain.id, user.id)
+    doms = await _taggable_domains(db, user)
+    ids = list(doms)
+    doc = await docs_svc.next_inbox_across(db, ids, user.id)
     tags = (await _tags_by_doc(db, [doc.id])).get(doc.id, []) if doc else []
-    remaining = await docs_svc.inbox_count(db, view.domain.id)
-    freq = await tags_svc.list_tags(db, view.domain.id)
+    freq = []
+    if doc is not None:
+        freq = [t.name for t, _ in (await tags_svc.list_tags(db, doc.domain_id))[:12]]
     return render(
         request,
         "inbox.html",
         {
-            "view": view,
             "doc": doc,
+            "doc_domain": doms.get(doc.domain_id).name if doc else None,
             "doc_tags": tags,
-            "remaining": remaining,
-            "freq_tags": [t.name for t, _ in freq[:12]],
+            "remaining": await docs_svc.inbox_count_across(db, ids),
+            "freq_tags": freq,
         },
     )
 
 
-@router.post("/domains/{slug}/inbox/{document_id}/done")
+@router.post("/inbox/{document_id}/done")
 async def inbox_done(
-    request: Request,
     document_id: uuid.UUID,
     tags: str = Form(default=""),
     _: None = CsrfGuard,
-    view: DomainView = Depends(domain_by_slug),
+    user=Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
-    require_cap(view, Cap.write)
-    user = request.state.user
-    doc = await docs_svc.get_document(db, document_id)
-    if doc is not None and doc.domain_id == view.domain.id:
-        names = [p.strip() for p in tags.split(",") if p.strip()]
-        tag_ids = []
-        for name in names:
-            tag = await tags_svc.get_or_create_tag(db, view.domain.id, name, actor=user)
-            tag_ids.append(tag.id)
-        await tags_svc.set_document_tags(db, doc, tag_ids, actor=user)
-        await docs_svc.complete_document(db, doc)
-    return RedirectResponse(f"/domains/{view.domain.slug}/inbox", status_code=303)
+    doc, domain = await _doc_domain(db, user, document_id)
+    if domain is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "нет прав на этот документ")
+    names = [p.strip() for p in tags.split(",") if p.strip()]
+    tag_ids = []
+    for name in names:
+        tag = await tags_svc.get_or_create_tag(db, domain.id, name, actor=user)
+        tag_ids.append(tag.id)
+    await tags_svc.set_document_tags(db, doc, tag_ids, actor=user)
+    await docs_svc.complete_document(db, doc)
+    return RedirectResponse("/inbox", status_code=303)
 
 
-@router.post("/domains/{slug}/inbox/{document_id}/defer")
+@router.post("/inbox/{document_id}/defer")
 async def inbox_defer(
-    request: Request,
     document_id: uuid.UUID,
     _: None = CsrfGuard,
-    view: DomainView = Depends(domain_by_slug),
+    user=Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
-    require_cap(view, Cap.write)
-    doc = await docs_svc.get_document(db, document_id)
-    if doc is not None and doc.domain_id == view.domain.id:
-        await docs_svc.defer_document(db, doc, request.state.user.id)
-    return RedirectResponse(f"/domains/{view.domain.slug}/inbox", status_code=303)
+    doc, domain = await _doc_domain(db, user, document_id)
+    if domain is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "нет прав на этот документ")
+    await docs_svc.defer_document(db, doc, user.id)
+    return RedirectResponse("/inbox", status_code=303)
 
 
-@router.post("/domains/{slug}/inbox/undefer")
+@router.post("/inbox/undefer")
 async def inbox_undefer(
-    request: Request,
     _: None = CsrfGuard,
-    view: DomainView = Depends(domain_by_slug),
+    user=Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
-    require_cap(view, Cap.write)
-    await docs_svc.clear_defers(db, view.domain.id, request.state.user.id)
-    return RedirectResponse(f"/domains/{view.domain.slug}/inbox", status_code=303)
+    for domain_id in await _taggable_domains(db, user):
+        await docs_svc.clear_defers(db, domain_id, user.id)
+    return RedirectResponse("/inbox", status_code=303)

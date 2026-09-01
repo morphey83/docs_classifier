@@ -1,0 +1,39 @@
+{% import "_macros.html" as m with context %}
+
+{% macro th(key, label) -%}
+<th>
+  <a hx-get="{{ m.qs(sort=key, dir=('asc' if f.sort == key and f.dir == 'desc' else 'desc'), page=1) }}"
+     hx-target="#results" hx-push-url="true">
+    {{ label }}{% if f.sort == key %} {{ '▲' if f.dir == 'asc' else '▼' }}{% endif %}
+  </a>
+</th>
+{%- endmacro %}
+
+<div style="overflow-x:auto">
+<table>
+  <thead>
+    <tr>
+      {{ th('title', 'Название') }}
+      <th>Домен</th>
+      <th>Тип</th>
+      {{ th('doc_date', 'Дата') }}
+      {{ th('size', 'Размер') }}
+      {{ th('status', 'Статус') }}
+      <th>Теги</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for doc in docs %}
+    <tr>
+      <td><a href="/documents/{{ doc.id }}">{{ doc.title }}</a></td>
+      <td>{{ domain_names.get(doc.domain_id, '?') }}</td>
+      <td>{{ doc.ext or (doc.mime.split('/')|last) }}</td>
+      <td>{{ doc.doc_date|shortdate }}</td>
+      <td>{{ doc.size_bytes|humansize }}</td>
+      <td>{{ doc.status }}{% if doc.ocr_at %} · OCR{% endif %}{% if doc.indexed_at %} · идx{% endif %}</td>
+      <td>{% for name in tag_map.get(doc.id, [])|sort %}<span class="tag">{{ name }}</span>{% endfor %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>

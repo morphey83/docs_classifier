@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from tests.conftest import web_csrf
+from tests.conftest import web_upload as _upload
 
 
 # --- auth ------------------------------------------------------------
@@ -64,41 +65,50 @@ async def test_foreign_domain_is_404(alice, bob, web_domain):
 
 
 # --- search --------------------------------------------------------
-async def _upload(client, slug, name, body):
-    page = (await client.get(f"/domains/{slug}/upload")).text
-    return await client.post(
-        f"/domains/{slug}/upload",
-        data={"csrf_token": web_csrf(page)},
-        files={"file": (name, body, "text/plain")},
-    )
-
-
 async def test_search_page_and_htmx_partial(alice, web_domain):
     await _upload(alice, web_domain, "alpha.txt", b"alpha body")
     await _upload(alice, web_domain, "beta.txt", b"beta body")
 
-    full = await alice.get(f"/domains/{web_domain}/search")
+    full = await alice.get("/search")
     assert full.status_code == 200
     assert "<html" in full.text and "Найдено: 2" in full.text
 
-    partial = await alice.get(
-        f"/domains/{web_domain}/search?q=alpha", headers={"HX-Request": "true"}
-    )
+    partial = await alice.get("/search?q=alpha", headers={"HX-Request": "true"})
     assert "<html" not in partial.text  # just the results fragment
     assert "Найдено: 1" in partial.text and "alpha" in partial.text
 
 
+async def test_search_table_view_and_sort(alice, web_domain):
+    await _upload(alice, web_domain, "a.txt")
+    await _upload(alice, web_domain, "b.txt")
+    r = await alice.get("/search?view=table&sort=title&dir=asc", headers={"HX-Request": "true"})
+    assert r.status_code == 200 and "<table" in r.text
+
+
+async def test_search_domain_filter(alice):
+    home = (await alice.get("/")).text
+    a = (await alice.post("/domains", data={"name": "DF-A", "csrf_token": web_csrf(home)})
+         ).headers["location"].rsplit("/", 1)[-1]
+    b = (await alice.post("/domains", data={"name": "DF-B", "csrf_token": web_csrf(home)})
+         ).headers["location"].rsplit("/", 1)[-1]
+    await _upload(alice, a, "only-a.txt")
+    await _upload(alice, b, "only-b.txt")
+
+    da = (await alice.get("/api/domains")).json()
+    a_id = next(x["id"] for x in da if x["slug"] == a)
+    r = await alice.get(f"/search?domain_id={a_id}", headers={"HX-Request": "true"})
+    assert "only-a" in r.text and "only-b" not in r.text
+
+
 async def test_search_empty_status_param_ok(alice, web_domain):
-    r = await alice.get(
-        f"/domains/{web_domain}/search?status=&q=&type=", headers={"HX-Request": "true"}
-    )
+    r = await alice.get("/search?status=&q=&type=", headers={"HX-Request": "true"})
     assert r.status_code == 200
 
 
 # --- document ----------------------------------------------------
 async def _one_doc(alice, slug):
     await _upload(alice, slug, "doc.txt", b"hello world")
-    partial = await alice.get(f"/domains/{slug}/search", headers={"HX-Request": "true"})
+    partial = await alice.get("/search", headers={"HX-Request": "true"})
     return re.search(r"/documents/([0-9a-f-]{36})", partial.text).group(1)
 
 

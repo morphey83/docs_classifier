@@ -30,40 +30,58 @@ from app.ocr.tasks import ocr_document
 from app.rbac import Cap
 from app.services import docsets as docsets_svc
 from app.services import documents as docs_svc
+from app.services import domains as domains_svc
 from app.services import tags as tags_svc
 from app.services import trash as trash_svc
 from app.services.ingest import process_archive
 from app.services.search import index_document
 from app.web.csrf import CsrfGuard
-from app.web.deps import DomainView, current_user, domain_by_slug, load_document, require_cap
+from app.web.deps import current_user, load_document, require_cap
 from app.web.templating import render
 
 router = APIRouter()
 
 
-# --- upload ----------------------------------------------------------
-@router.get("/domains/{slug}/upload")
+# --- upload (root-level, pick the target domain) --------------------
+async def _uploadable_domains(db: AsyncSession, user: User):
+    out = []
+    for domain, member in await domains_svc.list_memberships(db, user):
+        from app.rbac import ROLE_CAPS, Role
+
+        if Cap.upload in ROLE_CAPS[Role(member.role)]:
+            out.append(domain)
+    return out
+
+
+@router.get("/upload")
 async def upload_form(
-    request: Request, view: DomainView = Depends(domain_by_slug)
+    request: Request,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
 ) -> Response:
-    require_cap(view, Cap.upload)
-    return render(request, "upload.html", {"view": view})
+    doms = await _uploadable_domains(db, user)
+    picked = request.query_params.get("domain") or (doms[0].slug if doms else "")
+    return render(request, "upload.html", {"domains": doms, "picked": picked})
 
 
-@router.post("/domains/{slug}/upload")
+@router.post("/upload")
 async def upload_submit(
     request: Request,
     file: UploadFile,
+    domain: str = Form(...),
     on_conflict: str | None = Form(default=None),
     _: None = CsrfGuard,
-    view: DomainView = Depends(domain_by_slug),
+    user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
-    require_cap(view, Cap.upload)
-    domain, user = view.domain, request.state.user
+    doms = await _uploadable_domains(db, user)
+    target = next((d for d in doms if d.slug == domain or str(d.id) == domain), None)
+    if target is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "нет прав на загрузку в этот домен")
+    domain, user = target, user
     blob, meta = await docs_svc.store_and_probe(file.file, file.filename or "file")
     kind = archive.kind_of(meta.mime, meta.ext)
-    result: dict = {"view": view}
+    result: dict = {"domains": doms, "picked": domain.slug}
 
     if kind:
         batch = UploadBatch(
@@ -109,6 +127,13 @@ async def upload_submit(
             result["error"] = "Достигнут лимит хранилища домена."
         else:
             result["created"] = ing
+            s = domain.settings or {}
+            if s.get("auto_ocr") and ocr_engine.is_supported(ing.document.mime):
+                ing.document.ocr_status = OcrStatus.pending
+                await db.flush()
+                await dispatch(None, "ocr_document", ocr_document, document_id=ing.document.id)
+            if s.get("auto_index"):
+                await index_document(db, ing.document)
 
     return render(request, "upload.html", result)
 

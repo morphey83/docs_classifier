@@ -5,21 +5,14 @@ from __future__ import annotations
 import re
 
 from tests.conftest import web_csrf
-
-
-async def _upload(client, slug, name, body=None):
-    body = body if body is not None else f"body of {name}".encode()
-    page = (await client.get(f"/domains/{slug}/upload")).text
-    await client.post(
-        f"/domains/{slug}/upload",
-        data={"csrf_token": web_csrf(page)},
-        files={"file": (name, body, "text/plain")},
-    )
+from tests.conftest import web_upload as _upload
 
 
 async def _doc_id(client, slug):
-    p = await client.get(f"/domains/{slug}/search", headers={"HX-Request": "true"})
-    return re.search(r"/documents/([0-9a-f-]{36})", p.text).group(1)
+    p = await client.get("/search", headers={"HX-Request": "true"})
+    m = re.search(r"/documents/([0-9a-f-]{36})", p.text)
+    assert m, p.text[:400]
+    return m.group(1)
 
 
 # --- sets ---------------------------------------------------------
@@ -84,16 +77,16 @@ async def test_inbox_tag_and_advance(alice, web_domain):
     await _upload(alice, web_domain, "i1.txt")
     await _upload(alice, web_domain, "i2.txt")
 
-    page = await alice.get(f"/domains/{web_domain}/inbox")
+    page = await alice.get("/inbox")
     assert "осталось: 2" in page.text
     doc_id = re.search(r"/inbox/([0-9a-f-]{36})/done", page.text).group(1)
 
     r = await alice.post(
-        f"/domains/{web_domain}/inbox/{doc_id}/done",
+        f"/inbox/{doc_id}/done",
         data={"tags": "готово", "csrf_token": web_csrf(page.text)},
     )
     assert r.status_code == 303
-    page2 = await alice.get(f"/domains/{web_domain}/inbox")
+    page2 = await alice.get("/inbox")
     assert "осталось: 1" in page2.text
 
 
@@ -165,10 +158,10 @@ async def test_settings_save_allowed_types(alice, web_domain):
     )
     assert r.status_code == 303
     # a disallowed type is now rejected on upload
-    up = (await alice.get(f"/domains/{web_domain}/upload")).text
+    up = (await alice.get(f"/upload?domain={web_domain}")).text
     bad = await alice.post(
-        f"/domains/{web_domain}/upload",
-        data={"csrf_token": web_csrf(up)},
+        "/upload",
+        data={"domain": web_domain, "csrf_token": web_csrf(up)},
         files={"file": ("x.png", b"nope", "image/png")},
     )
     assert "не разрешён" in bad.text

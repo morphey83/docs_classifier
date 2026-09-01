@@ -1,0 +1,28 @@
+{% import "_macros.html" as m with context %}
+
+<div class="results-head">
+  <span class="muted">сортировка:</span>
+  {% for key, label in sorts.items() %}
+  <a hx-get="{{ m.qs(sort=key, dir=('asc' if f.sort == key and f.dir == 'desc' else 'desc'), page=1) }}"
+     hx-target="#results" hx-push-url="true"
+     class="{{ 'active' if f.sort == key }}">{{ label }}{% if f.sort == key %} {{ '▲' if f.dir == 'asc' else '▼' }}{% endif %}</a>
+  {% endfor %}
+</div>
+
+{% for doc in docs %}
+<article class="result">
+  <h4>
+    <span class="muted">[{{ domain_names.get(doc.domain_id, '?') }}]</span>
+    <a href="/documents/{{ doc.id }}">{{ doc.title }}</a>
+  </h4>
+  <p class="muted">
+    {{ doc.ext or (doc.mime.split('/')|last) }} ·
+    {{ doc.doc_date|shortdate }} ·
+    {{ doc.size_bytes|humansize }} ·
+    {{ doc.status }}
+    {% if doc.ocr_at %} · OCR{% endif %}
+    {% if doc.indexed_at %} · индекс{% endif %}
+  </p>
+  {% for name in tag_map.get(doc.id, [])|sort %}<span class="tag">{{ name }}</span>{% endfor %}
+</article>
+{% endfor %}

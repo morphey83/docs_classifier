@@ -7,11 +7,9 @@
 </ul></nav>
 
 <nav class="domain-tabs">
-  <a href="/domains/{{ d.slug }}/search" {{ 'aria-current=page' if active == 'search' }}>Поиск</a>
-  <a href="/domains/{{ d.slug }}/inbox" {{ 'aria-current=page' if active == 'inbox' }}>Инбокс</a>
+  <a href="/domains/{{ d.slug }}" {{ 'aria-current=page' if active == 'overview' }}>Обзор</a>
   <a href="/domains/{{ d.slug }}/sets" {{ 'aria-current=page' if active == 'sets' }}>Наборы</a>
   <a href="/domains/{{ d.slug }}/tags" {{ 'aria-current=page' if active == 'tags' }}>Теги</a>
-  <a href="/domains/{{ d.slug }}/upload" {{ 'aria-current=page' if active == 'upload' }}>Загрузка</a>
   {% if view.has('delete') %}
   <a href="/domains/{{ d.slug }}/trash" {{ 'aria-current=page' if active == 'trash' }}>Корзина</a>
   {% endif %}

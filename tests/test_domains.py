@@ -9,7 +9,7 @@ async def test_create_domain_makes_owner(alice):
     assert d["slug"]  # cyrillic slug still produced
 
     lst = await alice.get("/api/domains")
-    assert [x["id"] for x in lst.json()] == [d["id"]]
+    assert d["id"] in [x["id"] for x in lst.json()]  # + the auto "Мои документы"
 
 
 async def test_non_member_gets_404(alice, bob):

@@ -1,10 +1,6 @@
 {% extends "base.html" %}
-{% set d = view.domain %}
-{% block title %}Загрузка — {{ d.name }}{% endblock %}
+{% block title %}Загрузка{% endblock %}
 {% block content %}
-{% set active = 'upload' %}
-{% include "_domain_nav.html" %}
-
 <h1>Загрузить документ или архив</h1>
 
 {% if error %}<p class="flash err">{{ error }}</p>{% endif %}
@@ -19,8 +15,9 @@
 {% if conflict %}
 <article>
   <p class="flash err">Документ с таким именем уже есть, но с другим содержимым.</p>
-  <form method="post" action="/domains/{{ d.slug }}/upload" enctype="multipart/form-data">
+  <form method="post" action="/upload" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input type="hidden" name="domain" value="{{ picked }}">
     <p class="muted">Выберите файл ещё раз и решите, что делать:</p>
     <input type="file" name="file" required>
     <fieldset>
@@ -55,15 +52,24 @@
 </article>
 {% endif %}
 
+{% if domains %}
 <article>
-  <form method="post" action="/domains/{{ d.slug }}/upload" enctype="multipart/form-data">
+  <form method="post" action="/upload" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Домен
+      <select name="domain" required>
+        {% for d in domains %}
+        <option value="{{ d.slug }}" {{ 'selected' if d.slug == picked }}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
     <label>Файл (документ или zip/7z/rar/tar)
       <input type="file" name="file" required>
     </label>
     <button type="submit">Загрузить</button>
   </form>
 </article>
-
-<p><a href="/domains/{{ d.slug }}/search">← к поиску</a></p>
+{% else %}
+<p class="muted">Нет доменов, в которые можно загружать. Создайте домен или попросите доступ.</p>
+{% endif %}
 {% endblock %}

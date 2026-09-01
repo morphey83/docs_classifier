@@ -1,8 +1,14 @@
-{% macro qlink() -%}
-{{ request.url.include_query_params(**kwargs) }}
-{%- endmacro %}
+{% import "_macros.html" as m with context %}
 
-<p class="muted">Найдено: {{ total }}{% if pages > 1 %} · стр. {{ page }}/{{ pages }}{% endif %}</p>
+<div class="results-head">
+  <span class="muted">Найдено: {{ total }}{% if pages > 1 %} · стр. {{ page }}/{{ pages }}{% endif %}</span>
+  <span class="spacer"></span>
+  <span class="muted">вид:</span>
+  <a hx-get="{{ m.qs(view='cards') }}" hx-target="#results" hx-push-url="true"
+     class="{{ 'active' if view != 'table' }}">карточки</a>
+  <a hx-get="{{ m.qs(view='table') }}" hx-target="#results" hx-push-url="true"
+     class="{{ 'active' if view == 'table' }}">таблица</a>
+</div>
 
 {% if facets and (facets.tags or facets.types) %}
 <details>
@@ -10,7 +16,7 @@
   {% if facets.tags %}
   <p class="facet">теги:
     {% for t in facets.tags[:15] %}
-      <a class="tag" hx-get="{{ qlink(tags=t.name, page=1) }}" hx-target="#results"
+      <a class="tag" hx-get="{{ m.qs(tags=t.name, page=1) }}" hx-target="#results"
          hx-push-url="true">{{ t.name }} ({{ t.count }})</a>
     {% endfor %}
   </p>
@@ -18,7 +24,7 @@
   {% if facets.types %}
   <p class="facet">типы:
     {% for t in facets.types[:10] %}
-      <a class="tag" hx-get="{{ qlink(type=(t.mime.split('/')|last), page=1) }}"
+      <a class="tag" hx-get="{{ m.qs(type=(t.mime.split('/')|last), page=1) }}"
          hx-target="#results" hx-push-url="true">{{ t.mime }} ({{ t.count }})</a>
     {% endfor %}
   </p>
@@ -26,34 +32,22 @@
 </details>
 {% endif %}
 
-{% for doc in docs %}
-<article class="result">
-  <h4>
-    {% if domain_names %}<span class="muted">[{{ domain_names.get(doc.domain_id, '?') }}]</span> {% endif %}
-    <a href="/documents/{{ doc.id }}">{{ doc.title }}</a>
-  </h4>
-  <p class="muted">
-    {{ doc.ext or (doc.mime.split('/')|last) }} ·
-    {{ doc.doc_date|shortdate }} ·
-    {{ doc.size_bytes|humansize }} ·
-    {{ doc.status }}
-    {% if doc.ocr_at %} · OCR{% endif %}
-    {% if doc.indexed_at %} · индекс{% endif %}
-  </p>
-  {% for name in tag_map.get(doc.id, [])|sort %}<span class="tag">{{ name }}</span>{% endfor %}
-</article>
-{% else %}
+{% if total == 0 %}
 <p>Ничего не найдено.</p>
-{% endfor %}
+{% elif view == 'table' %}
+{% include "_res_table.html" %}
+{% else %}
+{% include "_res_cards.html" %}
+{% endif %}
 
 {% if pages > 1 %}
-<nav>
+<nav class="pager">
   {% if page > 1 %}
-  <a role="button" class="outline" hx-get="{{ qlink(page=page-1) }}" hx-target="#results"
+  <a role="button" class="outline" hx-get="{{ m.qs(page=page-1) }}" hx-target="#results"
      hx-push-url="true">← назад</a>
   {% endif %}
   {% if page < pages %}
-  <a role="button" class="outline" hx-get="{{ qlink(page=page+1) }}" hx-target="#results"
+  <a role="button" class="outline" hx-get="{{ m.qs(page=page+1) }}" hx-target="#results"
      hx-push-url="true">вперёд →</a>
   {% endif %}
 </nav>

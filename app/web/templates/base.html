@@ -27,6 +27,13 @@
       border-bottom:1px solid var(--pico-muted-border-color); }
     nav.domain-tabs a { padding:.4rem .8rem; text-decoration:none; border-bottom:2px solid transparent; }
     nav.domain-tabs a[aria-current] { border-bottom-color: var(--pico-primary); font-weight:600; }
+    .results-head { display:flex; gap:.5rem; align-items:baseline; flex-wrap:wrap;
+      margin:.4rem 0; font-size:.85rem; }
+    .results-head .spacer { flex:1; }
+    .results-head a { text-decoration:none; padding:.1rem .35rem; border-radius:.3rem; }
+    .results-head a.active { background: var(--pico-primary); color:#fff; }
+    nav.pager { display:flex; gap:.5rem; margin-top:1rem; }
+    th a { text-decoration:none; white-space:nowrap; }
   </style>
   <script src="/static/htmx.min.js" defer></script>
 </head>
@@ -34,11 +41,16 @@
   <nav class="topbar">
     <div class="container">
       <ul>
-        <li><strong><a href="/" class="contrast">DocsClassifier</a></strong></li>
+        <li><strong><a href="/search" class="contrast">DocsClassifier</a></strong></li>
+        {% if user %}
+        <li><a href="/search">Поиск</a></li>
+        <li><a href="/inbox">Очередь на сортировку</a></li>
+        <li><a href="/upload">Загрузка</a></li>
+        <li><a href="/">Домены</a></li>
+        {% endif %}
       </ul>
       <ul>
         {% if user %}
-          <li><a href="/search" class="secondary">Поиск везде</a></li>
           <li><a href="/profile" class="secondary">{{ user.username }}</a></li>
           <li>
             <form method="post" action="/logout" class="inline-form">

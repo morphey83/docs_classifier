@@ -280,17 +280,42 @@ async def update_document(
 
 # --- inbox queue ---------------------------------------------------------
 async def inbox_count(db: AsyncSession, domain_id: uuid.UUID) -> int:
+    return await inbox_count_across(db, [domain_id])
+
+
+async def inbox_count_across(db: AsyncSession, domain_ids) -> int:
+    if not domain_ids:
+        return 0
     return int(
         await db.scalar(
             select(func.count())
             .select_from(Document)
             .where(
-                Document.domain_id == domain_id,
+                Document.domain_id.in_(list(domain_ids)),
                 Document.status == DocStatus.inbox,
                 Document.deleted_at.is_(None),
             )
         )
         or 0
+    )
+
+
+async def next_inbox_across(
+    db: AsyncSession, domain_ids, user_id: uuid.UUID
+) -> Document | None:
+    if not domain_ids:
+        return None
+    deferred = select(InboxDefer.document_id).where(InboxDefer.user_id == user_id)
+    return await db.scalar(
+        select(Document)
+        .where(
+            Document.domain_id.in_(list(domain_ids)),
+            Document.status == DocStatus.inbox,
+            Document.deleted_at.is_(None),
+            Document.id.not_in(deferred),
+        )
+        .order_by(Document.uploaded_at.asc())
+        .limit(1)
     )
 
 

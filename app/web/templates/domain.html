@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% set d = view.domain %}
-{% block title %}{{ d.name }} — DocsClassifier{% endblock %}
+{% block title %}{{ d.name }}{% endblock %}
 {% block content %}
+{% set active = 'overview' %}
 {% include "_domain_nav.html" %}
 
 <hgroup>
@@ -13,20 +14,19 @@
   <article>
     <h4>{{ doc_total }}</h4>
     <p class="muted">документов</p>
-    <a href="/domains/{{ d.slug }}/search" role="button" class="outline">Поиск</a>
+    <a href="/search?domain_id={{ d.id }}" role="button" class="outline">Найти</a>
   </article>
   <article>
     <h4>{{ inbox }}</h4>
-    <p class="muted">в инбоксе</p>
-    <a href="/domains/{{ d.slug }}/inbox" role="button" class="outline secondary">Обработать</a>
+    <p class="muted">в очереди на сортировку</p>
+    <a href="/inbox" role="button" class="outline secondary">К очереди</a>
   </article>
   <article>
     <h4>{{ tag_count }}</h4>
     <p class="muted">тегов</p>
+    <a href="/domains/{{ d.slug }}/tags" role="button" class="outline secondary">Словарь</a>
   </article>
 </div>
 
-<p>
-  <a href="/domains/{{ d.slug }}/upload" role="button">Загрузить документ или архив</a>
-</p>
+<p><a href="/upload?domain={{ d.slug }}" role="button">Загрузить в этот домен</a></p>
 {% endblock %}

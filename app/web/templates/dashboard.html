@@ -11,14 +11,10 @@
   {% for d in domains %}
   <article>
     <header><a href="/domains/{{ d.domain.slug }}"><strong>{{ d.domain.name }}</strong></a></header>
-    <p class="muted">роль: {{ d.role }}</p>
-    <p>
-      {% if d.inbox %}<a href="/domains/{{ d.domain.slug }}/inbox">📥 в инбоксе: {{ d.inbox }}</a>
-      {% else %}<span class="muted">инбокс пуст</span>{% endif %}
-    </p>
+    <p class="muted">роль: {{ d.role }}{% if d.inbox %} · в очереди: {{ d.inbox }}{% endif %}</p>
     <footer>
-      <a href="/domains/{{ d.domain.slug }}/search" role="button" class="outline">Поиск</a>
-      <a href="/domains/{{ d.domain.slug }}/upload" role="button" class="outline secondary">Загрузить</a>
+      <a href="/search?domain_id={{ d.domain.id }}" role="button" class="outline">Найти</a>
+      <a href="/upload?domain={{ d.domain.slug }}" role="button" class="outline secondary">Загрузить</a>
     </footer>
   </article>
   {% endfor %}

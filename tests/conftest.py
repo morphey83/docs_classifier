@@ -113,8 +113,21 @@ def web_csrf(html: str) -> str:
 
 @pytest_asyncio.fixture
 async def web_domain(alice) -> str:
-    """Create a domain through the web UI, return its slug."""
+    """Create a domain through the web UI, return its (decoded) slug."""
+    from urllib.parse import unquote
+
     page = (await alice.get("/")).text
     r = await alice.post("/domains", data={"name": "Рабочий", "csrf_token": web_csrf(page)})
     assert r.status_code == 303
-    return r.headers["location"].rsplit("/", 1)[-1]
+    return unquote(r.headers["location"].rsplit("/", 1)[-1])
+
+
+async def web_upload(client, slug: str, name: str, body: bytes | None = None):
+    """Upload one file into ``slug`` via the root-level /upload screen."""
+    body = body if body is not None else f"body of {name}".encode()
+    page = (await client.get(f"/upload?domain={slug}")).text
+    return await client.post(
+        "/upload",
+        data={"domain": slug, "csrf_token": web_csrf(page)},
+        files={"file": (name, body, "text/plain")},
+    )

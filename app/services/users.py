@@ -31,6 +31,11 @@ async def register_user(db: AsyncSession, *, username: str, email: str, password
     )
     db.add(user)
     await db.flush()
+
+    # Every new user gets a personal domain to start with (architecture §2.1).
+    from app.services.domains import create_domain
+
+    await create_domain(db, user, name="Мои документы")
     return user
 
 

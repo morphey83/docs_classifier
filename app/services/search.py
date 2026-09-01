@@ -84,6 +84,7 @@ class SearchFilters:
     text_source: TextSource | None = None
     include_trash: bool = False
     sort: str = "uploaded_at"
+    sort_dir: str = "desc"  # "asc" | "desc"
     page: int = 1
     page_size: int = 50
 
@@ -198,14 +199,21 @@ def _apply(
     return stmt
 
 
-_SORTS = {
-    "uploaded_at": Document.uploaded_at.desc(),
-    "doc_date": Document.doc_date.desc().nulls_last(),
-    "size": Document.size_bytes.desc(),
-    "title": Document.title.asc(),
-    "indexed_at": Document.indexed_at.desc().nulls_last(),
-    "ocr_at": Document.ocr_at.desc().nulls_last(),
+_SORT_COLS = {
+    "uploaded_at": Document.uploaded_at,
+    "doc_date": Document.doc_date,
+    "size": Document.size_bytes,
+    "title": Document.title,
+    "status": Document.status,
+    "indexed_at": Document.indexed_at,
+    "ocr_at": Document.ocr_at,
 }
+
+
+def _order_by(f: SearchFilters):
+    col = _SORT_COLS.get(f.sort, Document.uploaded_at)
+    clause = col.asc() if f.sort_dir == "asc" else col.desc()
+    return clause.nulls_last() if hasattr(clause, "nulls_last") else clause
 
 
 async def search_documents(
@@ -221,7 +229,7 @@ async def search_documents(
 
     total = int(await db.scalar(select(func.count()).select_from(base.subquery())) or 0)
 
-    order = _SORTS.get(f.sort, Document.uploaded_at.desc())
+    order = _order_by(f)
     if f.sort == "relevance" and pg and f.q:
         order = text(
             "ts_rank_cd(document.search_tsv, websearch_to_tsquery(:cfg, :q)) DESC"
