@@ -275,15 +275,29 @@ async def _visible_set(db, user, doc, set_id: uuid.UUID) -> DocumentSet:
 async def document_add_to_set(
     request: Request,
     document_id: uuid.UUID,
-    set_id: uuid.UUID = Form(...),
+    set_id: str = Form(default=""),
+    new_name: str = Form(default=""),
     _: None = CsrfGuard,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
     doc, view = await load_document(db, user, document_id)
     require_cap(view, Cap.view)
-    s = await _visible_set(db, user, doc, set_id)
-    await docsets_svc.add_items(db, s, [doc.id], actor=user)
+    if set_id == "__new__" or (not set_id and new_name.strip()):
+        require_cap(view, Cap.write)
+        await docsets_svc.create_set(
+            db, view.domain, user,
+            name=new_name.strip() or "Новый набор",
+            description=None, visibility=SetVisibility.private,
+            document_ids=[doc.id],
+        )
+    else:
+        try:
+            sid = uuid.UUID(set_id)
+        except ValueError as err:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "нужно выбрать набор") from err
+        s = await _visible_set(db, user, doc, sid)
+        await docsets_svc.add_items(db, s, [doc.id], actor=user)
     return await _doc_fragment(request, db, user, document_id)
 
 

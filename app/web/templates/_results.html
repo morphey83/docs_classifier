@@ -1,10 +1,25 @@
 {% import "_macros.html" as m with context %}
 {% import "_icons.html" as ic %}
 
-<div class="d-flex align-items-center mb-2">
+<div data-filter-sig="{{ filter_sig }}">
+
+{% if bulk_msg %}
+<div class="alert alert-success alert-dismissible" role="alert">
+  {{ bulk_msg }}
+  <a class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></a>
+</div>
+{% endif %}
+
+<div class="d-flex align-items-center gap-3 mb-2">
   <span class="text-secondary">
     Найдено: {{ total }}{% if pages > 1 %} · стр. {{ page }}/{{ pages }}{% endif %}
   </span>
+  {% if total > 0 %}
+  <label class="form-check m-0 text-secondary small">
+    <input class="form-check-input" type="checkbox" id="sel-all">
+    <span class="form-check-label">выбрать на странице</span>
+  </label>
+  {% endif %}
   <div class="btn-group ms-auto" role="group">
     <a class="btn btn-sm {{ 'active' if view != 'table' }}"
        hx-get="{{ m.qs(view='cards') }}" hx-target="#results" hx-push-url="true"
@@ -12,6 +27,45 @@
     <a class="btn btn-sm {{ 'active' if view == 'table' }}"
        hx-get="{{ m.qs(view='table') }}" hx-target="#results" hx-push-url="true"
        title="Таблица">{{ ic.icon('list') }}</a>
+  </div>
+</div>
+
+{# --- bulk actions on the selection ------------------------------------ #}
+<form id="bulk-form" hx-post="/search/bulk" hx-target="#results" hx-swap="innerHTML"
+      hx-include="#filters" class="d-none">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <input type="hidden" name="page" value="{{ page }}">
+  <input type="hidden" name="doc_ids" id="bulk-ids">
+  <input type="hidden" name="action" id="bulk-action">
+  <input type="hidden" name="set_id" id="bulk-set-id">
+  <input type="hidden" name="new_name" id="bulk-new-name">
+</form>
+
+<div id="bulk-bar" class="card mb-2 d-none">
+  <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
+    <span><strong id="bulk-count">0</strong>&nbsp;выбрано</span>
+    <div class="btn-list ms-auto">
+      <button type="button" class="btn btn-sm" data-bulk="index">
+        {{ ic.icon('search') }} Индексировать
+      </button>
+      <button type="button" class="btn btn-sm" data-bulk="ocr">
+        {{ ic.icon('scan') }} OCR
+      </button>
+      <div class="dropdown">
+        <button type="button" class="btn btn-sm dropdown-toggle" data-bs-toggle="dropdown"
+                {{ 'disabled' if not f.domain_id }}>
+          {{ ic.icon('folder') }} В набор
+        </button>
+        <div class="dropdown-menu dropdown-menu-end">
+          {% for s in domain_sets %}
+          <a class="dropdown-item" href="#" data-bulk-set="{{ s.id }}">{{ s.name }}</a>
+          {% endfor %}
+          {% if domain_sets %}<div class="dropdown-divider"></div>{% endif %}
+          <a class="dropdown-item" href="#" data-bulk-set="__new__">➕ Новый набор…</a>
+        </div>
+      </div>
+      <button type="button" class="btn btn-sm btn-ghost-secondary" id="bulk-clear">Снять</button>
+    </div>
   </div>
 </div>
 
@@ -31,3 +85,99 @@
 {% include "_res_cards.html" %}
 {% if pages > 1 %}<div class="d-flex mt-3"><div class="ms-auto">{{ m.pager(page, pages) }}</div></div>{% endif %}
 {% endif %}
+
+</div>
+
+<script>
+(function () {
+  var box = document.getElementById('results');
+  var wrap = box.querySelector('[data-filter-sig]');
+  if (!wrap) return;
+  var SEL = 'dc-search-sel', SIG = 'dc-search-sig';
+
+  function read() {
+    try { return new Set(JSON.parse(localStorage.getItem(SEL) || '[]')); }
+    catch (e) { return new Set(); }
+  }
+  function write(s) {
+    try { localStorage.setItem(SEL, JSON.stringify(Array.from(s))); } catch (e) {}
+  }
+
+  // wipe the selection whenever a filter changed (page / sort / view keep it)
+  try {
+    if (localStorage.getItem(SIG) !== wrap.dataset.filterSig) {
+      localStorage.setItem(SIG, wrap.dataset.filterSig);
+      localStorage.setItem(SEL, '[]');
+    }
+  } catch (e) {}
+
+  var sel = read();
+  var checks = Array.prototype.slice.call(wrap.querySelectorAll('.doc-sel'));
+  var bar = document.getElementById('bulk-bar');
+  var count = document.getElementById('bulk-count');
+  var idsField = document.getElementById('bulk-ids');
+  var form = document.getElementById('bulk-form');
+  var allBox = wrap.querySelector('#sel-all');
+
+  function refresh() {
+    if (count) count.textContent = sel.size;
+    if (bar) bar.classList.toggle('d-none', sel.size === 0);
+    if (idsField) idsField.value = Array.from(sel).join(',');
+    if (allBox) {
+      allBox.checked = checks.length > 0 && checks.every(function (c) { return c.checked; });
+    }
+  }
+
+  checks.forEach(function (c) {
+    c.checked = sel.has(c.value);
+    c.addEventListener('change', function () {
+      if (c.checked) sel.add(c.value); else sel.delete(c.value);
+      write(sel); refresh();
+    });
+  });
+
+  if (allBox) {
+    allBox.addEventListener('change', function () {
+      checks.forEach(function (c) {
+        c.checked = allBox.checked;
+        if (allBox.checked) sel.add(c.value); else sel.delete(c.value);
+      });
+      write(sel); refresh();
+    });
+  }
+
+  var clr = document.getElementById('bulk-clear');
+  if (clr) clr.addEventListener('click', function (e) {
+    e.preventDefault();
+    sel.clear(); write(sel);
+    checks.forEach(function (c) { c.checked = false; });
+    refresh();
+  });
+
+  function fire(action, setId, newName) {
+    if (!sel.size) return;
+    document.getElementById('bulk-action').value = action;
+    document.getElementById('bulk-set-id').value = setId || '';
+    document.getElementById('bulk-new-name').value = newName || '';
+    form.requestSubmit();
+  }
+
+  Array.prototype.slice.call(document.querySelectorAll('[data-bulk]')).forEach(function (b) {
+    b.addEventListener('click', function () { fire(b.dataset.bulk); });
+  });
+  Array.prototype.slice.call(document.querySelectorAll('[data-bulk-set]')).forEach(function (b) {
+    b.addEventListener('click', function (e) {
+      e.preventDefault();
+      var v = b.dataset.bulkSet;
+      if (v === '__new__') {
+        var name = window.prompt('Название нового набора');
+        if (name && name.trim()) fire('set', '__new__', name.trim());
+      } else {
+        fire('set', v);
+      }
+    });
+  });
+
+  refresh();
+})();
+</script>

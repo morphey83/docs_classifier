@@ -48,6 +48,84 @@ async def test_set_lifecycle(alice, web_domain):
     assert rm.status_code == 200 and "не входит ни в один набор" in rm.text
 
 
+async def test_document_page_creates_a_new_set_inline(alice, web_domain):
+    await _upload(alice, web_domain, "n1.txt")
+    doc_id = await _doc_id(alice, web_domain)
+    dp = (await alice.get(f"/documents/{doc_id}")).text
+    r = await alice.post(
+        f"/documents/{doc_id}/add-to-set",
+        data={"set_id": "__new__", "new_name": "С нуля", "csrf_token": web_csrf(dp)},
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200 and "С нуля" in r.text
+
+
+async def _domain_id(client, slug):
+    for d in (await client.get("/api/domains")).json():
+        if d["slug"] == slug:
+            return d["id"]
+    raise AssertionError("domain not found")
+
+
+async def test_bulk_index_and_add_to_set(alice, web_domain):
+    await _upload(alice, web_domain, "b1.txt", b"alpha bravo")
+    await _upload(alice, web_domain, "b2.txt", b"charlie delta")
+    ids = re.findall(
+        r"/documents/([0-9a-f-]{36})",
+        (await alice.get("/search", headers={"HX-Request": "true"})).text,
+    )
+    ids = sorted(set(ids))[:2]
+    dom = await _domain_id(alice, web_domain)
+    page = (await alice.get("/search")).text
+    common = {"csrf_token": web_csrf(page), "doc_ids": ",".join(ids), "domain_id": dom}
+
+    r = await alice.post(
+        "/search/bulk",
+        data={**common, "action": "index"},
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200 and "Проиндексировано: 2" in r.text
+
+    r = await alice.post(
+        "/search/bulk",
+        data={**common, "action": "set", "set_id": "__new__", "new_name": "Пакет"},
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200 and "Пакет" in r.text
+
+    sets = (await alice.get(f"/domains/{web_domain}/sets")).text
+    assert "Пакет" in sets
+
+
+async def test_bulk_add_to_set_rejects_a_cross_domain_selection(alice, web_domain):
+    home = (await alice.get("/")).text
+    other = (
+        await alice.post("/domains", data={"name": "Второй", "csrf_token": web_csrf(home)})
+    ).headers["location"].rsplit("/", 1)[-1]
+    from urllib.parse import unquote
+
+    other = unquote(other)
+    await _upload(alice, web_domain, "d1.txt")
+    await _upload(alice, other, "d2.txt")
+    ids = sorted(set(re.findall(
+        r"/documents/([0-9a-f-]{36})",
+        (await alice.get("/search", headers={"HX-Request": "true"})).text,
+    )))[:2]
+    page = (await alice.get("/search")).text
+    r = await alice.post(
+        "/search/bulk",
+        data={
+            "csrf_token": web_csrf(page),
+            "doc_ids": ",".join(ids),
+            "action": "set",
+            "set_id": "__new__",
+            "new_name": "Ничей",
+        },
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200 and "Выберите один домен" in r.text
+
+
 async def test_set_share_link_and_revoke(alice, web_domain):
     await _upload(alice, web_domain, "sh.txt")
     doc_id = await _doc_id(alice, web_domain)

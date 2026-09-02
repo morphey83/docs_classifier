@@ -88,18 +88,33 @@
 
         {% set _in = doc_sets|map(attribute='id')|list %}
         {% set avail = sets|rejectattr('id', 'in', _in)|list %}
-        {% if can_view and avail %}
-        <form hx-post="/documents/{{ doc.id }}/add-to-set" hx-target="#doc" class="d-flex gap-2">
+        {% if can_view %}
+        <form hx-post="/documents/{{ doc.id }}/add-to-set" hx-target="#doc">
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
-          <select class="form-select form-select-sm" name="set_id" required>
-            <option value="" disabled selected>добавить в набор…</option>
-            {% for s in avail %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
-          </select>
-          <button class="btn btn-sm btn-outline-primary flex-none">Добавить</button>
+          <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" name="set_id" id="doc-set-pick" required>
+              <option value="" disabled selected>добавить в набор…</option>
+              {% for s in avail %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+              <option value="__new__">➕ Новый набор…</option>
+            </select>
+            <button class="btn btn-sm btn-outline-primary flex-none">Добавить</button>
+          </div>
+          <input class="form-control form-control-sm mt-2 d-none" name="new_name" id="doc-set-new"
+                 placeholder="Название нового набора" maxlength="200">
         </form>
-        {% elif can_view and not sets %}
-        <p class="text-secondary small m-0">В домене пока нет наборов —
-          создайте на вкладке <a href="/domains/{{ d.slug }}/sets">Наборы</a>.</p>
+        <script>
+        (function () {
+          var sel = document.getElementById('doc-set-pick'),
+              nw = document.getElementById('doc-set-new');
+          if (!sel) return;
+          sel.addEventListener('change', function () {
+            var isNew = sel.value === '__new__';
+            nw.classList.toggle('d-none', !isNew);
+            nw.required = isNew;
+            if (isNew) nw.focus();
+          });
+        })();
+        </script>
         {% endif %}
       </div>
     </div>

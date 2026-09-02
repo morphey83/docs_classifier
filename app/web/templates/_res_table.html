@@ -16,6 +16,7 @@
   <thead>
     <tr>
       <th class="w-1"></th>
+      <th class="w-1"></th>
       {{ th('title', 'Название') }}
       <th>Домен</th>
       <th>Тип</th>
@@ -28,6 +29,10 @@
   <tbody>
   {% for doc in docs %}
     <tr>
+      <td>
+        <input class="form-check-input m-0 doc-sel" type="checkbox" value="{{ doc.id }}"
+               aria-label="Выбрать документ">
+      </td>
       <td class="cell-thumb">
         {% if doc.mime.startswith('image/') %}
         <a href="/documents/{{ doc.id }}">
