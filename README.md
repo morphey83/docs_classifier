@@ -92,6 +92,10 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
     Bootstrap 5.3) — vendored CSS/JS, no build; top navbar, native cards,
     forms, tables, badges, tabs, and a real Bootstrap modal for inbox
     tagging. pico.css dropped.
+  - **7i** search results as a card grid (image or colour-by-type media);
+    status / index / OCR shown as tooltipped pictograms; "Form with
+    Icons" inputs; **dark theme** with a navbar toggle; drag-and-drop
+    upload zone.
 
 ## Stack
 
