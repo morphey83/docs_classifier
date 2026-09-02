@@ -101,7 +101,9 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
     option); tag input with the domain's frequent-tag chips.
   - **7k** bulk actions on selected search results — index / OCR / add to
     a set; the selection persists in `localStorage` across pages and
-    resets on a filter change.
+    resets on a filter change. Action feedback is a bottom-right toast.
+  - **7l** HTML error pages (`error.html`) for the web UI instead of raw
+    JSON; `/api` keeps JSON, htmx errors become a toast.
 - **8 email confirmation** (opt-in) — set `SMTP_HOST` to require a
   verified address before a new account can log in (migration 0009,
   `app/services/email.py`, `GET /verify/{token}`); unset keeps sign-up
