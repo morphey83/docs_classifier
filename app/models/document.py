@@ -134,7 +134,10 @@ class Document(Base):
     source: Mapped[DocSource] = mapped_column(_source_enum, default=DocSource.upload)
     version: Mapped[int] = mapped_column(Integer, default=1)
 
-    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Can be large (a whole document's body). Never read back for display —
+    # only written during indexing and matched via SQL — so keep it off the
+    # default SELECT; it loads lazily if something ever touches the attribute.
+    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True, deferred=True)
     text_source: Mapped[TextSource] = mapped_column(
         _text_source_enum, default=TextSource.none, server_default="none"
     )

@@ -173,7 +173,7 @@ async def test_document_index_button(alice, web_domain):
         data={"csrf_token": web_csrf(page.text)},
         headers={"HX-Request": "true"},
     )
-    assert r.status_code == 200 and "Проиндексирован" in r.text
+    assert r.status_code == 200 and "Переиндексировать" in r.text
 
 
 async def test_document_tag_edit_needs_csrf(alice, web_domain):

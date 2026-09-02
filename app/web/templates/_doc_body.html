@@ -1,26 +1,27 @@
-{% import "_docmeta.html" as dm with context %}
 {% import "_icons.html" as ic %}
 {% set d = view.domain %}
 {% set can_write = view.has('write') %}
 {% set can_process = view.has('process') %}
 {% set can_download = view.has('download') %}
 {% set can_view = view.has('view') %}
+{% set is_image = doc.mime.startswith('image/') %}
 
-<div class="mb-1">
-  <a href="/domains/{{ d.slug }}" class="text-secondary text-decoration-none small">{{ d.name }}</a>
-</div>
-<div class="mb-2 d-flex align-items-start justify-content-between gap-2">
-  <div>
-    <h2 class="m-0">{{ doc.title }}</h2>
-    <div class="text-secondary">{{ doc.original_name }} · {{ doc.mime }} · {{ doc.size_bytes|humansize }}</div>
-  </div>
-  <div class="pt-1">{{ dm.state_icons(doc) }}</div>
-</div>
+<h2 class="mb-3">{{ doc.title }}</h2>
 
-{% if doc.mime.startswith('image/') %}
-<img src="/documents/{{ doc.id }}/thumb" alt="превью"
-     style="max-width:100%;max-height:45vh;border-radius:6px;display:block;margin:.5rem 0 1rem;
-            background:var(--tblr-bg-surface-secondary)">
+{% if is_image %}
+<div class="doc-preview mb-3">
+  <img src="/documents/{{ doc.id }}/thumb" alt="превью">
+  {% if can_download %}
+  <a href="/documents/{{ doc.id }}/download" class="btn btn-icon doc-dl"
+     data-bs-toggle="tooltip" title="Скачать оригинал">{{ ic.icon('download') }}</a>
+  {% endif %}
+</div>
+{% elif can_download %}
+<div class="btn-list mb-3">
+  <a href="/documents/{{ doc.id }}/download" class="btn btn-outline-primary">
+    {{ ic.icon('download') }} Скачать оригинал
+  </a>
+</div>
 {% endif %}
 
 {% if doc.deleted_at %}
@@ -32,12 +33,6 @@
     <button class="btn btn-sm btn-outline-primary">Восстановить</button>
   </form>
   {% endif %}
-</div>
-{% endif %}
-
-{% if can_download %}
-<div class="btn-list mb-3">
-  <a href="/documents/{{ doc.id }}/download" class="btn btn-outline-primary">{{ ic.icon('download') }} Скачать оригинал</a>
 </div>
 {% endif %}
 
@@ -113,47 +108,13 @@
   <div class="col-12 col-lg-6">
     <div class="card">
       <div class="card-body">
-        <h3 class="card-title">Обработка</h3>
-        <div class="datagrid">
-          <div class="datagrid-item"><div class="datagrid-title">{{ ic.icon('note') }} текст</div>
-            <div class="datagrid-content">{{ doc.text_source }}</div></div>
-          <div class="datagrid-item">
-            <div class="datagrid-title">{{ ic.icon('search') }} индексация</div>
-            <div class="datagrid-content">
-              {% if doc.indexed_at %}
-              <span class="text-green">{{ ic.icon('check') }}</span> {{ doc.indexed_at|datetimefmt }}
-              {% else %}<span class="text-secondary">{{ doc.index_status }}</span>{% endif %}
-            </div>
-          </div>
-          <div class="datagrid-item">
-            <div class="datagrid-title">{{ ic.icon('scan') }} OCR</div>
-            <div class="datagrid-content">
-              {% if doc.ocr_at %}
-              <span class="text-green">{{ ic.icon('check') }}</span> {{ doc.ocr_at|datetimefmt }}
-              {% else %}<span class="text-secondary">{{ doc.ocr_status }}</span>{% endif %}
-            </div>
-          </div>
-        </div>
-        {% if can_process %}
-        <div class="btn-list mt-3">
-          <button hx-post="/documents/{{ doc.id }}/index" hx-target="#doc" class="btn btn-outline-secondary">
-            {{ 'Переиндексировать' if doc.indexed_at else 'Проиндексировать' }}
-          </button>
-          {% if ocr_supported and not doc.ocr_at %}
-          <button hx-post="/documents/{{ doc.id }}/ocr" hx-target="#doc" class="btn btn-outline-secondary">Распознать (OCR)</button>
-          {% elif not ocr_supported %}
-          <span class="text-secondary align-self-center">OCR недоступен для этого типа</span>
-          {% endif %}
-        </div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <div class="col-12 col-lg-6">
-    <div class="card">
-      <div class="card-body">
         <h3 class="card-title">Свойства</h3>
+        <div class="datagrid mb-3">
+          <div class="datagrid-item"><div class="datagrid-title">имя файла</div>
+            <div class="datagrid-content">{{ doc.original_name }}</div></div>
+          <div class="datagrid-item"><div class="datagrid-title">тип</div>
+            <div class="datagrid-content">{{ doc.ext or '—' }} · <span class="text-secondary">{{ doc.mime }}</span></div></div>
+        </div>
         {% if can_write %}
         <form method="post" action="/documents/{{ doc.id }}">
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
@@ -195,6 +156,8 @@
       <div class="card-body">
         <h3 class="card-title">Метаданные</h3>
         <div class="datagrid">
+          <div class="datagrid-item"><div class="datagrid-title">домен</div>
+            <div class="datagrid-content"><a href="/domains/{{ d.slug }}">{{ d.name }}</a></div></div>
           <div class="datagrid-item"><div class="datagrid-title">статус</div>
             <div class="datagrid-content d-inline-flex align-items-center gap-1">
               {% if doc.status.value == 'inbox' %}
@@ -205,6 +168,26 @@
               <span class="text-green">{{ ic.icon('check') }}</span> размечен
               {% endif %}
             </div></div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">{{ ic.icon('search') }} индексация</div>
+            <div class="datagrid-content">
+              {% if doc.indexed_at %}
+              <span class="text-green">{{ ic.icon('check') }}</span> {{ doc.indexed_at|datetimefmt }}
+              {% else %}<span class="text-secondary">{{ doc.index_status }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="datagrid-item">
+            <div class="datagrid-title">{{ ic.icon('scan') }} OCR</div>
+            <div class="datagrid-content">
+              {% if doc.ocr_at %}
+              <span class="text-green">{{ ic.icon('check') }}</span> {{ doc.ocr_at|datetimefmt }}
+              {% else %}<span class="text-secondary">{{ doc.ocr_status }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="datagrid-item"><div class="datagrid-title">{{ ic.icon('note') }} текст</div>
+            <div class="datagrid-content">{{ doc.text_source }}</div></div>
+          <div class="datagrid-item"><div class="datagrid-title">размер</div>
+            <div class="datagrid-content">{{ doc.size_bytes|humansize }}</div></div>
           <div class="datagrid-item"><div class="datagrid-title">загружен</div>
             <div class="datagrid-content">{{ doc.uploaded_at|datetimefmt }}</div></div>
           <div class="datagrid-item"><div class="datagrid-title">версия</div>
@@ -212,6 +195,18 @@
           <div class="datagrid-item"><div class="datagrid-title">sha256</div>
             <div class="datagrid-content"><span class="text-secondary">{{ doc.sha256 }}</span></div></div>
         </div>
+        {% if can_process %}
+        <div class="btn-list mt-3">
+          <button hx-post="/documents/{{ doc.id }}/index" hx-target="#doc" class="btn btn-outline-secondary">
+            {{ 'Переиндексировать' if doc.indexed_at else 'Проиндексировать' }}
+          </button>
+          {% if ocr_supported and not doc.ocr_at %}
+          <button hx-post="/documents/{{ doc.id }}/ocr" hx-target="#doc" class="btn btn-outline-secondary">Распознать (OCR)</button>
+          {% elif not ocr_supported %}
+          <span class="text-secondary align-self-center">OCR недоступен для этого типа</span>
+          {% endif %}
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>

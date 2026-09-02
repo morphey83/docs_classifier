@@ -38,6 +38,14 @@
     [data-bs-theme="dark"]  #theme-toggle .to-dark  { display:none; }
     [data-bs-theme="light"] #theme-toggle .to-light { display:none; }
 
+    /* document preview with a download pictogram overlaid */
+    .doc-preview { position:relative; display:inline-block; max-width:100%; }
+    .doc-preview img { display:block; max-width:100%; max-height:45vh; border-radius:6px;
+      background:var(--tblr-bg-surface-secondary); }
+    .doc-preview .doc-dl { position:absolute; top:.5rem; right:.5rem;
+      background:rgba(15,23,42,.62); color:#fff; border:0; }
+    .doc-preview .doc-dl:hover { background:rgba(15,23,42,.85); color:#fff; }
+
     /* result-card media area */
     .card-media { display:block; height:132px; background-size:cover; background-position:center;
       border-top-left-radius:inherit; border-top-right-radius:inherit;
