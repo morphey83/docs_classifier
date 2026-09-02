@@ -277,4 +277,4 @@ async def test_global_search_spans_domains(alice):
     await _upload(alice, b, "gb-doc.txt")
 
     r = await alice.get("/search?q=doc", headers={"HX-Request": "true"})
-    assert "[GA]" in r.text and "[GB]" in r.text
+    assert ">GA</span>" in r.text and ">GB</span>" in r.text

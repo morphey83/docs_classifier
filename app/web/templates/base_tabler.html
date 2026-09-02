@@ -1,0 +1,107 @@
+{% import "_icons.html" as ic with context %}<!doctype html>
+<html lang="ru" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}DocsClassifier{% endblock %}</title>
+  <link rel="stylesheet" href="/static/tabler.min.css">
+  <style>
+    :root { --tblr-font-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI",
+      Roboto, "Helvetica Neue", Arial, sans-serif; }
+    .icon { width:1.25rem; height:1.25rem; fill:none; stroke:currentColor;
+      stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+    .nav-link-icon .icon { width:1.25rem; height:1.25rem; }
+    .btn .icon { width:1rem; height:1rem; vertical-align:-0.15em; }
+    .thumb { width:56px; height:56px; object-fit:cover; border-radius:4px;
+      background:var(--tblr-bg-surface-secondary); max-width:none; }
+    td.cell-thumb { width:1%; }
+    td.cell-thumb img { width:44px; height:44px; object-fit:cover; border-radius:4px;
+      background:var(--tblr-bg-surface-secondary); max-width:none; display:block; }
+  </style>
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/tabler.min.js" defer></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
+{% set path = request.url.path %}
+<div class="page">
+  <header class="navbar navbar-expand-md d-print-none">
+    <div class="container-xl">
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+              data-bs-target="#navbar-menu" aria-label="Меню">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="navbar-brand navbar-brand-autodark pe-0 pe-md-3">
+        <a href="/search">DocsClassifier</a>
+      </div>
+      {% if user %}
+      <div class="navbar-nav flex-row order-md-last">
+        <div class="nav-item dropdown">
+          <a href="#" class="nav-link d-flex lh-1 p-0 px-2" data-bs-toggle="dropdown"
+             aria-label="Меню профиля">
+            <span class="avatar avatar-sm">{{ user.username[0]|upper }}</span>
+            <div class="d-none d-xl-block ps-2"><div>{{ user.username }}</div></div>
+          </a>
+          <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
+            <a href="/profile" class="dropdown-item">Профиль</a>
+            <div class="dropdown-divider"></div>
+            <form method="post" action="/logout">
+              <input type="hidden" name="csrf_token" value="{{ csrf }}">
+              <button class="dropdown-item" type="submit">Выйти</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      <div class="collapse navbar-collapse" id="navbar-menu">
+        <div class="d-flex flex-column flex-md-row flex-fill align-items-stretch align-items-md-center">
+          <ul class="navbar-nav">
+            {% if user %}
+            {% set nav = [
+              ('/search', 'Поиск', 'search'),
+              ('/inbox', 'Очередь на сортировку', 'inbox'),
+              ('/upload', 'Загрузка', 'upload'),
+              ('/', 'Домены', 'folder'),
+            ] %}
+            {% for href, label, name in nav %}
+            <li class="nav-item{{ ' active' if path == href or (href != '/' and path.startswith(href)) }}">
+              <a class="nav-link" href="{{ href }}">
+                <span class="nav-link-icon">{{ ic.icon(name) }}</span>
+                <span class="nav-link-title">{{ label }}</span>
+              </a>
+            </li>
+            {% endfor %}
+            {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="/login">
+                <span class="nav-link-icon">{{ ic.icon('user') }}</span>
+                <span class="nav-link-title">Войти</span>
+              </a>
+            </li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-wrapper">
+    <div class="page-header d-print-none">
+      <div class="container-xl">
+        <h2 class="page-title">{% block page_title %}{% endblock %}</h2>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="container-xl">
+        {% if flash %}
+        <div class="alert alert-{{ 'danger' if flash_kind == 'err' else 'success' }}" role="alert">
+          {{ flash }}
+        </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

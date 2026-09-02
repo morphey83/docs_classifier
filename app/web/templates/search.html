@@ -1,57 +1,81 @@
-{% extends "base.html" %}
+{% extends "base_tabler.html" %}
 {% block title %}Поиск документов{% endblock %}
+{% block page_title %}Поиск документов{% endblock %}
 {% block content %}
-<h1>Поиск документов</h1>
+<div class="row row-cards">
+  <div class="col-12 col-lg-3">
+    <form id="filters" method="get" action="/search"
+          hx-get="/search" hx-target="#results" hx-push-url="true"
+          hx-trigger="submit, input changed delay:400ms, change delay:200ms"
+          class="card">
+      <div class="card-body">
+        <input type="hidden" name="view" value="{{ view }}">
+        <input type="hidden" name="sort" value="{{ f.sort }}">
+        <input type="hidden" name="dir" value="{{ f.dir }}">
 
-<div class="grid-search">
-  <form id="filters" method="get" action="/search"
-        hx-get="/search" hx-target="#results" hx-push-url="true"
-        hx-trigger="submit, input changed delay:400ms, change delay:200ms">
-    <input type="hidden" name="view" value="{{ view }}">
-    <input type="hidden" name="sort" value="{{ f.sort }}">
-    <input type="hidden" name="dir" value="{{ f.dir }}">
+        <div class="mb-3">
+          <label class="form-label">Домен</label>
+          <select class="form-select" name="domain_id">
+            <option value="" {{ 'selected' if not f.domain_id }}>все доступные</option>
+            {% for d in domains %}
+            <option value="{{ d.id }}" {{ 'selected' if f.domain_id == d.id|string }}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-    <label>Домен
-      <select name="domain_id">
-        <option value="" {{ 'selected' if not f.domain_id }}>все доступные</option>
-        {% for d in domains %}
-        <option value="{{ d.id }}" {{ 'selected' if f.domain_id == d.id|string }}>{{ d.name }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Запрос
-      <input type="text" name="q" value="{{ f.q }}" placeholder="слова из названия / текста">
-    </label>
-    <label>Теги (через запятую)
-      <input name="tags" value="{{ f.tags }}" placeholder="договор, 2024">
-    </label>
-    <label>Тип (расширение)
-      <select name="type">
-        <option value="" {{ 'selected' if not f.type }}>любой</option>
-        {% if f.type and f.type not in ext_options %}
-        <option value="{{ f.type }}" selected>{{ f.type }}</option>
-        {% endif %}
-        {% for ext in ext_options %}
-        <option value="{{ ext }}" {{ 'selected' if f.type == ext }}>{{ ext }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Статус
-      <select name="status">
-        <option value="" {{ 'selected' if not f.status }}>любой</option>
-        <option value="inbox" {{ 'selected' if f.status == 'inbox' }}>в очереди</option>
-        <option value="tagged" {{ 'selected' if f.status == 'tagged' }}>размечен</option>
-      </select>
-    </label>
-    <fieldset>
-      <label><input type="checkbox" name="has_ocr" value="yes" {{ 'checked' if f.has_ocr == 'yes' }}> распознан (OCR)</label>
-      <label><input type="checkbox" name="has_index" value="yes" {{ 'checked' if f.has_index == 'yes' }}> проиндексирован</label>
-    </fieldset>
-    <button type="submit">Искать</button>
-  </form>
+        <div class="mb-3">
+          <label class="form-label">Запрос</label>
+          <input type="text" class="form-control" name="q" value="{{ f.q }}"
+                 placeholder="слова из названия / текста">
+        </div>
 
-  <div id="results">
-    {% include "_results.html" %}
+        <div class="mb-3">
+          <label class="form-label">Теги <span class="form-hint d-inline">через запятую</span></label>
+          <input class="form-control" name="tags" value="{{ f.tags }}" placeholder="договор, 2024">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Тип (расширение)</label>
+          <select class="form-select" name="type">
+            <option value="" {{ 'selected' if not f.type }}>любой</option>
+            {% if f.type and f.type not in ext_options %}
+            <option value="{{ f.type }}" selected>{{ f.type }}</option>
+            {% endif %}
+            {% for ext in ext_options %}
+            <option value="{{ ext }}" {{ 'selected' if f.type == ext }}>{{ ext }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Статус</label>
+          <select class="form-select" name="status">
+            <option value="" {{ 'selected' if not f.status }}>любой</option>
+            <option value="inbox" {{ 'selected' if f.status == 'inbox' }}>в очереди</option>
+            <option value="tagged" {{ 'selected' if f.status == 'tagged' }}>размечен</option>
+          </select>
+        </div>
+
+        <label class="form-check">
+          <input class="form-check-input" type="checkbox" name="has_ocr" value="yes"
+                 {{ 'checked' if f.has_ocr == 'yes' }}>
+          <span class="form-check-label">распознан (OCR)</span>
+        </label>
+        <label class="form-check">
+          <input class="form-check-input" type="checkbox" name="has_index" value="yes"
+                 {{ 'checked' if f.has_index == 'yes' }}>
+          <span class="form-check-label">проиндексирован</span>
+        </label>
+
+        <button type="submit" class="btn btn-primary w-100 mt-3">Искать</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-12 col-lg-9">
+    <div id="results">
+      {% include "_results.html" %}
+    </div>
   </div>
 </div>
 {% endblock %}

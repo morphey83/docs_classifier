@@ -1,35 +1,46 @@
 {% import "_macros.html" as m with context %}
 
-<div class="results-head">
-  <span class="muted">сортировка:</span>
+<div class="card-body border-bottom py-2 d-flex flex-wrap align-items-center gap-1">
+  <span class="text-secondary small me-1">сортировка:</span>
   {% for key, label in sorts.items() %}
-  <a hx-get="{{ m.qs(sort=key, dir=('asc' if f.sort == key and f.dir == 'desc' else 'desc'), page=1) }}"
-     hx-target="#results" hx-push-url="true"
-     class="{{ 'active' if f.sort == key }}">{{ label }}{% if f.sort == key %} {{ '▲' if f.dir == 'asc' else '▼' }}{% endif %}</a>
+  <a class="btn btn-sm btn-ghost-secondary {{ 'active' if f.sort == key }}"
+     hx-get="{{ m.qs(sort=key, dir=('asc' if f.sort == key and f.dir == 'desc' else 'desc'), page=1) }}"
+     hx-target="#results" hx-push-url="true">
+    {{ label }}{% if f.sort == key %} {{ '↑' if f.dir == 'asc' else '↓' }}{% endif %}
+  </a>
   {% endfor %}
 </div>
 
-{% for doc in docs %}
-<article class="result{% if doc.mime.startswith('image/') %} has-thumb{% endif %}">
-  {% if doc.mime.startswith('image/') %}
-  <a href="/documents/{{ doc.id }}" class="result-thumb">
-    <img src="/documents/{{ doc.id }}/thumb" alt="" loading="lazy">
-  </a>
-  {% endif %}
-  <div class="result-body">
-    <h4>
-      <span class="muted">[{{ domain_names.get(doc.domain_id, '?') }}]</span>
-      <a href="/documents/{{ doc.id }}">{{ doc.title }}</a>
-    </h4>
-    <p class="muted">
-      {{ doc.ext or (doc.mime.split('/')|last) }} ·
-      {{ doc.doc_date|shortdate }} ·
-      {{ doc.size_bytes|humansize }} ·
-      {{ doc.status|statusfmt }}
-      {% if doc.ocr_at %} · OCR{% endif %}
-      {% if doc.indexed_at %} · Indexed{% endif %}
-    </p>
-    {% for name in tag_map.get(doc.id, [])|sort %}<span class="tag">{{ name }}</span>{% endfor %}
+<div class="list-group list-group-flush">
+  {% for doc in docs %}
+  <div class="list-group-item">
+    <div class="row align-items-center">
+      {% if doc.mime.startswith('image/') %}
+      <div class="col-auto">
+        <a href="/documents/{{ doc.id }}">
+          <img class="thumb" src="/documents/{{ doc.id }}/thumb" alt="" loading="lazy">
+        </a>
+      </div>
+      {% endif %}
+      <div class="col text-truncate">
+        <a href="/documents/{{ doc.id }}" class="text-reset d-block text-truncate">{{ doc.title }}</a>
+        <div class="text-secondary mt-1">
+          <span class="badge bg-blue-lt me-1">{{ domain_names.get(doc.domain_id, '?') }}</span>
+          {{ doc.ext or (doc.mime.split('/')|last) }} ·
+          {{ doc.doc_date|shortdate }} ·
+          {{ doc.size_bytes|humansize }} ·
+          {{ doc.status|statusfmt }}
+          {% if doc.ocr_at %} · OCR{% endif %}
+          {% if doc.indexed_at %} · Indexed{% endif %}
+        </div>
+        {% set names = tag_map.get(doc.id, [])|sort %}
+        {% if names %}
+        <div class="mt-2">
+          {% for name in names %}<span class="badge bg-secondary-lt me-1">{{ name }}</span>{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
   </div>
-</article>
-{% endfor %}
+  {% endfor %}
+</div>

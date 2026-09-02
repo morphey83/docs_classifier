@@ -2,18 +2,19 @@
 
 {% macro th(key, label) -%}
 <th>
-  <a hx-get="{{ m.qs(sort=key, dir=('asc' if f.sort == key and f.dir == 'desc' else 'desc'), page=1) }}"
+  <a class="text-reset d-inline-flex align-items-center" style="cursor:pointer"
+     hx-get="{{ m.qs(sort=key, dir=('asc' if f.sort == key and f.dir == 'desc' else 'desc'), page=1) }}"
      hx-target="#results" hx-push-url="true">
-    {{ label }}{% if f.sort == key %} {{ '▲' if f.dir == 'asc' else '▼' }}{% endif %}
+    {{ label }}{% if f.sort == key %}&nbsp;{{ '↑' if f.dir == 'asc' else '↓' }}{% endif %}
   </a>
 </th>
 {%- endmacro %}
 
-<div style="overflow-x:auto">
-<table>
+<div class="table-responsive">
+<table class="table table-vcenter card-table">
   <thead>
     <tr>
-      <th></th>
+      <th class="w-1"></th>
       {{ th('title', 'Название') }}
       <th>Домен</th>
       <th>Тип</th>
@@ -33,13 +34,17 @@
         </a>
         {% endif %}
       </td>
-      <td><a href="/documents/{{ doc.id }}">{{ doc.title }}</a></td>
-      <td>{{ domain_names.get(doc.domain_id, '?') }}</td>
-      <td>{{ doc.ext or (doc.mime.split('/')|last) }}</td>
-      <td>{{ doc.doc_date|shortdate }}</td>
-      <td>{{ doc.size_bytes|humansize }}</td>
-      <td>{{ doc.status|statusfmt }}{% if doc.ocr_at %} · OCR{% endif %}{% if doc.indexed_at %} · Indexed{% endif %}</td>
-      <td>{% for name in tag_map.get(doc.id, [])|sort %}<span class="tag">{{ name }}</span>{% endfor %}</td>
+      <td><a href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a></td>
+      <td class="text-secondary">{{ domain_names.get(doc.domain_id, '?') }}</td>
+      <td class="text-secondary">{{ doc.ext or (doc.mime.split('/')|last) }}</td>
+      <td class="text-secondary">{{ doc.doc_date|shortdate }}</td>
+      <td class="text-secondary">{{ doc.size_bytes|humansize }}</td>
+      <td class="text-secondary">
+        {{ doc.status|statusfmt }}{% if doc.ocr_at %} · OCR{% endif %}{% if doc.indexed_at %} · Indexed{% endif %}
+      </td>
+      <td>
+        {% for name in tag_map.get(doc.id, [])|sort %}<span class="badge bg-secondary-lt me-1">{{ name }}</span>{% endfor %}
+      </td>
     </tr>
   {% endfor %}
   </tbody>

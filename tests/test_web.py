@@ -135,7 +135,7 @@ async def test_search_type_filter_lists_existing_extensions(alice, web_domain):
     await _upload(alice, web_domain, "b.md")
     page = (await alice.get("/search")).text
     # the type filter is a <select> built from real extensions, no free-text input
-    assert '<select name="type">' in page
+    assert 'name="type"' in page and 'form-select' in page
     assert ">txt</option>" in page and ">md</option>" in page
     # facets block and the "архив" status option are gone
     assert "Фасеты" not in page

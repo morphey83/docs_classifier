@@ -1,33 +1,45 @@
 {% import "_macros.html" as m with context %}
 {% import "_icons.html" as ic %}
 
-<div class="results-head">
-  <span class="muted">Найдено: {{ total }}{% if pages > 1 %} · стр. {{ page }}/{{ pages }}{% endif %}</span>
-  <span class="spacer"></span>
-  <span class="muted">вид:</span>
-  <a hx-get="{{ m.qs(view='cards') }}" hx-target="#results" hx-push-url="true"
-     title="Карточки" class="{{ 'active' if view != 'table' }}">{{ ic.icon('grid') }}карточки</a>
-  <a hx-get="{{ m.qs(view='table') }}" hx-target="#results" hx-push-url="true"
-     title="Таблица" class="{{ 'active' if view == 'table' }}">{{ ic.icon('list') }}таблица</a>
+<div class="card">
+  <div class="card-header">
+    <span class="text-secondary">
+      Найдено: {{ total }}{% if pages > 1 %} · стр. {{ page }}/{{ pages }}{% endif %}
+    </span>
+    <div class="card-actions">
+      <div class="btn-group" role="group">
+        <a class="btn btn-sm {{ 'active' if view != 'table' }}"
+           hx-get="{{ m.qs(view='cards') }}" hx-target="#results" hx-push-url="true"
+           title="Карточки">{{ ic.icon('grid') }}</a>
+        <a class="btn btn-sm {{ 'active' if view == 'table' }}"
+           hx-get="{{ m.qs(view='table') }}" hx-target="#results" hx-push-url="true"
+           title="Таблица">{{ ic.icon('list') }}</a>
+      </div>
+    </div>
+  </div>
+
+  {% if total == 0 %}
+  <div class="card-body">
+    <p class="text-secondary m-0">Ничего не найдено.</p>
+  </div>
+  {% elif view == 'table' %}
+  {% include "_res_table.html" %}
+  {% else %}
+  {% include "_res_cards.html" %}
+  {% endif %}
+
+  {% if pages > 1 %}
+  <div class="card-footer d-flex align-items-center">
+    <ul class="pagination m-0 ms-auto">
+      <li class="page-item {{ 'disabled' if page <= 1 }}">
+        <a class="page-link" hx-get="{{ m.qs(page=page-1) }}" hx-target="#results"
+           hx-push-url="true">← назад</a>
+      </li>
+      <li class="page-item {{ 'disabled' if page >= pages }}">
+        <a class="page-link" hx-get="{{ m.qs(page=page+1) }}" hx-target="#results"
+           hx-push-url="true">вперёд →</a>
+      </li>
+    </ul>
+  </div>
+  {% endif %}
 </div>
-
-{% if total == 0 %}
-<p>Ничего не найдено.</p>
-{% elif view == 'table' %}
-{% include "_res_table.html" %}
-{% else %}
-{% include "_res_cards.html" %}
-{% endif %}
-
-{% if pages > 1 %}
-<nav class="pager">
-  {% if page > 1 %}
-  <a role="button" class="outline" hx-get="{{ m.qs(page=page-1) }}" hx-target="#results"
-     hx-push-url="true">← назад</a>
-  {% endif %}
-  {% if page < pages %}
-  <a role="button" class="outline" hx-get="{{ m.qs(page=page+1) }}" hx-target="#results"
-     hx-push-url="true">вперёд →</a>
-  {% endif %}
-</nav>
-{% endif %}
