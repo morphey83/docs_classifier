@@ -1,0 +1,64 @@
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+{% if created %}
+<div class="alert alert-success">
+  Загружено:
+  <a href="/documents/{{ created.document.id }}">{{ created.document.title }}</a>
+  ({{ created.outcome }})
+</div>
+{% endif %}
+
+{% if conflict %}
+<div class="card mb-3 border-danger">
+  <div class="card-body">
+    <div class="alert alert-danger">Документ с таким именем уже есть, но с другим содержимым.</div>
+    <form hx-post="/upload" hx-encoding="multipart/form-data"
+          hx-target="#upload-result" hx-swap="innerHTML"
+          hx-disabled-elt="find button[type=submit]"
+          method="post" action="/upload" enctype="multipart/form-data" class="js-upload">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="domain" value="{{ picked }}">
+      <div class="mb-3">
+        <label class="form-label">Выберите файл ещё раз</label>
+        <input type="file" class="form-control" name="file" required>
+      </div>
+      <label class="form-check">
+        <input class="form-check-input" type="radio" name="on_conflict" value="replace" checked>
+        <span class="form-check-label">заменить (старая версия сохранится)</span>
+      </label>
+      <label class="form-check mb-3">
+        <input class="form-check-input" type="radio" name="on_conflict" value="new">
+        <span class="form-check-label">загрузить как отдельный документ</span>
+      </label>
+      <button type="submit" class="btn btn-primary">Продолжить</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if batch %}
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="alert alert-{{ 'success' if batch.status == 'done' else 'warning' }} mb-0">
+      Архив: статус «{{ batch.status }}», добавлено {{ batch.item_count }}, конфликтов {{ batch.conflict_count }}.
+      {% if batch.error %}<br>Ошибка: {{ batch.error }}{% endif %}
+    </div>
+  </div>
+  {% if items %}
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead><tr><th>файл</th><th>результат</th><th class="w-1"></th></tr></thead>
+      <tbody>
+      {% for i in items %}
+        <tr>
+          <td>{{ i.entry_name }}</td>
+          <td>{{ i.outcome }}{% if i.note %} — <span class="text-secondary">{{ i.note }}</span>{% endif %}</td>
+          <td>{% if i.document_id %}<a href="/documents/{{ i.document_id }}">открыть</a>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endif %}

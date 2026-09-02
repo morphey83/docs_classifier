@@ -6,70 +6,14 @@
 <div class="row justify-content-center">
   <div class="col-12 col-lg-7">
 
-    {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
-
-    {% if created %}
-    <div class="alert alert-success">
-      Загружено:
-      <a href="/documents/{{ created.document.id }}">{{ created.document.title }}</a>
-      ({{ created.outcome }})
-    </div>
-    {% endif %}
-
-    {% if conflict %}
-    <div class="card mb-3 border-danger">
-      <div class="card-body">
-        <div class="alert alert-danger">Документ с таким именем уже есть, но с другим содержимым.</div>
-        <form method="post" action="/upload" enctype="multipart/form-data">
-          <input type="hidden" name="csrf_token" value="{{ csrf }}">
-          <input type="hidden" name="domain" value="{{ picked }}">
-          <div class="mb-3">
-            <label class="form-label">Выберите файл ещё раз</label>
-            <input type="file" class="form-control" name="file" required>
-          </div>
-          <label class="form-check">
-            <input class="form-check-input" type="radio" name="on_conflict" value="replace" checked>
-            <span class="form-check-label">заменить (старая версия сохранится)</span>
-          </label>
-          <label class="form-check mb-3">
-            <input class="form-check-input" type="radio" name="on_conflict" value="new">
-            <span class="form-check-label">загрузить как отдельный документ</span>
-          </label>
-          <button type="submit" class="btn btn-primary">Продолжить</button>
-        </form>
-      </div>
-    </div>
-    {% endif %}
-
-    {% if batch %}
-    <div class="card mb-3">
-      <div class="card-body">
-        <div class="alert alert-{{ 'success' if batch.status == 'done' else 'warning' }} mb-0">
-          Архив: статус «{{ batch.status }}», добавлено {{ batch.item_count }}, конфликтов {{ batch.conflict_count }}.
-          {% if batch.error %}<br>Ошибка: {{ batch.error }}{% endif %}
-        </div>
-      </div>
-      {% if items %}
-      <div class="table-responsive">
-        <table class="table table-vcenter card-table">
-          <thead><tr><th>файл</th><th>результат</th><th class="w-1"></th></tr></thead>
-          <tbody>
-          {% for i in items %}
-            <tr>
-              <td>{{ i.entry_name }}</td>
-              <td>{{ i.outcome }}{% if i.note %} — <span class="text-secondary">{{ i.note }}</span>{% endif %}</td>
-              <td>{% if i.document_id %}<a href="/documents/{{ i.document_id }}">открыть</a>{% endif %}</td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% endif %}
-    </div>
-    {% endif %}
+    <div id="upload-result">{% include "_upload_result.html" %}</div>
 
     {% if domains %}
-    <form method="post" action="/upload" enctype="multipart/form-data" class="card" id="upload-form">
+    <form hx-post="/upload" hx-encoding="multipart/form-data"
+          hx-target="#upload-result" hx-swap="innerHTML"
+          hx-disabled-elt="find button[type=submit]"
+          method="post" action="/upload" enctype="multipart/form-data"
+          class="card js-upload" id="upload-form">
       <div class="card-body">
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
         <div class="mb-3">
@@ -92,6 +36,11 @@
         </div>
         <input type="file" name="file" id="dz-input" class="d-none">
         <div class="invalid-feedback d-block dz-error" hidden>Выберите файл.</div>
+
+        <div class="progress mt-3 d-none" id="up-progress">
+          <div class="progress-bar progress-bar-indeterminate" id="up-bar"></div>
+        </div>
+        <div class="text-secondary small mt-1 d-none" id="up-status"></div>
 
         <button type="submit" class="btn btn-primary mt-3">Загрузить</button>
       </div>
@@ -122,7 +71,11 @@
     var area = document.getElementById('dz-area'),
         input = document.getElementById('dz-input'),
         out = area.querySelector('.dz-file'),
-        err = form.querySelector('.dz-error');
+        err = form.querySelector('.dz-error'),
+        prog = document.getElementById('up-progress'),
+        bar = document.getElementById('up-bar'),
+        status = document.getElementById('up-status');
+
     function render() {
       out.textContent = input.files && input.files.length ? input.files[0].name : '';
       if (input.files && input.files.length) err.hidden = true;
@@ -141,8 +94,47 @@
     area.addEventListener('drop', function (e) {
       if (e.dataTransfer && e.dataTransfer.files.length) { input.files = e.dataTransfer.files; render(); }
     });
-    form.addEventListener('submit', function (e) {
-      if (!input.files || !input.files.length) { e.preventDefault(); err.hidden = false; area.focus(); }
+
+    // --- upload progress (works for this form and the conflict re-upload) ---
+    function showBar() {
+      prog.classList.remove('d-none');
+      status.classList.remove('d-none');
+      bar.classList.add('progress-bar-indeterminate');
+      bar.style.width = '';
+      bar.textContent = '';
+      status.textContent = 'Отправка…';
+    }
+    function hideBar() {
+      prog.classList.add('d-none');
+      status.classList.add('d-none');
+    }
+    document.body.addEventListener('htmx:beforeRequest', function (e) {
+      var f = e.target;
+      if (!f.classList || !f.classList.contains('js-upload')) return;
+      if (f === form && (!input.files || !input.files.length)) {
+        e.preventDefault();
+        err.hidden = false;
+        area.focus();
+        return;
+      }
+      var b = f.querySelector('button[type="submit"]');
+      if (b) b.disabled = true;
+      showBar();
+    });
+    document.body.addEventListener('htmx:xhr:progress', function (e) {
+      if (!e.target.classList || !e.target.classList.contains('js-upload')) return;
+      var d = e.detail;
+      if (d.lengthComputable && d.total) {
+        var pct = Math.round(d.loaded / d.total * 100);
+        bar.classList.remove('progress-bar-indeterminate');
+        bar.style.width = pct + '%';
+        bar.textContent = pct + '%';
+        status.textContent = pct >= 100 ? 'Обработка на сервере…' : 'Отправка…';
+      }
+    });
+    document.body.addEventListener('htmx:afterRequest', function (e) {
+      if (!e.target.classList || !e.target.classList.contains('js-upload')) return;
+      hideBar();
     });
   })();
 </script>

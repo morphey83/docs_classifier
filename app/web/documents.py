@@ -81,7 +81,8 @@ async def upload_submit(
     domain, user = target, user
     blob, meta = await docs_svc.store_and_probe(file.file, file.filename or "file")
     kind = archive.kind_of(meta.mime, meta.ext)
-    result: dict = {"domains": doms, "picked": domain.slug}
+    # HX upload → swap only the result block; full page for a plain POST
+    result: dict = {"domains": doms, "picked": domain.slug, "partial": "_upload_result.html"}
 
     if kind:
         batch = UploadBatch(

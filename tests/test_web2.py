@@ -319,6 +319,19 @@ async def test_upload_without_csrf_shows_an_error_page(alice, web_domain):
     assert "Доступ запрещён" in r.text and "{" not in r.text[:1]
 
 
+async def test_hx_upload_returns_just_the_result_fragment(alice, web_domain):
+    up = (await alice.get(f"/upload?domain={web_domain}")).text
+    r = await alice.post(
+        "/upload",
+        data={"domain": web_domain, "csrf_token": web_csrf(up)},
+        files={"file": ("frag.txt", b"body", "text/plain")},
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200
+    assert "<html" not in r.text  # fragment, not the whole page
+    assert "Загружено" in r.text
+
+
 async def test_settings_save_allowed_types(alice, web_domain):
     page = (await alice.get(f"/domains/{web_domain}/settings")).text
     r = await alice.post(
