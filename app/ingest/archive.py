@@ -170,16 +170,35 @@ def _sevenz(path: Path, limits: Limits, counter: _Counter) -> Iterator[tuple[str
     try:
         import py7zr
     except ImportError as err:  # pragma: no cover
-        raise UnsupportedArchive("7z support is not installed") from err
-    with py7zr.SevenZipFile(path, "r") as zf:
-        for name, bio in zf.readall().items():
-            safe = _safe_name(name)
-            if safe is None:
+        raise UnsupportedArchive("на сервере не установлена поддержка 7z (py7zr)") from err
+
+    # Extract to a temp dir on disk (py7zr 1.x has no streaming read), checking
+    # the declared sizes against the budget *before* extracting anything.
+    with tempfile.TemporaryDirectory(prefix="dc-7z-") as td:
+        td_path = Path(td)
+        wanted: list[str] = []
+        with py7zr.SevenZipFile(path, "r") as zf:
+            for info in zf.list():
+                if info.is_directory:
+                    continue
+                safe = _safe_name(info.filename)
+                if safe is None:
+                    continue
+                counter.add(safe, int(info.uncompressed or 0))
+                wanted.append(info.filename)
+            if not wanted:
+                return
+            zf.reset()
+            zf.extract(path=td, targets=wanted)
+
+        for original in wanted:
+            safe = _safe_name(original)
+            src = td_path / original
+            if safe is None or not src.is_file():
                 continue
-            data = bio.read()
-            counter.add(safe, len(data))
             out = _tmp()
-            out.write_bytes(data)
+            with src.open("rb") as s, out.open("wb") as d:
+                _copy(s, d, limits.max_entry_bytes)
             yield safe, out
 
 
