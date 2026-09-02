@@ -1,10 +1,22 @@
-<!doctype html>
-<html lang="ru" data-bs-theme="light">
+{% import "_icons.html" as ic %}<!doctype html>
+<html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    (function () {
+      var t;
+      try { t = localStorage.getItem('dc-theme'); } catch (e) {}
+      if (t !== 'dark' && t !== 'light') {
+        t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.setAttribute('data-bs-theme', t);
+    })();
+  </script>
   <title>Вход — DocsClassifier</title>
   <link rel="stylesheet" href="/static/tabler.min.css">
+  <style>.icon{width:1.25rem;height:1.25rem;fill:none;stroke:currentColor;stroke-width:2;
+    stroke-linecap:round;stroke-linejoin:round}</style>
 </head>
 <body class="d-flex flex-column">
 <div class="page page-center">
@@ -21,11 +33,18 @@
           <input type="hidden" name="next" value="{{ next or '' }}">
           <div class="mb-3">
             <label class="form-label">Логин или email</label>
-            <input class="form-control" name="login" required autofocus value="{{ login or '' }}">
+            <div class="input-icon">
+              <span class="input-icon-addon">{{ ic.icon('user') }}</span>
+              <input class="form-control" name="login" required autofocus value="{{ login or '' }}"
+                     placeholder="логин или email">
+            </div>
           </div>
           <div class="mb-3">
             <label class="form-label">Пароль</label>
-            <input class="form-control" name="password" type="password" required>
+            <div class="input-icon">
+              <span class="input-icon-addon">{{ ic.icon('lock') }}</span>
+              <input class="form-control" name="password" type="password" required placeholder="пароль">
+            </div>
           </div>
           <div class="form-footer">
             <button type="submit" class="btn btn-primary w-100">Войти</button>

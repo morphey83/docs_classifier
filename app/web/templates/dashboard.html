@@ -10,7 +10,11 @@
         <h3 class="card-title">Новый домен</h3>
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
         <div class="mb-3">
-          <input class="form-control" name="name" placeholder="Название домена" required maxlength="120">
+          <label class="form-label">Название</label>
+          <div class="input-icon">
+            <span class="input-icon-addon">{{ ic.icon('folder') }}</span>
+            <input class="form-control" name="name" placeholder="Название домена" required maxlength="120">
+          </div>
         </div>
         <button type="submit" class="btn btn-primary w-100">Создать</button>
       </div>

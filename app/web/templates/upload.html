@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as ic %}
 {% block title %}Загрузка{% endblock %}
 {% block page_title %}Загрузить документ или архив{% endblock %}
 {% block content %}
@@ -68,21 +69,30 @@
     {% endif %}
 
     {% if domains %}
-    <form method="post" action="/upload" enctype="multipart/form-data" class="card">
+    <form method="post" action="/upload" enctype="multipart/form-data" class="card" id="upload-form">
       <div class="card-body">
         <div class="mb-3">
           <label class="form-label">Домен</label>
-          <select class="form-select" name="domain" required>
-            {% for d in domains %}
-            <option value="{{ d.slug }}" {{ 'selected' if d.slug == picked }}>{{ d.name }}</option>
-            {% endfor %}
-          </select>
+          <div class="input-icon">
+            <span class="input-icon-addon">{{ ic.icon('folder') }}</span>
+            <select class="form-select" name="domain" required>
+              {% for d in domains %}
+              <option value="{{ d.slug }}" {{ 'selected' if d.slug == picked }}>{{ d.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
-        <div class="mb-3">
-          <label class="form-label">Файл <span class="form-hint d-inline">документ или zip / 7z / rar / tar</span></label>
-          <input type="file" class="form-control" name="file" required>
+
+        <label class="form-label">Файл <span class="form-hint d-inline">документ или zip / 7z / rar / tar</span></label>
+        <div class="dropzone-area" id="dz-area" tabindex="0" role="button" aria-label="Выбрать файл">
+          {{ ic.icon('cloud-upload') }}
+          <div class="dz-hint">Перетащите файл сюда<br><span class="text-secondary">или нажмите, чтобы выбрать</span></div>
+          <div class="dz-file"></div>
         </div>
-        <button type="submit" class="btn btn-primary">Загрузить</button>
+        <input type="file" name="file" id="dz-input" class="d-none">
+        <div class="invalid-feedback d-block dz-error" hidden>Выберите файл.</div>
+
+        <button type="submit" class="btn btn-primary mt-3">Загрузить</button>
       </div>
     </form>
     {% else %}
@@ -92,4 +102,47 @@
     {% endif %}
   </div>
 </div>
+
+<style>
+  .dropzone-area { display:flex; flex-direction:column; align-items:center; gap:.4rem;
+    padding:1.75rem 1rem; text-align:center; cursor:pointer;
+    border:2px dashed var(--tblr-border-color); border-radius:var(--tblr-border-radius);
+    background:var(--tblr-bg-surface-secondary); transition:border-color .12s, background .12s; }
+  .dropzone-area:hover, .dropzone-area:focus-visible { border-color:var(--tblr-primary); outline:none; }
+  .dropzone-area.is-dragover { border-color:var(--tblr-primary);
+    background:var(--tblr-primary-lt); }
+  .dropzone-area .icon { width:2rem; height:2rem; color:var(--tblr-secondary); }
+  .dropzone-area .dz-file { font-weight:600; }
+</style>
+<script>
+  (function () {
+    var form = document.getElementById('upload-form');
+    if (!form) return;
+    var area = document.getElementById('dz-area'),
+        input = document.getElementById('dz-input'),
+        out = area.querySelector('.dz-file'),
+        err = form.querySelector('.dz-error');
+    function render() {
+      out.textContent = input.files && input.files.length ? input.files[0].name : '';
+      if (input.files && input.files.length) err.hidden = true;
+    }
+    area.addEventListener('click', function () { input.click(); });
+    area.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+    });
+    input.addEventListener('change', render);
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      area.addEventListener(ev, function (e) { e.preventDefault(); area.classList.add('is-dragover'); });
+    });
+    ['dragleave', 'dragend', 'drop'].forEach(function (ev) {
+      area.addEventListener(ev, function (e) { e.preventDefault(); area.classList.remove('is-dragover'); });
+    });
+    area.addEventListener('drop', function (e) {
+      if (e.dataTransfer && e.dataTransfer.files.length) { input.files = e.dataTransfer.files; render(); }
+    });
+    form.addEventListener('submit', function (e) {
+      if (!input.files || !input.files.length) { e.preventDefault(); err.hidden = false; area.focus(); }
+    });
+  })();
+</script>
 {% endblock %}

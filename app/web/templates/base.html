@@ -1,8 +1,18 @@
 {% import "_icons.html" as ic with context %}<!doctype html>
-<html lang="ru" data-bs-theme="light">
+<html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    (function () {
+      var t;
+      try { t = localStorage.getItem('dc-theme'); } catch (e) {}
+      if (t !== 'dark' && t !== 'light') {
+        t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.setAttribute('data-bs-theme', t);
+    })();
+  </script>
   <title>{% block title %}DocsClassifier{% endblock %}</title>
   <link rel="stylesheet" href="/static/tabler.min.css">
   <style>
@@ -13,12 +23,33 @@
       stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
     .nav-link-icon .icon { width:1.25rem; height:1.25rem; }
     .btn .icon { width:1rem; height:1rem; vertical-align:-0.15em; }
+    /* Tabler's .input-icon only pads .form-control — do the same for selects */
+    .input-icon > .form-select { padding-left: 2.5rem; }
+    .input-icon .input-icon-addon { z-index: 4; }
+    .card-title .icon { width:1.1rem; height:1.1rem; vertical-align:-0.15em; }
     .thumb { width:56px; height:56px; object-fit:cover; border-radius:4px;
       background:var(--tblr-bg-surface-secondary); max-width:none; }
     td.cell-thumb { width:1%; }
     td.cell-thumb a { display:block; width:44px; }
     td.cell-thumb img { width:44px; height:44px; object-fit:cover; border-radius:4px;
       background:var(--tblr-bg-surface-secondary); max-width:none; display:block; }
+
+    /* theme toggle: show the icon for the theme you'd switch TO */
+    [data-bs-theme="dark"]  #theme-toggle .to-dark  { display:none; }
+    [data-bs-theme="light"] #theme-toggle .to-light { display:none; }
+
+    /* result-card media area */
+    .card-media { display:block; height:132px; background-size:cover; background-position:center;
+      border-top-left-radius:inherit; border-top-right-radius:inherit;
+      background-color:var(--tblr-bg-surface-secondary); }
+    .card-media-file { display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:.35rem; text-decoration:none; }
+    .card-media-file .icon { width:2.25rem; height:2.25rem; opacity:.85; }
+    .card-media-ext { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+
+    .state-icons { display:inline-flex; align-items:center; gap:.3rem; }
+    .state-icons .icon { width:1.1rem; height:1.1rem; }
+
     /* inbox tagging modal */
     .inbox-preview { display:block; width:100%; max-height:52vh; object-fit:contain;
       border-radius:6px; margin:.25rem 0 1rem; background:var(--tblr-bg-surface-secondary); }
@@ -51,8 +82,15 @@
       <div class="navbar-brand navbar-brand-autodark pe-0 pe-md-3">
         <a href="/search">DocsClassifier</a>
       </div>
-      {% if user %}
       <div class="navbar-nav flex-row order-md-last">
+        <div class="nav-item">
+          <a href="#" class="nav-link px-2" id="theme-toggle" role="button"
+             data-bs-toggle="tooltip" title="Светлая / тёмная тема" aria-label="Сменить тему">
+            <span class="to-dark">{{ ic.icon('moon') }}</span>
+            <span class="to-light">{{ ic.icon('sun') }}</span>
+          </a>
+        </div>
+        {% if user %}
         <div class="nav-item dropdown">
           <a href="#" class="nav-link d-flex lh-1 p-0 px-2" data-bs-toggle="dropdown"
              aria-label="Меню профиля">
@@ -68,8 +106,8 @@
             </form>
           </div>
         </div>
+        {% endif %}
       </div>
-      {% endif %}
       <div class="collapse navbar-collapse" id="navbar-menu">
         <div class="d-flex flex-column flex-md-row flex-fill align-items-stretch align-items-md-center">
           <ul class="navbar-nav">
@@ -123,5 +161,29 @@
     </div>
   </div>
 </div>
+
+<script>
+  (function () {
+    function initTooltips(root) {
+      if (!window.tabler) return;
+      (root || document).querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
+        window.tabler.Tooltip.getOrCreateInstance(el);
+      });
+    }
+    document.addEventListener('DOMContentLoaded', function () { initTooltips(); });
+    document.body.addEventListener('htmx:afterSwap', function (e) { initTooltips(e.target); });
+
+    var toggle = document.getElementById('theme-toggle');
+    if (toggle) {
+      toggle.addEventListener('click', function (e) {
+        e.preventDefault();
+        var cur = document.documentElement.getAttribute('data-bs-theme');
+        var next = cur === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-bs-theme', next);
+        try { localStorage.setItem('dc-theme', next); } catch (err) {}
+      });
+    }
+  })();
+</script>
 </body>
 </html>

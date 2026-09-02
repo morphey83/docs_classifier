@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as ic %}
 {% set d = view.domain %}
 {% set can_manage = view.has('manage') %}
 {% block title %}Теги — {{ d.name }}{% endblock %}
@@ -64,10 +65,18 @@
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
         <div class="row">
           <div class="col-sm-7 mb-3">
-            <input class="form-control" name="name" placeholder="Название" required maxlength="120">
+            <label class="form-label">Название</label>
+            <div class="input-icon">
+              <span class="input-icon-addon">{{ ic.icon('hash') }}</span>
+              <input class="form-control" name="name" placeholder="Название" required maxlength="120">
+            </div>
           </div>
           <div class="col-sm-5 mb-3">
-            <input class="form-control" name="color" placeholder="#2563eb (необязательно)" maxlength="16">
+            <label class="form-label">Цвет</label>
+            <div class="input-icon">
+              <span class="input-icon-addon">{{ ic.icon('droplet') }}</span>
+              <input class="form-control" name="color" placeholder="#2563eb" maxlength="16">
+            </div>
           </div>
         </div>
         <button type="submit" class="btn btn-primary">Создать</button>

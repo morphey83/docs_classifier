@@ -1,3 +1,29 @@
 {% macro qs() -%}
 {{ request.url.include_query_params(**kwargs) }}
 {%- endmacro %}
+
+{% macro pager(page, pages) -%}
+{% if pages > 1 %}
+<ul class="pagination m-0">
+  <li class="page-item {{ 'disabled' if page <= 1 }}">
+    <a class="page-link" hx-get="{{ qs(page=page-1) }}" hx-target="#results" hx-push-url="true">← назад</a>
+  </li>
+  <li class="page-item {{ 'disabled' if page >= pages }}">
+    <a class="page-link" hx-get="{{ qs(page=page+1) }}" hx-target="#results" hx-push-url="true">вперёд →</a>
+  </li>
+</ul>
+{% endif %}
+{%- endmacro %}
+
+{% macro sortbar() -%}
+<div class="d-flex flex-wrap align-items-center gap-1 mb-2">
+  <span class="text-secondary small me-1">сортировка:</span>
+  {% for key, label in sorts.items() %}
+  <a class="btn btn-sm btn-ghost-secondary {{ 'active' if f.sort == key }}"
+     hx-get="{{ qs(sort=key, dir=('asc' if f.sort == key and f.dir == 'desc' else 'desc'), page=1) }}"
+     hx-target="#results" hx-push-url="true">
+    {{ label }}{% if f.sort == key %} {{ '↑' if f.dir == 'asc' else '↓' }}{% endif %}
+  </a>
+  {% endfor %}
+</div>
+{%- endmacro %}

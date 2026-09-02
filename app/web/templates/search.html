@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as ic %}
 {% block title %}Поиск документов{% endblock %}
 {% block page_title %}Поиск документов{% endblock %}
 {% block content %}
@@ -8,6 +9,9 @@
           hx-get="/search" hx-target="#results" hx-push-url="true"
           hx-trigger="submit, input changed delay:400ms, change delay:200ms"
           class="card">
+      <div class="card-header">
+        <h3 class="card-title">{{ ic.icon('filter') }} Фильтры</h3>
+      </div>
       <div class="card-body">
         <input type="hidden" name="view" value="{{ view }}">
         <input type="hidden" name="sort" value="{{ f.sort }}">
@@ -15,45 +19,60 @@
 
         <div class="mb-3">
           <label class="form-label">Домен</label>
-          <select class="form-select" name="domain_id">
-            <option value="" {{ 'selected' if not f.domain_id }}>все доступные</option>
-            {% for d in domains %}
-            <option value="{{ d.id }}" {{ 'selected' if f.domain_id == d.id|string }}>{{ d.name }}</option>
-            {% endfor %}
-          </select>
+          <div class="input-icon">
+            <span class="input-icon-addon">{{ ic.icon('folder') }}</span>
+            <select class="form-select" name="domain_id">
+              <option value="" {{ 'selected' if not f.domain_id }}>все доступные</option>
+              {% for d in domains %}
+              <option value="{{ d.id }}" {{ 'selected' if f.domain_id == d.id|string }}>{{ d.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
 
         <div class="mb-3">
           <label class="form-label">Запрос</label>
-          <input type="text" class="form-control" name="q" value="{{ f.q }}"
-                 placeholder="слова из названия / текста">
+          <div class="input-icon">
+            <span class="input-icon-addon">{{ ic.icon('search') }}</span>
+            <input type="text" class="form-control" name="q" value="{{ f.q }}"
+                   placeholder="слова из названия / текста">
+          </div>
         </div>
 
         <div class="mb-3">
           <label class="form-label">Теги <span class="form-hint d-inline">через запятую</span></label>
-          <input class="form-control" name="tags" value="{{ f.tags }}" placeholder="договор, 2024">
+          <div class="input-icon">
+            <span class="input-icon-addon">{{ ic.icon('hash') }}</span>
+            <input class="form-control" name="tags" value="{{ f.tags }}" placeholder="договор, 2024">
+          </div>
         </div>
 
         <div class="mb-3">
           <label class="form-label">Тип (расширение)</label>
-          <select class="form-select" name="type">
-            <option value="" {{ 'selected' if not f.type }}>любой</option>
-            {% if f.type and f.type not in ext_options %}
-            <option value="{{ f.type }}" selected>{{ f.type }}</option>
-            {% endif %}
-            {% for ext in ext_options %}
-            <option value="{{ ext }}" {{ 'selected' if f.type == ext }}>{{ ext }}</option>
-            {% endfor %}
-          </select>
+          <div class="input-icon">
+            <span class="input-icon-addon">{{ ic.icon('file') }}</span>
+            <select class="form-select" name="type">
+              <option value="" {{ 'selected' if not f.type }}>любой</option>
+              {% if f.type and f.type not in ext_options %}
+              <option value="{{ f.type }}" selected>{{ f.type }}</option>
+              {% endif %}
+              {% for ext in ext_options %}
+              <option value="{{ ext }}" {{ 'selected' if f.type == ext }}>{{ ext }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
 
         <div class="mb-3">
           <label class="form-label">Статус</label>
-          <select class="form-select" name="status">
-            <option value="" {{ 'selected' if not f.status }}>любой</option>
-            <option value="inbox" {{ 'selected' if f.status == 'inbox' }}>в очереди</option>
-            <option value="tagged" {{ 'selected' if f.status == 'tagged' }}>размечен</option>
-          </select>
+          <div class="input-icon">
+            <span class="input-icon-addon">{{ ic.icon('check') }}</span>
+            <select class="form-select" name="status">
+              <option value="" {{ 'selected' if not f.status }}>любой</option>
+              <option value="inbox" {{ 'selected' if f.status == 'inbox' }}>в очереди</option>
+              <option value="tagged" {{ 'selected' if f.status == 'tagged' }}>размечен</option>
+            </select>
+          </div>
         </div>
 
         <label class="form-check">

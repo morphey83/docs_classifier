@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as ic %}
 {% set d = view.domain %}
 {% block title %}Настройки — {{ d.name }}{% endblock %}
 {% block content %}
@@ -13,7 +14,10 @@
       <div class="card-body">
         <div class="mb-3">
           <label class="form-label">Название</label>
-          <input class="form-control" name="name" value="{{ d.name }}" required maxlength="120">
+          <div class="input-icon">
+            <span class="input-icon-addon">{{ ic.icon('folder') }}</span>
+            <input class="form-control" name="name" value="{{ d.name }}" required maxlength="120">
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label">Описание</label>
@@ -37,12 +41,18 @@
 
         <div class="mb-3">
           <label class="form-label">Язык OCR по умолчанию</label>
-          <input class="form-control" name="default_ocr_lang" value="{{ s.get('default_ocr_lang', '') }}" placeholder="rus+eng">
+          <div class="input-icon">
+            <span class="input-icon-addon">{{ ic.icon('scan') }}</span>
+            <input class="form-control" name="default_ocr_lang" value="{{ s.get('default_ocr_lang', '') }}" placeholder="rus+eng">
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label">Разрешённые типы файлов
             <span class="form-hint d-inline">расширения через запятую; пусто = любые</span></label>
-          <input class="form-control" name="allowed_types" value="{{ (s.get('allowed_types') or [])|join(', ') }}" placeholder="pdf, docx, png">
+          <div class="input-icon">
+            <span class="input-icon-addon">{{ ic.icon('file') }}</span>
+            <input class="form-control" name="allowed_types" value="{{ (s.get('allowed_types') or [])|join(', ') }}" placeholder="pdf, docx, png">
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label">При конфликте имён в архиве</label>

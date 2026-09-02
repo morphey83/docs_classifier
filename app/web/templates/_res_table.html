@@ -1,4 +1,5 @@
 {% import "_macros.html" as m with context %}
+{% import "_docmeta.html" as dm with context %}
 
 {% macro th(key, label) -%}
 <th>
@@ -20,7 +21,7 @@
       <th>Тип</th>
       {{ th('doc_date', 'Дата') }}
       {{ th('size', 'Размер') }}
-      {{ th('status', 'Статус') }}
+      <th>Состояние</th>
       <th>Теги</th>
     </tr>
   </thead>
@@ -37,11 +38,9 @@
       <td><a href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a></td>
       <td class="text-secondary">{{ domain_names.get(doc.domain_id, '?') }}</td>
       <td class="text-secondary">{{ doc.ext or (doc.mime.split('/')|last) }}</td>
-      <td class="text-secondary">{{ doc.doc_date|shortdate }}</td>
+      <td class="text-secondary">{% if doc.doc_date %}{{ doc.doc_date|shortdate }}{% endif %}</td>
       <td class="text-secondary">{{ doc.size_bytes|humansize }}</td>
-      <td class="text-secondary">
-        {{ doc.status|statusfmt }}{% if doc.ocr_at %} · OCR{% endif %}{% if doc.indexed_at %} · Indexed{% endif %}
-      </td>
+      <td>{{ dm.state_icons(doc) }}</td>
       <td>
         {% for name in tag_map.get(doc.id, [])|sort %}<span class="badge bg-secondary-lt me-1">{{ name }}</span>{% endfor %}
       </td>

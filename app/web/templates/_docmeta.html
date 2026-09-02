@@ -1,0 +1,51 @@
+{% import "_icons.html" as ic %}
+
+{#- category (colour, icon) by mime/ext — drives the card media tint -#}
+{% macro _kind(doc) %}
+{%- set e = (doc.ext or '')|lower -%}
+{%- if doc.mime.startswith('image/') -%}image photo
+{%- elif e == 'pdf' or doc.mime == 'application/pdf' -%}red file-text
+{%- elif e in ['doc','docx','odt','rtf'] -%}blue file-text
+{%- elif e in ['xls','xlsx','ods','csv','tsv'] -%}green file-text
+{%- elif e in ['ppt','pptx','odp'] -%}orange file-text
+{%- elif e in ['zip','7z','rar','tar','gz','tgz'] -%}yellow file
+{%- elif e in ['txt','md','markdown','log'] -%}secondary file-text
+{%- else -%}secondary file
+{%- endif -%}
+{% endmacro %}
+
+{#- big media area at the top of a result card -#}
+{% macro card_media(doc) -%}
+{%- set parts = _kind(doc).split() -%}
+{%- if parts[0] == 'image' -%}
+  <a href="/documents/{{ doc.id }}" class="card-media"
+     style="background-image:url(/documents/{{ doc.id }}/thumb)"
+     aria-label="{{ doc.title }}"></a>
+{%- else -%}
+  <a href="/documents/{{ doc.id }}" class="card-media card-media-file bg-{{ parts[0] }}-lt text-{{ parts[0] }}">
+    {{ ic.icon(parts[1]) }}
+    <span class="card-media-ext">{{ doc.ext or (doc.mime.split('/')|last) }}</span>
+  </a>
+{%- endif -%}
+{%- endmacro %}
+
+{#- status / index / OCR as pictograms with tooltips -#}
+{% macro state_icons(doc) -%}
+<span class="state-icons">
+  {%- if doc.status.value == 'inbox' -%}
+  <span class="text-orange" data-bs-toggle="tooltip" title="В очереди на сортировку">{{ ic.icon('inbox') }}</span>
+  {%- elif doc.status.value == 'archived' -%}
+  <span class="text-secondary" data-bs-toggle="tooltip" title="В архиве">{{ ic.icon('folder') }}</span>
+  {%- else -%}
+  <span class="text-green" data-bs-toggle="tooltip" title="Размечен">{{ ic.icon('check') }}</span>
+  {%- endif -%}
+  {%- if doc.indexed_at %}
+  <span class="text-blue" data-bs-toggle="tooltip"
+        title="Проиндексирован · {{ doc.indexed_at|datetimefmt }}">{{ ic.icon('search') }}</span>
+  {%- endif -%}
+  {%- if doc.ocr_at %}
+  <span class="text-blue" data-bs-toggle="tooltip"
+        title="Распознан (OCR) · {{ doc.ocr_at|datetimefmt }}">{{ ic.icon('scan') }}</span>
+  {%- endif -%}
+</span>
+{%- endmacro %}

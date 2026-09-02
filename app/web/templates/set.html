@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_icons.html" as ic %}
+{% import "_docmeta.html" as dm with context %}
 {% set d = view.domain %}
 {% block title %}{{ set.name }} — {{ d.name }}{% endblock %}
 {% block content %}
@@ -67,7 +68,8 @@
     <div class="list-group-item d-flex align-items-center">
       <div class="flex-fill">
         <a href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a>
-        <span class="text-secondary">· {{ doc.doc_date|shortdate }} · {{ doc.size_bytes|humansize }}</span>
+        <span class="text-secondary">· {{ doc.size_bytes|humansize }}{% if doc.doc_date %} · {{ doc.doc_date|shortdate }}{% endif %}</span>
+        <span class="ms-1">{{ dm.state_icons(doc) }}</span>
         {% for name in tag_map.get(doc.id, [])|sort %}<span class="badge bg-secondary-lt ms-1">{{ name }}</span>{% endfor %}
       </div>
       {% if can_edit %}
