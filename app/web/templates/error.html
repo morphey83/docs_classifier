@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    (function () {
+      var t;
+      try { t = localStorage.getItem('dc-theme'); } catch (e) {}
+      if (t !== 'dark' && t !== 'light') {
+        t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.setAttribute('data-bs-theme', t);
+    })();
+  </script>
+  <title>{{ code }} — DocsClassifier</title>
+  <link rel="stylesheet" href="/static/tabler.min.css">
+</head>
+<body class="d-flex flex-column">
+<div class="page page-center">
+  <div class="container container-tight py-4">
+    <div class="empty">
+      <div class="empty-header">{{ code }}</div>
+      <p class="empty-title">{{ title }}</p>
+      {% if detail %}<p class="empty-subtitle text-secondary">{{ detail }}</p>{% endif %}
+      <div class="empty-action">
+        <a href="{{ back or '/search' }}" class="btn btn-primary">Вернуться</a>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

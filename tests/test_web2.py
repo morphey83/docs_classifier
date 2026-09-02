@@ -298,6 +298,27 @@ async def test_members_page_forbidden_for_viewer(alice, bob, web_domain):
 
 
 # --- settings + trash ----------------------------------------
+async def test_post_forms_carry_a_csrf_field(alice, web_domain):
+    # a real browser submit uses the token in the form, not the body hx-headers
+    for url in (f"/upload?domain={web_domain}", f"/domains/{web_domain}/settings"):
+        page = (await alice.get(url)).text
+        forms = re.findall(r"<form[^>]*method=\"post\"[^>]*>(.*?)</form>", page, re.S)
+        assert forms, url
+        assert all('name="csrf_token"' in f for f in forms), url
+
+
+async def test_upload_without_csrf_shows_an_error_page(alice, web_domain):
+    r = await alice.post(
+        "/upload",
+        data={"domain": web_domain},
+        files={"file": ("x.txt", b"hi", "text/plain")},
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
+    assert "text/html" in r.headers["content-type"]
+    assert "Доступ запрещён" in r.text and "{" not in r.text[:1]
+
+
 async def test_settings_save_allowed_types(alice, web_domain):
     page = (await alice.get(f"/domains/{web_domain}/settings")).text
     r = await alice.post(

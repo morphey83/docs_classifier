@@ -71,6 +71,7 @@
     {% if domains %}
     <form method="post" action="/upload" enctype="multipart/form-data" class="card" id="upload-form">
       <div class="card-body">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
         <div class="mb-3">
           <label class="form-label">Домен</label>
           <div class="input-icon">

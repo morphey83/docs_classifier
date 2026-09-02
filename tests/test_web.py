@@ -89,6 +89,25 @@ async def test_foreign_domain_is_404(alice, bob, web_domain):
     assert (await bob.get(f"/domains/{web_domain}")).status_code == 404
 
 
+async def test_web_404_is_an_html_page_not_json(alice):
+    r = await alice.get("/no/such/page")
+    assert r.status_code == 404
+    assert "text/html" in r.headers["content-type"]
+    assert "Страница не найдена" in r.text
+
+
+async def test_htmx_error_becomes_a_toast(alice, web_domain):
+    doc_id = await _one_doc(alice, web_domain)
+    r = await alice.post(
+        f"/documents/{doc_id}/tags",
+        data={"tags": "x", "csrf_token": "forged"},
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200
+    assert r.headers.get("HX-Reswap") == "none"
+    assert "dc-toast" in r.headers.get("HX-Trigger", "")
+
+
 # --- search --------------------------------------------------------
 async def test_search_page_and_htmx_partial(alice, web_domain):
     await _upload(alice, web_domain, "alpha.txt", b"alpha body")
