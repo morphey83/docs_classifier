@@ -97,8 +97,11 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
     Icons" inputs; **dark theme** with a navbar toggle; drag-and-drop
     upload zone.
   - **7j** document page: breadcrumb removed; a dedicated "Наборы" card
-    (add / remove sets in place, any file type); tag input with the
-    domain's frequent-tag chips.
+    (add / remove sets in place, any file type, always a "new set"
+    option); tag input with the domain's frequent-tag chips.
+  - **7k** bulk actions on selected search results — index / OCR / add to
+    a set; the selection persists in `localStorage` across pages and
+    resets on a filter change.
 - **8 email confirmation** (opt-in) — set `SMTP_HOST` to require a
   verified address before a new account can log in (migration 0009,
   `app/services/email.py`, `GET /verify/{token}`); unset keeps sign-up
