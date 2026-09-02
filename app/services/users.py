@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models import Session, User
 from app.security import (
     DUMMY_HASH,
@@ -15,6 +16,7 @@ from app.security import (
     username_or_email_taken,
     verify_password,
 )
+from app.util.time import utcnow
 
 
 class RegistrationError(ValueError):
@@ -28,6 +30,8 @@ async def register_user(db: AsyncSession, *, username: str, email: str, password
         username=username,
         email=email.lower(),
         password_hash=await hash_password(password),
+        # confirmation only gates login when SMTP is configured
+        email_verified_at=None if settings.email_verification_enabled else utcnow(),
     )
     db.add(user)
     await db.flush()
@@ -37,6 +41,23 @@ async def register_user(db: AsyncSession, *, username: str, email: str, password
 
     await create_domain(db, user, name="Мои документы")
     return user
+
+
+def email_unverified(user: User) -> bool:
+    """True when this account still has to click its confirmation link."""
+    return settings.email_verification_enabled and user.email_verified_at is None
+
+
+async def get_user_by_login(db: AsyncSession, login: str) -> User | None:
+    login = login.strip().lower()
+    res = await db.execute(select(User).where((User.username == login) | (User.email == login)))
+    return res.scalar_one_or_none()
+
+
+async def mark_email_verified(db: AsyncSession, user: User) -> None:
+    if user.email_verified_at is None:
+        user.email_verified_at = utcnow()
+        await db.flush()
 
 
 async def authenticate(db: AsyncSession, *, login: str, password: str) -> User | None:

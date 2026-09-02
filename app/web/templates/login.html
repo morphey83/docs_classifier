@@ -27,7 +27,15 @@
     <div class="card card-md">
       <div class="card-body">
         <h2 class="h2 text-center mb-4">Вход</h2>
+        {% if verified %}<div class="alert alert-success">Адрес подтверждён — теперь можно войти.</div>{% endif %}
         {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+        {% if resend_login %}
+        <form method="post" action="/verify/resend" class="mb-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <input type="hidden" name="login" value="{{ resend_login }}">
+          <button type="submit" class="btn btn-outline-secondary w-100">Отправить письмо ещё раз</button>
+        </form>
+        {% endif %}
         <form method="post" action="/login" autocomplete="off">
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
           <input type="hidden" name="next" value="{{ next or '' }}">

@@ -45,6 +45,22 @@ class Settings(BaseSettings):
     bot_token: str | None = None  # from @BotFather — the `bot` service (§8)
     bot_search_page_size: int = 5
 
+    # --- outbound email / registration verification ----------------------
+    # Set SMTP_HOST to switch on email confirmation: a new account then has
+    # to click a link before it can log in. Unset -> accounts are usable
+    # immediately (dev / single-tenant).
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str = "DocsClassifier <no-reply@localhost>"
+    smtp_starttls: bool = True
+    email_verify_ttl_hours: int = 48
+
+    @property
+    def email_verification_enabled(self) -> bool:
+        return bool(self.smtp_host)
+
     @property
     def default_allowed_types_set(self) -> set[str] | None:
         if not self.default_allowed_types:

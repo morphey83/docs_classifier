@@ -31,17 +31,21 @@ async def test_set_lifecycle(alice, web_domain):
     add = await alice.post(
         f"/documents/{doc_id}/add-to-set",
         data={"set_id": set_id, "csrf_token": web_csrf(doc_page)},
+        headers={"HX-Request": "true"},
     )
-    assert add.status_code == 303
+    assert add.status_code == 200 and "Подборка" in add.text  # doc-page fragment, now in the set
 
     detail = await alice.get(f"/domains/{web_domain}/sets/{set_id}")
     assert "s1" in detail.text
 
+    # the document page can also take it back out of the set
+    dp2 = (await alice.get(f"/documents/{doc_id}")).text
     rm = await alice.post(
-        f"/domains/{web_domain}/sets/{set_id}/items/{doc_id}/remove",
-        data={"csrf_token": web_csrf(detail.text)},
+        f"/documents/{doc_id}/remove-from-set",
+        data={"set_id": set_id, "csrf_token": web_csrf(dp2)},
+        headers={"HX-Request": "true"},
     )
-    assert rm.status_code == 303
+    assert rm.status_code == 200 and "не входит ни в один набор" in rm.text
 
 
 async def test_set_share_link_and_revoke(alice, web_domain):

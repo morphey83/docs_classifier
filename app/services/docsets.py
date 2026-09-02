@@ -140,6 +140,26 @@ async def remove_item(
     return True
 
 
+async def sets_of_document(
+    db: AsyncSession, document_id: uuid.UUID, *, domain_id: uuid.UUID, user_id: uuid.UUID
+) -> list[DocumentSet]:
+    """Sets (visible to ``user_id``) that ``document_id`` currently belongs to."""
+    rows = await db.scalars(
+        select(DocumentSet)
+        .join(DocumentSetItem, DocumentSetItem.set_id == DocumentSet.id)
+        .where(
+            DocumentSetItem.document_id == document_id,
+            DocumentSet.domain_id == domain_id,
+            or_(
+                DocumentSet.visibility == SetVisibility.domain,
+                DocumentSet.created_by == user_id,
+            ),
+        )
+        .order_by(DocumentSet.name)
+    )
+    return list(rows)
+
+
 async def _refresh_item_count(db: AsyncSession, set_obj: DocumentSet) -> None:
     set_obj.item_count = int(
         await db.scalar(

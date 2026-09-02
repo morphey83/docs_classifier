@@ -15,6 +15,7 @@ os.environ.setdefault("PUBLIC_BASE_URL", "")
 os.environ.setdefault("TELEGRAM_BOT_USERNAME", "")
 os.environ.setdefault("BOT_TOKEN", "")
 os.environ.setdefault("DEFAULT_ALLOWED_TYPES", "")
+os.environ.setdefault("SMTP_HOST", "")  # email verification off in tests
 
 from collections.abc import AsyncGenerator, Callable
 from pathlib import Path

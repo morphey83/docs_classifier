@@ -1,9 +1,14 @@
 {% import "_docmeta.html" as dm with context %}
 {% import "_icons.html" as ic %}
+{% set d = view.domain %}
 {% set can_write = view.has('write') %}
 {% set can_process = view.has('process') %}
 {% set can_download = view.has('download') %}
+{% set can_view = view.has('view') %}
 
+<div class="mb-1">
+  <a href="/domains/{{ d.slug }}" class="text-secondary text-decoration-none small">{{ d.name }}</a>
+</div>
 <div class="mb-2 d-flex align-items-start justify-content-between gap-2">
   <div>
     <h2 class="m-0">{{ doc.title }}</h2>
@@ -30,37 +35,76 @@
 </div>
 {% endif %}
 
+{% if can_download %}
 <div class="btn-list mb-3">
-  {% if can_download %}
-  <a href="/documents/{{ doc.id }}/download" class="btn btn-outline-primary">Скачать оригинал</a>
-  {% endif %}
-  {% if sets and view.has('view') %}
-  <form method="post" action="/documents/{{ doc.id }}/add-to-set" class="d-flex gap-2">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <select class="form-select form-select-sm w-auto" name="set_id" required>
-      <option value="" disabled selected>+ в набор…</option>
-      {% for s in sets %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
-    </select>
-    <button class="btn btn-sm btn-outline-secondary">Добавить</button>
-  </form>
-  {% endif %}
+  <a href="/documents/{{ doc.id }}/download" class="btn btn-outline-primary">{{ ic.icon('download') }} Скачать оригинал</a>
 </div>
+{% endif %}
 
 <div class="row row-cards">
   <div class="col-12 col-lg-6">
     <div class="card">
       <div class="card-body">
         <h3 class="card-title">Теги</h3>
-        <p>
+        {% if can_write %}
+        <form hx-post="/documents/{{ doc.id }}/tags" hx-target="#doc">
+          <input class="form-control" name="tags" id="doc-tagfield" autocomplete="off"
+                 value="{{ tags|join(', ') }}" placeholder="через запятую; пустое поле снимет все">
+          {% if freq %}
+          <div class="freq-tags mt-2">
+            <span class="freq-label">частые:</span>
+            {% for name in freq %}
+            <button type="button" class="freq" data-tag="{{ name }}">{{ name }}</button>
+            {% endfor %}
+          </div>
+          {% endif %}
+          <button type="submit" class="btn btn-primary mt-2">Сохранить теги</button>
+        </form>
+        {% else %}
+        <p class="m-0">
           {% for name in tags %}<span class="badge bg-secondary-lt me-1">{{ name }}</span>
           {% else %}<span class="text-secondary">нет тегов</span>{% endfor %}
         </p>
-        {% if can_write %}
-        <form hx-post="/documents/{{ doc.id }}/tags" hx-target="#doc" class="d-flex gap-2">
-          <input class="form-control" name="tags" value="{{ tags|join(', ') }}"
-                 placeholder="через запятую; пустое поле снимет все">
-          <button type="submit" class="btn btn-primary flex-none">Сохранить</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <h3 class="card-title">Наборы</h3>
+        {% if doc_sets %}
+        <div class="mb-2">
+          {% for s in doc_sets %}
+          <span class="badge bg-blue-lt me-1 mb-1">
+            <a href="/domains/{{ d.slug }}/sets/{{ s.id }}" class="text-reset">{{ s.name }}</a>
+            {% if can_view %}
+            <a href="#" class="text-reset ms-1" title="Убрать из набора"
+               hx-post="/documents/{{ doc.id }}/remove-from-set" hx-target="#doc"
+               hx-vals='{"set_id": "{{ s.id }}"}'>✕</a>
+            {% endif %}
+          </span>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-secondary">Документ не входит ни в один набор.</p>
+        {% endif %}
+
+        {% set _in = doc_sets|map(attribute='id')|list %}
+        {% set avail = sets|rejectattr('id', 'in', _in)|list %}
+        {% if can_view and avail %}
+        <form hx-post="/documents/{{ doc.id }}/add-to-set" hx-target="#doc" class="d-flex gap-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <select class="form-select form-select-sm" name="set_id" required>
+            <option value="" disabled selected>добавить в набор…</option>
+            {% for s in avail %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+          </select>
+          <button class="btn btn-sm btn-outline-primary flex-none">Добавить</button>
         </form>
+        {% elif can_view and not sets %}
+        <p class="text-secondary small m-0">В домене пока нет наборов —
+          создайте на вкладке <a href="/domains/{{ d.slug }}/sets">Наборы</a>.</p>
         {% endif %}
       </div>
     </div>
@@ -115,12 +159,18 @@
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
           <div class="mb-3">
             <label class="form-label">Название</label>
-            <input class="form-control" name="title" value="{{ doc.title }}" required maxlength="500">
+            <div class="input-icon">
+              <span class="input-icon-addon">{{ ic.icon('type') }}</span>
+              <input class="form-control" name="title" value="{{ doc.title }}" required maxlength="500">
+            </div>
           </div>
           <div class="mb-3">
             <label class="form-label">Дата документа</label>
-            <input class="form-control" name="doc_date" type="date"
-                   value="{{ doc.doc_date.date().isoformat() if doc.doc_date else '' }}">
+            <div class="input-icon">
+              <span class="input-icon-addon">{{ ic.icon('calendar') }}</span>
+              <input class="form-control" name="doc_date" type="date"
+                     value="{{ doc.doc_date.date().isoformat() if doc.doc_date else '' }}">
+            </div>
           </div>
           <div class="mb-3">
             <label class="form-label">Заметки</label>
@@ -131,7 +181,7 @@
         {% else %}
         <div class="datagrid">
           <div class="datagrid-item"><div class="datagrid-title">дата документа</div>
-            <div class="datagrid-content">{{ doc.doc_date|shortdate }}</div></div>
+            <div class="datagrid-content">{% if doc.doc_date %}{{ doc.doc_date|shortdate }}{% else %}—{% endif %}</div></div>
           <div class="datagrid-item"><div class="datagrid-title">заметки</div>
             <div class="datagrid-content">{{ doc.notes or '—' }}</div></div>
         </div>
@@ -175,4 +225,33 @@
     <button class="btn btn-outline-danger">Удалить в корзину</button>
   </form>
 </div>
+{% endif %}
+
+{% if can_write and freq %}
+<script>
+(function () {
+  var field = document.getElementById('doc-tagfield');
+  if (!field) return;
+  var chips = Array.prototype.slice.call(document.querySelectorAll('#doc .freq-tags .freq'));
+  function cur() {
+    return field.value.split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+  }
+  function sync() {
+    var have = cur();
+    chips.forEach(function (c) { c.disabled = have.indexOf(c.dataset.tag.toLowerCase()) !== -1; });
+  }
+  chips.forEach(function (c) {
+    c.addEventListener('click', function () {
+      if (cur().indexOf(c.dataset.tag.toLowerCase()) === -1) {
+        var v = field.value.trim().replace(/,\s*$/, '');
+        field.value = (v ? v + ', ' : '') + c.dataset.tag;
+      }
+      sync();
+      field.focus();
+    });
+  });
+  field.addEventListener('input', sync);
+  sync();
+})();
+</script>
 {% endif %}

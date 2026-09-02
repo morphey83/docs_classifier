@@ -20,6 +20,10 @@ class User(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(255))
     tg_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
+    # NULL = email not confirmed yet (only enforced when SMTP is configured)
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     sessions: Mapped[list[Session]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

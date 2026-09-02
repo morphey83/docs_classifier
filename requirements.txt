@@ -20,4 +20,5 @@ saq==0.22.4
 psycopg[binary,pool]==3.2.3
 aiogram==3.31.0
 jinja2==3.1.5
-itsdangerous==2.2.0    # signed CSRF tokens for the web UI
+itsdangerous==2.2.0    # signed CSRF + email-verification tokens for the web UI
+aiosmtplib==3.0.2      # outbound email (account verification); only imported when SMTP_HOST is set

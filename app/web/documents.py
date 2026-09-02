@@ -149,6 +149,21 @@ async def _tag_names(db: AsyncSession, doc_id: uuid.UUID) -> list[str]:
     return list(rows)
 
 
+async def _doc_ctx(db: AsyncSession, user: User, doc, view) -> dict:
+    freq = [t.name for t, _ in (await tags_svc.list_tags(db, doc.domain_id))[:14]]
+    return {
+        "view": view,
+        "doc": doc,
+        "tags": await _tag_names(db, doc.id),
+        "freq": freq,
+        "ocr_supported": ocr_engine.is_supported(doc.mime),
+        "sets": await docsets_svc.list_sets(db, doc.domain_id, user.id),
+        "doc_sets": await docsets_svc.sets_of_document(
+            db, doc.id, domain_id=doc.domain_id, user_id=user.id
+        ),
+    }
+
+
 @router.get("/documents/{document_id}")
 async def document_page(
     request: Request,
@@ -161,11 +176,7 @@ async def document_page(
         request,
         "document.html",
         {
-            "view": view,
-            "doc": doc,
-            "tags": await _tag_names(db, doc.id),
-            "ocr_supported": ocr_engine.is_supported(doc.mime),
-            "sets": await docsets_svc.list_sets(db, doc.domain_id, user.id),
+            **(await _doc_ctx(db, user, doc, view)),
             "partial": "_doc_body.html",
         },
     )
@@ -249,6 +260,17 @@ async def document_index(
     return await _doc_fragment(request, db, user, document_id)
 
 
+async def _visible_set(db, user, doc, set_id: uuid.UUID) -> DocumentSet:
+    s = await db.get(DocumentSet, set_id)
+    if (
+        s is None
+        or s.domain_id != doc.domain_id
+        or (s.created_by != user.id and s.visibility != SetVisibility.domain)
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "набор не найден")
+    return s
+
+
 @router.post("/documents/{document_id}/add-to-set")
 async def document_add_to_set(
     request: Request,
@@ -259,13 +281,26 @@ async def document_add_to_set(
     db: AsyncSession = Depends(get_session),
 ) -> Response:
     doc, view = await load_document(db, user, document_id)
-    s = await db.get(DocumentSet, set_id)
-    if s is None or s.domain_id != doc.domain_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "набор не найден")
-    if s.created_by != user.id and s.visibility != SetVisibility.domain:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "набор не найден")
+    require_cap(view, Cap.view)
+    s = await _visible_set(db, user, doc, set_id)
     await docsets_svc.add_items(db, s, [doc.id], actor=user)
-    return RedirectResponse(f"/documents/{document_id}", status_code=303)
+    return await _doc_fragment(request, db, user, document_id)
+
+
+@router.post("/documents/{document_id}/remove-from-set")
+async def document_remove_from_set(
+    request: Request,
+    document_id: uuid.UUID,
+    set_id: uuid.UUID = Form(...),
+    _: None = CsrfGuard,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    doc, view = await load_document(db, user, document_id)
+    require_cap(view, Cap.view)
+    s = await _visible_set(db, user, doc, set_id)
+    await docsets_svc.remove_item(db, s, doc.id)
+    return await _doc_fragment(request, db, user, document_id)
 
 
 @router.post("/documents/{document_id}/delete")
@@ -336,14 +371,4 @@ async def _doc_fragment(request: Request, db, user, document_id: uuid.UUID) -> R
     await db.commit()
     doc, view = await load_document(db, user, document_id)
     await db.refresh(doc)
-    return render(
-        request,
-        "_doc_body.html",
-        {
-            "view": view,
-            "doc": doc,
-            "tags": await _tag_names(db, doc.id),
-            "ocr_supported": ocr_engine.is_supported(doc.mime),
-            "sets": await docsets_svc.list_sets(db, doc.domain_id, user.id),
-        },
-    )
+    return render(request, "_doc_body.html", await _doc_ctx(db, user, doc, view))

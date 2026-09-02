@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -12,11 +12,13 @@ from app.schemas.auth import LoginIn, RegisterIn, UserOut
 from app.schemas.tglink import TgLinkCreateOut
 from app.security import get_current_user
 from app.services import tglink as tglink_svc
+from app.services.email import make_verify_token, send_verification_email
 from app.services.users import (
     RegistrationError,
     authenticate,
     create_session,
     delete_session,
+    email_unverified,
     register_user,
 )
 from app.util.urls import bot_deep_link
@@ -48,6 +50,7 @@ async def register(
     body: RegisterIn,
     request: Request,
     response: Response,
+    background: BackgroundTasks,
     db: AsyncSession = Depends(get_session),
 ) -> User:
     try:
@@ -56,6 +59,12 @@ async def register(
         )
     except RegistrationError as err:
         raise HTTPException(status.HTTP_409_CONFLICT, str(err)) from err
+    if email_unverified(user):
+        await db.commit()
+        background.add_task(
+            send_verification_email, user.email, user.username, make_verify_token(user.id)
+        )
+        return user  # no session — the account is dormant until the link is clicked
     session = await create_session(
         db, user, user_agent=request.headers.get("user-agent"), ip=_client_ip(request)
     )
@@ -73,6 +82,8 @@ async def login(
     user = await authenticate(db, login=body.login, password=body.password)
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid credentials")
+    if email_unverified(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "email not verified")
     session = await create_session(
         db, user, user_agent=request.headers.get("user-agent"), ip=_client_ip(request)
     )
