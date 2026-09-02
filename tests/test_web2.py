@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import re
 
 from tests.conftest import web_csrf
 from tests.conftest import web_upload as _upload
+
+
+def _toast(response) -> str:
+    trig = response.headers.get("HX-Trigger", "")
+    try:
+        return json.loads(trig).get("dc-toast", "")
+    except ValueError:
+        return trig
 
 
 async def _doc_id(client, slug):
@@ -84,14 +93,15 @@ async def test_bulk_index_and_add_to_set(alice, web_domain):
         data={**common, "action": "index"},
         headers={"HX-Request": "true"},
     )
-    assert r.status_code == 200 and "Проиндексировано: 2" in r.text
+    assert r.status_code == 200
+    assert "Проиндексировано: 2" in _toast(r)
 
     r = await alice.post(
         "/search/bulk",
         data={**common, "action": "set", "set_id": "__new__", "new_name": "Пакет"},
         headers={"HX-Request": "true"},
     )
-    assert r.status_code == 200 and "Пакет" in r.text
+    assert r.status_code == 200 and "Пакет" in _toast(r)
 
     sets = (await alice.get(f"/domains/{web_domain}/sets")).text
     assert "Пакет" in sets
@@ -123,7 +133,7 @@ async def test_bulk_add_to_set_rejects_a_cross_domain_selection(alice, web_domai
         },
         headers={"HX-Request": "true"},
     )
-    assert r.status_code == 200 and "Выберите один домен" in r.text
+    assert r.status_code == 200 and "Выберите один домен" in _toast(r)
 
 
 async def test_set_share_link_and_revoke(alice, web_domain):

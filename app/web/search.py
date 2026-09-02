@@ -204,8 +204,7 @@ async def search_bulk(
     await db.commit()
 
     ctx = await _ctx(form, db, user)
-    ctx["bulk_msg"] = msg
-    return render(request, "_results.html", ctx)
+    return render(request, "_results.html", ctx, toast=msg)
 
 
 async def _apply_bulk(db, user, action, docs, caps, dom_by_id, form) -> str:

@@ -53,9 +53,17 @@ templates.env.filters["statusfmt"] = statusfmt
 
 
 def render(
-    request: Request, name: str, context: dict[str, Any] | None = None, *, status_code: int = 200
+    request: Request,
+    name: str,
+    context: dict[str, Any] | None = None,
+    *,
+    status_code: int = 200,
+    toast: str | None = None,
 ) -> HTMLResponse:
-    """Full page (``name``) or, for an ``HX-Request``, its ``partial`` block only."""
+    """Full page (``name``) or, for an ``HX-Request``, its ``partial`` block only.
+
+    ``toast`` sets an ``HX-Trigger`` so the page shows a transient toast.
+    """
     from app.web import csrf
 
     ctx = {
@@ -66,4 +74,9 @@ def render(
     }
     if request.headers.get("HX-Request") and ctx.get("partial"):
         name = ctx["partial"]
-    return templates.TemplateResponse(request, name, ctx, status_code=status_code)
+    resp = templates.TemplateResponse(request, name, ctx, status_code=status_code)
+    if toast:
+        import json
+
+        resp.headers["HX-Trigger"] = json.dumps({"dc-toast": toast})
+    return resp

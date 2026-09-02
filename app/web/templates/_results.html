@@ -3,13 +3,6 @@
 
 <div data-filter-sig="{{ filter_sig }}">
 
-{% if bulk_msg %}
-<div class="alert alert-success alert-dismissible" role="alert">
-  {{ bulk_msg }}
-  <a class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></a>
-</div>
-{% endif %}
-
 <div class="d-flex align-items-center gap-3 mb-2">
   <span class="text-secondary">
     Найдено: {{ total }}{% if pages > 1 %} · стр. {{ page }}/{{ pages }}{% endif %}
@@ -87,97 +80,5 @@
 {% endif %}
 
 </div>
-
-<script>
-(function () {
-  var box = document.getElementById('results');
-  var wrap = box.querySelector('[data-filter-sig]');
-  if (!wrap) return;
-  var SEL = 'dc-search-sel', SIG = 'dc-search-sig';
-
-  function read() {
-    try { return new Set(JSON.parse(localStorage.getItem(SEL) || '[]')); }
-    catch (e) { return new Set(); }
-  }
-  function write(s) {
-    try { localStorage.setItem(SEL, JSON.stringify(Array.from(s))); } catch (e) {}
-  }
-
-  // wipe the selection whenever a filter changed (page / sort / view keep it)
-  try {
-    if (localStorage.getItem(SIG) !== wrap.dataset.filterSig) {
-      localStorage.setItem(SIG, wrap.dataset.filterSig);
-      localStorage.setItem(SEL, '[]');
-    }
-  } catch (e) {}
-
-  var sel = read();
-  var checks = Array.prototype.slice.call(wrap.querySelectorAll('.doc-sel'));
-  var bar = document.getElementById('bulk-bar');
-  var count = document.getElementById('bulk-count');
-  var idsField = document.getElementById('bulk-ids');
-  var form = document.getElementById('bulk-form');
-  var allBox = wrap.querySelector('#sel-all');
-
-  function refresh() {
-    if (count) count.textContent = sel.size;
-    if (bar) bar.classList.toggle('d-none', sel.size === 0);
-    if (idsField) idsField.value = Array.from(sel).join(',');
-    if (allBox) {
-      allBox.checked = checks.length > 0 && checks.every(function (c) { return c.checked; });
-    }
-  }
-
-  checks.forEach(function (c) {
-    c.checked = sel.has(c.value);
-    c.addEventListener('change', function () {
-      if (c.checked) sel.add(c.value); else sel.delete(c.value);
-      write(sel); refresh();
-    });
-  });
-
-  if (allBox) {
-    allBox.addEventListener('change', function () {
-      checks.forEach(function (c) {
-        c.checked = allBox.checked;
-        if (allBox.checked) sel.add(c.value); else sel.delete(c.value);
-      });
-      write(sel); refresh();
-    });
-  }
-
-  var clr = document.getElementById('bulk-clear');
-  if (clr) clr.addEventListener('click', function (e) {
-    e.preventDefault();
-    sel.clear(); write(sel);
-    checks.forEach(function (c) { c.checked = false; });
-    refresh();
-  });
-
-  function fire(action, setId, newName) {
-    if (!sel.size) return;
-    document.getElementById('bulk-action').value = action;
-    document.getElementById('bulk-set-id').value = setId || '';
-    document.getElementById('bulk-new-name').value = newName || '';
-    form.requestSubmit();
-  }
-
-  Array.prototype.slice.call(document.querySelectorAll('[data-bulk]')).forEach(function (b) {
-    b.addEventListener('click', function () { fire(b.dataset.bulk); });
-  });
-  Array.prototype.slice.call(document.querySelectorAll('[data-bulk-set]')).forEach(function (b) {
-    b.addEventListener('click', function (e) {
-      e.preventDefault();
-      var v = b.dataset.bulkSet;
-      if (v === '__new__') {
-        var name = window.prompt('Название нового набора');
-        if (name && name.trim()) fire('set', '__new__', name.trim());
-      } else {
-        fire('set', v);
-      }
-    });
-  });
-
-  refresh();
-})();
-</script>
+{# selection wiring lives in base.html (dcInitSelection) — it re-runs on every
+   htmx:afterSettle, so it never races with the swap. #}

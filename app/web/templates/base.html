@@ -46,6 +46,12 @@
       background:rgba(15,23,42,.62); color:#fff; border:0; }
     .doc-preview .doc-dl:hover { background:rgba(15,23,42,.85); color:#fff; }
 
+    /* selection checkbox pinned to a result card's top-left corner */
+    .doc-sel-corner { position:absolute; top:.5rem; left:.5rem; z-index:3; margin:0;
+      display:flex; padding:.2rem; border-radius:6px;
+      background:rgba(15,23,42,.55); backdrop-filter:blur(2px); cursor:pointer; }
+    .doc-sel-corner .form-check-input { cursor:pointer; }
+
     /* result-card media area */
     .card-media { display:block; height:132px; background-size:cover; background-position:center;
       border-top-left-radius:inherit; border-top-right-radius:inherit;
@@ -170,16 +176,128 @@
   </div>
 </div>
 
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="dc-toasts" style="z-index:1090"></div>
+
 <script>
   (function () {
+    function showToast(msg) {
+      if (!msg || !window.tabler) return;
+      var el = document.createElement('div');
+      el.className = 'toast align-items-center border-0';
+      el.setAttribute('role', 'status');
+      var body = document.createElement('div');
+      body.className = 'toast-body';
+      body.textContent = msg;
+      var wrap = document.createElement('div');
+      wrap.className = 'd-flex';
+      wrap.appendChild(body);
+      var x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'btn-close me-2 m-auto';
+      x.setAttribute('data-bs-dismiss', 'toast');
+      wrap.appendChild(x);
+      el.appendChild(wrap);
+      document.getElementById('dc-toasts').appendChild(el);
+      var t = window.tabler.Toast.getOrCreateInstance(el, { delay: 4000 });
+      t.show();
+      el.addEventListener('hidden.bs.toast', function () { el.remove(); });
+    }
+    document.body.addEventListener('dc-toast', function (e) {
+      var d = e.detail;
+      showToast(typeof d === 'string' ? d : (d && (d.value || d.msg)));
+    });
+
     function initTooltips(root) {
       if (!window.tabler) return;
       (root || document).querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
         window.tabler.Tooltip.getOrCreateInstance(el);
       });
     }
-    document.addEventListener('DOMContentLoaded', function () { initTooltips(); });
-    document.body.addEventListener('htmx:afterSwap', function (e) { initTooltips(e.target); });
+
+    // --- search-results selection + bulk bar --------------------------
+    var SEL = 'dc-search-sel', SIG = 'dc-search-sig';
+    function selRead() {
+      try { return new Set(JSON.parse(localStorage.getItem(SEL) || '[]')); }
+      catch (e) { return new Set(); }
+    }
+    function selWrite(s) {
+      try { localStorage.setItem(SEL, JSON.stringify(Array.from(s))); } catch (e) {}
+    }
+    function dcInitSelection() {
+      var wrap = document.querySelector('#results [data-filter-sig]');
+      if (!wrap) return;
+      try {
+        if (localStorage.getItem(SIG) !== wrap.dataset.filterSig) {
+          localStorage.setItem(SIG, wrap.dataset.filterSig);
+          localStorage.setItem(SEL, '[]');
+        }
+      } catch (e) {}
+
+      var sel = selRead();
+      var checks = Array.prototype.slice.call(wrap.querySelectorAll('.doc-sel'));
+      var bar = document.getElementById('bulk-bar');
+      var count = document.getElementById('bulk-count');
+      var idsField = document.getElementById('bulk-ids');
+      var form = document.getElementById('bulk-form');
+      var allBox = document.getElementById('sel-all');
+
+      function refresh() {
+        if (count) count.textContent = sel.size;
+        if (bar) { bar.classList[sel.size ? 'remove' : 'add']('d-none'); }
+        if (idsField) idsField.value = Array.from(sel).join(',');
+        if (allBox) allBox.checked = checks.length > 0 && checks.every(function (c) { return c.checked; });
+      }
+
+      checks.forEach(function (c) {
+        c.checked = sel.has(c.value);
+        c.onchange = function () {
+          if (c.checked) sel.add(c.value); else sel.delete(c.value);
+          selWrite(sel); refresh();
+        };
+      });
+      if (allBox) allBox.onchange = function () {
+        checks.forEach(function (c) {
+          c.checked = allBox.checked;
+          if (allBox.checked) sel.add(c.value); else sel.delete(c.value);
+        });
+        selWrite(sel); refresh();
+      };
+      var clr = document.getElementById('bulk-clear');
+      if (clr) clr.onclick = function (e) {
+        e.preventDefault();
+        sel.clear(); selWrite(sel);
+        checks.forEach(function (c) { c.checked = false; });
+        refresh();
+      };
+
+      function fire(action, setId, newName) {
+        if (!sel.size || !form) return;
+        document.getElementById('bulk-action').value = action;
+        document.getElementById('bulk-set-id').value = setId || '';
+        document.getElementById('bulk-new-name').value = newName || '';
+        form.requestSubmit();
+      }
+      Array.prototype.slice.call(document.querySelectorAll('[data-bulk]')).forEach(function (b) {
+        b.onclick = function () { fire(b.dataset.bulk); };
+      });
+      Array.prototype.slice.call(document.querySelectorAll('[data-bulk-set]')).forEach(function (b) {
+        b.onclick = function (e) {
+          e.preventDefault();
+          var v = b.dataset.bulkSet;
+          if (v === '__new__') {
+            var name = window.prompt('Название нового набора');
+            if (name && name.trim()) fire('set', '__new__', name.trim());
+          } else { fire('set', v); }
+        };
+      });
+      refresh();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () { initTooltips(); dcInitSelection(); });
+    document.body.addEventListener('htmx:afterSettle', function (e) {
+      initTooltips(e.target);
+      dcInitSelection();
+    });
 
     var toggle = document.getElementById('theme-toggle');
     if (toggle) {

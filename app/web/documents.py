@@ -225,7 +225,7 @@ async def document_tags(
         tag = await tags_svc.get_or_create_tag(db, doc.domain_id, name, actor=user)
         tag_ids.append(tag.id)
     await tags_svc.set_document_tags(db, doc, tag_ids, actor=user)
-    return await _doc_fragment(request, db, user, document_id)
+    return await _doc_fragment(request, db, user, document_id, toast="Теги сохранены")
 
 
 @router.post("/documents/{document_id}/ocr")
@@ -243,7 +243,7 @@ async def document_ocr(
     doc.ocr_status = OcrStatus.pending
     await db.flush()
     await dispatch(None, "ocr_document", ocr_document, document_id=doc.id)
-    return await _doc_fragment(request, db, user, document_id)
+    return await _doc_fragment(request, db, user, document_id, toast="Отправлено на распознавание")
 
 
 @router.post("/documents/{document_id}/index")
@@ -257,7 +257,7 @@ async def document_index(
     doc, view = await load_document(db, user, document_id)
     require_cap(view, Cap.process)
     await index_document(db, doc)
-    return await _doc_fragment(request, db, user, document_id)
+    return await _doc_fragment(request, db, user, document_id, toast="Проиндексировано")
 
 
 async def _visible_set(db, user, doc, set_id: uuid.UUID) -> DocumentSet:
@@ -285,12 +285,13 @@ async def document_add_to_set(
     require_cap(view, Cap.view)
     if set_id == "__new__" or (not set_id and new_name.strip()):
         require_cap(view, Cap.write)
-        await docsets_svc.create_set(
+        s = await docsets_svc.create_set(
             db, view.domain, user,
             name=new_name.strip() or "Новый набор",
             description=None, visibility=SetVisibility.private,
             document_ids=[doc.id],
         )
+        msg = f"Создан набор «{s.name}»"
     else:
         try:
             sid = uuid.UUID(set_id)
@@ -298,7 +299,8 @@ async def document_add_to_set(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "нужно выбрать набор") from err
         s = await _visible_set(db, user, doc, sid)
         await docsets_svc.add_items(db, s, [doc.id], actor=user)
-    return await _doc_fragment(request, db, user, document_id)
+        msg = f"Добавлено в «{s.name}»"
+    return await _doc_fragment(request, db, user, document_id, toast=msg)
 
 
 @router.post("/documents/{document_id}/remove-from-set")
@@ -314,7 +316,7 @@ async def document_remove_from_set(
     require_cap(view, Cap.view)
     s = await _visible_set(db, user, doc, set_id)
     await docsets_svc.remove_item(db, s, doc.id)
-    return await _doc_fragment(request, db, user, document_id)
+    return await _doc_fragment(request, db, user, document_id, toast=f"Убрано из «{s.name}»")
 
 
 @router.post("/documents/{document_id}/delete")
@@ -378,11 +380,13 @@ async def document_thumb(
     return FileResponse(path, media_type="image/webp")
 
 
-async def _doc_fragment(request: Request, db, user, document_id: uuid.UUID) -> Response:
+async def _doc_fragment(
+    request: Request, db, user, document_id: uuid.UUID, *, toast: str | None = None
+) -> Response:
     # Persist this request's changes, then re-read so an inline job's commit
     # (a separate session, e.g. OCR) is reflected and all columns are loaded
     # before the synchronous template render.
     await db.commit()
     doc, view = await load_document(db, user, document_id)
     await db.refresh(doc)
-    return render(request, "_doc_body.html", await _doc_ctx(db, user, doc, view))
+    return render(request, "_doc_body.html", await _doc_ctx(db, user, doc, view), toast=toast)
