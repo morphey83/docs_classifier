@@ -2,12 +2,12 @@
 {% set d = view.domain %}
 {% block title %}{{ doc.title }} — DocsClassifier{% endblock %}
 {% block content %}
-<nav aria-label="breadcrumb"><ul>
-  <li><a href="/">Домены</a></li>
-  <li><a href="/domains/{{ d.slug }}">{{ d.name }}</a></li>
-  <li><a href="/domains/{{ d.slug }}/search">Поиск</a></li>
-  <li>{{ doc.title }}</li>
-</ul></nav>
+<ol class="breadcrumb" aria-label="breadcrumbs">
+  <li class="breadcrumb-item"><a href="/">Домены</a></li>
+  <li class="breadcrumb-item"><a href="/domains/{{ d.slug }}">{{ d.name }}</a></li>
+  <li class="breadcrumb-item"><a href="/search?domain_id={{ d.id }}">Поиск</a></li>
+  <li class="breadcrumb-item active">{{ doc.title }}</li>
+</ol>
 
 <div id="doc">
   {% include "_doc_body.html" %}

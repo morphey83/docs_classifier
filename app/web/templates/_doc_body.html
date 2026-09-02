@@ -2,103 +2,152 @@
 {% set can_process = view.has('process') %}
 {% set can_download = view.has('download') %}
 
-<hgroup>
-  <h1>{{ doc.title }}</h1>
-  <p class="muted">{{ doc.original_name }} · {{ doc.mime }} · {{ doc.size_bytes|humansize }}</p>
-</hgroup>
+<div class="mb-2">
+  <h2 class="m-0">{{ doc.title }}</h2>
+  <div class="text-secondary">{{ doc.original_name }} · {{ doc.mime }} · {{ doc.size_bytes|humansize }}</div>
+</div>
 
 {% if doc.mime.startswith('image/') %}
 <img src="/documents/{{ doc.id }}/thumb" alt="превью"
-     style="max-width:100%;max-height:45vh;border-radius:.4rem;display:block;margin:.3rem 0 1rem">
+     style="max-width:100%;max-height:45vh;border-radius:6px;display:block;margin:.5rem 0 1rem;
+            background:var(--tblr-bg-surface-secondary)">
 {% endif %}
 
 {% if doc.deleted_at %}
-<p class="flash err">Документ в корзине (удалён {{ doc.deleted_at|datetimefmt }}).
+<div class="alert alert-warning d-flex align-items-center">
+  <div class="flex-fill">Документ в корзине (удалён {{ doc.deleted_at|datetimefmt }}).</div>
   {% if view.has('delete') %}
-  <form method="post" action="/documents/{{ doc.id }}/restore" class="inline-form">
+  <form method="post" action="/documents/{{ doc.id }}/restore">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <button class="outline">Восстановить</button>
+    <button class="btn btn-sm btn-outline-primary">Восстановить</button>
   </form>
   {% endif %}
-</p>
+</div>
 {% endif %}
 
-<p>
+<div class="btn-list mb-3">
   {% if can_download %}
-  <a href="/documents/{{ doc.id }}/download" role="button" class="outline">Скачать оригинал</a>
+  <a href="/documents/{{ doc.id }}/download" class="btn btn-outline-primary">Скачать оригинал</a>
   {% endif %}
   {% if sets and view.has('view') %}
-  <form method="post" action="/documents/{{ doc.id }}/add-to-set" class="inline-form">
+  <form method="post" action="/documents/{{ doc.id }}/add-to-set" class="d-flex gap-2">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <select name="set_id" required>
+    <select class="form-select form-select-sm w-auto" name="set_id" required>
       <option value="" disabled selected>+ в набор…</option>
       {% for s in sets %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
     </select>
-    <button class="outline secondary">Добавить</button>
+    <button class="btn btn-sm btn-outline-secondary">Добавить</button>
   </form>
   {% endif %}
-</p>
+</div>
 
-<h4>Теги</h4>
-<p>
-  {% for name in tags %}<span class="tag">{{ name }}</span>{% else %}<span class="muted">нет тегов</span>{% endfor %}
-</p>
-{% if can_write %}
-<form hx-post="/documents/{{ doc.id }}/tags" hx-target="#doc" class="grid">
-  <input name="tags" value="{{ tags|join(', ') }}" placeholder="через запятую; пустое поле снимет все">
-  <button type="submit">Сохранить теги</button>
-</form>
-{% endif %}
+<div class="row row-cards">
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <h3 class="card-title">Теги</h3>
+        <p>
+          {% for name in tags %}<span class="badge bg-secondary-lt me-1">{{ name }}</span>
+          {% else %}<span class="text-secondary">нет тегов</span>{% endfor %}
+        </p>
+        {% if can_write %}
+        <form hx-post="/documents/{{ doc.id }}/tags" hx-target="#doc" class="d-flex gap-2">
+          <input class="form-control" name="tags" value="{{ tags|join(', ') }}"
+                 placeholder="через запятую; пустое поле снимет все">
+          <button type="submit" class="btn btn-primary flex-none">Сохранить</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 
-<h4>Обработка</h4>
-<table class="meta">
-  <tr><td>текст</td><td>{{ doc.text_source }}</td></tr>
-  <tr><td>индексация</td><td>{{ doc.index_status }}{% if doc.indexed_at %} · {{ doc.indexed_at|datetimefmt }}{% endif %}</td></tr>
-  <tr><td>OCR</td><td>{{ doc.ocr_status }}{% if doc.ocr_at %} · {{ doc.ocr_at|datetimefmt }}{% endif %}</td></tr>
-</table>
-{% if can_process %}
-<p>
-  <button hx-post="/documents/{{ doc.id }}/index" hx-target="#doc" class="outline secondary">
-    {{ 'Переиндексировать' if doc.indexed_at else 'Проиндексировать' }}
-  </button>
-  {% if ocr_supported and not doc.ocr_at %}
-  <button hx-post="/documents/{{ doc.id }}/ocr" hx-target="#doc" class="outline secondary">Распознать (OCR)</button>
-  {% elif not ocr_supported %}
-  <span class="muted">OCR недоступен для этого типа</span>
-  {% endif %}
-</p>
-{% endif %}
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <h3 class="card-title">Обработка</h3>
+        <div class="datagrid">
+          <div class="datagrid-item"><div class="datagrid-title">текст</div>
+            <div class="datagrid-content">{{ doc.text_source }}</div></div>
+          <div class="datagrid-item"><div class="datagrid-title">индексация</div>
+            <div class="datagrid-content">{{ doc.index_status }}{% if doc.indexed_at %} · {{ doc.indexed_at|datetimefmt }}{% endif %}</div></div>
+          <div class="datagrid-item"><div class="datagrid-title">OCR</div>
+            <div class="datagrid-content">{{ doc.ocr_status }}{% if doc.ocr_at %} · {{ doc.ocr_at|datetimefmt }}{% endif %}</div></div>
+        </div>
+        {% if can_process %}
+        <div class="btn-list mt-3">
+          <button hx-post="/documents/{{ doc.id }}/index" hx-target="#doc" class="btn btn-outline-secondary">
+            {{ 'Переиндексировать' if doc.indexed_at else 'Проиндексировать' }}
+          </button>
+          {% if ocr_supported and not doc.ocr_at %}
+          <button hx-post="/documents/{{ doc.id }}/ocr" hx-target="#doc" class="btn btn-outline-secondary">Распознать (OCR)</button>
+          {% elif not ocr_supported %}
+          <span class="text-secondary align-self-center">OCR недоступен для этого типа</span>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 
-<h4>Свойства</h4>
-{% if can_write %}
-<form method="post" action="/documents/{{ doc.id }}">
-  <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <label>Название <input name="title" value="{{ doc.title }}" required maxlength="500"></label>
-  <label>Дата документа
-    <input name="doc_date" type="date" value="{{ doc.doc_date.date().isoformat() if doc.doc_date else '' }}">
-  </label>
-  <label>Заметки <textarea name="notes" rows="3">{{ doc.notes or '' }}</textarea></label>
-  <button type="submit">Сохранить</button>
-</form>
-{% else %}
-<table class="meta">
-  <tr><td>дата документа</td><td>{{ doc.doc_date|shortdate }}</td></tr>
-  <tr><td>заметки</td><td>{{ doc.notes or '—' }}</td></tr>
-</table>
-{% endif %}
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <h3 class="card-title">Свойства</h3>
+        {% if can_write %}
+        <form method="post" action="/documents/{{ doc.id }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <div class="mb-3">
+            <label class="form-label">Название</label>
+            <input class="form-control" name="title" value="{{ doc.title }}" required maxlength="500">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Дата документа</label>
+            <input class="form-control" name="doc_date" type="date"
+                   value="{{ doc.doc_date.date().isoformat() if doc.doc_date else '' }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Заметки</label>
+            <textarea class="form-control" name="notes" rows="3">{{ doc.notes or '' }}</textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">Сохранить</button>
+        </form>
+        {% else %}
+        <div class="datagrid">
+          <div class="datagrid-item"><div class="datagrid-title">дата документа</div>
+            <div class="datagrid-content">{{ doc.doc_date|shortdate }}</div></div>
+          <div class="datagrid-item"><div class="datagrid-title">заметки</div>
+            <div class="datagrid-content">{{ doc.notes or '—' }}</div></div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 
-<table class="meta">
-  <tr><td>статус</td><td>{{ doc.status }}</td></tr>
-  <tr><td>загружен</td><td>{{ doc.uploaded_at|datetimefmt }}</td></tr>
-  <tr><td>версия</td><td>{{ doc.version }}</td></tr>
-  <tr><td>sha256</td><td><small>{{ doc.sha256 }}</small></td></tr>
-</table>
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <h3 class="card-title">Метаданные</h3>
+        <div class="datagrid">
+          <div class="datagrid-item"><div class="datagrid-title">статус</div>
+            <div class="datagrid-content">{{ doc.status }}</div></div>
+          <div class="datagrid-item"><div class="datagrid-title">загружен</div>
+            <div class="datagrid-content">{{ doc.uploaded_at|datetimefmt }}</div></div>
+          <div class="datagrid-item"><div class="datagrid-title">версия</div>
+            <div class="datagrid-content">{{ doc.version }}</div></div>
+          <div class="datagrid-item"><div class="datagrid-title">sha256</div>
+            <div class="datagrid-content"><span class="text-secondary">{{ doc.sha256 }}</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 {% if view.has('delete') and not doc.deleted_at %}
-<hr>
-<form method="post" action="/documents/{{ doc.id }}/delete"
-      onsubmit="return confirm('Переместить документ в корзину?')">
-  <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <button class="outline contrast">Удалить в корзину</button>
-</form>
+<div class="mt-3">
+  <form method="post" action="/documents/{{ doc.id }}/delete"
+        onsubmit="return confirm('Переместить документ в корзину?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button class="btn btn-outline-danger">Удалить в корзину</button>
+  </form>
+</div>
 {% endif %}

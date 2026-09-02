@@ -5,30 +5,37 @@
 {% set active = 'trash' %}
 {% include "_domain_nav.html" %}
 
-<hgroup>
-  <h1>Корзина</h1>
-  <p class="muted">{{ total }} документов · автоочистка по расписанию домена</p>
-</hgroup>
-
-{% if is_owner and docs %}
-<form method="post" action="/domains/{{ d.slug }}/trash/purge" class="inline-form"
-      onsubmit="return confirm('Очистить корзину полностью? Это необратимо.')">
-  <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <button class="contrast outline">Очистить корзину</button>
-</form>
-{% endif %}
-
-{% for doc in docs %}
-<article class="result">
-  <a href="/documents/{{ doc.id }}">{{ doc.title }}</a>
-  <span class="muted">· удалён {{ doc.deleted_at|datetimefmt }} · {{ doc.size_bytes|humansize }}</span>
-  {% for name in tag_map.get(doc.id, [])|sort %}<span class="tag">{{ name }}</span>{% endfor %}
-  <form method="post" action="/documents/{{ doc.id }}/restore" class="inline-form">
+<div class="d-flex align-items-baseline justify-content-between mb-3">
+  <div>
+    <h2 class="m-0">Корзина</h2>
+    <span class="text-secondary">{{ total }} документов · автоочистка по расписанию домена</span>
+  </div>
+  {% if is_owner and docs %}
+  <form method="post" action="/domains/{{ d.slug }}/trash/purge"
+        onsubmit="return confirm('Очистить корзину полностью? Это необратимо.')">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <button class="outline" style="padding:.1rem .6rem">восстановить</button>
+    <button class="btn btn-outline-danger">Очистить корзину</button>
   </form>
-</article>
-{% else %}
-<p class="muted">Корзина пуста.</p>
-{% endfor %}
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="list-group list-group-flush">
+    {% for doc in docs %}
+    <div class="list-group-item d-flex align-items-center">
+      <div class="flex-fill">
+        <a href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a>
+        <span class="text-secondary">· удалён {{ doc.deleted_at|datetimefmt }} · {{ doc.size_bytes|humansize }}</span>
+        {% for name in tag_map.get(doc.id, [])|sort %}<span class="badge bg-secondary-lt ms-1">{{ name }}</span>{% endfor %}
+      </div>
+      <form method="post" action="/documents/{{ doc.id }}/restore">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <button class="btn btn-sm btn-outline-primary">восстановить</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="list-group-item text-secondary">Корзина пуста.</div>
+    {% endfor %}
+  </div>
+</div>
 {% endblock %}

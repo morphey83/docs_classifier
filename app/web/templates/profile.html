@@ -1,48 +1,71 @@
 {% extends "base.html" %}
 {% block title %}Профиль — DocsClassifier{% endblock %}
+{% block page_title %}{{ user.username }}{% endblock %}
 {% block content %}
-<nav aria-label="breadcrumb"><ul><li><a href="/">Домены</a></li><li>Профиль</li></ul></nav>
+<div class="row row-cards">
+  <div class="col-12 col-lg-4">
+    <div class="card">
+      <div class="card-body">
+        <h3 class="card-title">Аккаунт</h3>
+        <dl class="row mb-0">
+          <dt class="col-4 text-secondary">email</dt>
+          <dd class="col-8">{{ user.email }}</dd>
+          <dt class="col-4 text-secondary">создан</dt>
+          <dd class="col-8">{{ user.created_at|shortdate }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
 
-<h1>{{ user.username }}</h1>
-<table class="meta">
-  <tr><td>email</td><td>{{ user.email }}</td></tr>
-  <tr><td>аккаунт создан</td><td>{{ user.created_at|shortdate }}</td></tr>
-</table>
+  <div class="col-12 col-lg-4">
+    <div class="card">
+      <div class="card-body">
+        <h3 class="card-title">Telegram</h3>
+        {% if user.tg_id %}
+          <div class="alert alert-success">Привязан (id {{ user.tg_id }}).</div>
+          <form method="post" action="/profile/tg-unlink">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <button class="btn btn-outline-danger">Отвязать</button>
+          </form>
+        {% elif tg_token %}
+          <p>Откройте бота и подтвердите привязку:</p>
+          {% if tg_deep_link %}
+          <p><a href="{{ tg_deep_link }}" class="btn btn-primary">Открыть @-бота</a></p>
+          {% endif %}
+          <p class="text-secondary mb-1">…или отправьте боту команду:</p>
+          <p><code>/start {{ tg_token }}</code></p>
+          <p class="text-secondary">Ссылка действует 15 минут.</p>
+        {% else %}
+          <p class="text-secondary">Бот даёт мобильный доступ: загрузка, обработка инбокса, поиск, наборы.</p>
+          <form method="post" action="/profile/tg-link">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <button class="btn btn-primary">Подключить Telegram</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 
-<article>
-  <h3>Telegram</h3>
-  {% if user.tg_id %}
-    <p class="flash ok">Привязан (id {{ user.tg_id }}).</p>
-    <form method="post" action="/profile/tg-unlink" class="inline-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf }}">
-      <button class="outline contrast">Отвязать</button>
-    </form>
-  {% elif tg_token %}
-    <p>Откройте бота и подтвердите привязку:</p>
-    {% if tg_deep_link %}
-    <p><a href="{{ tg_deep_link }}" role="button">Открыть @-бота</a></p>
-    {% endif %}
-    <p class="muted">…или отправьте боту команду:<br>
-      <code>/start {{ tg_token }}</code></p>
-    <p class="muted">Ссылка действует 15 минут.</p>
-  {% else %}
-    <p class="muted">Бот даёт мобильный доступ: загрузка, обработка инбокса, поиск, наборы.</p>
-    <form method="post" action="/profile/tg-link" class="inline-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf }}">
-      <button>Подключить Telegram</button>
-    </form>
-  {% endif %}
-</article>
-
-<article>
-  <h3>Смена пароля</h3>
-  {% if pw_ok %}<p class="flash ok">Пароль изменён.</p>{% endif %}
-  {% if pw_error %}<p class="flash err">Текущий пароль неверен или новый короче 8 символов.</p>{% endif %}
-  <form method="post" action="/profile/password">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <label>Текущий пароль <input name="current" type="password" required></label>
-    <label>Новый пароль <input name="new_password" type="password" required minlength="8"></label>
-    <button type="submit">Сменить</button>
-  </form>
-</article>
+  <div class="col-12 col-lg-4">
+    <div class="card">
+      <div class="card-body">
+        <h3 class="card-title">Смена пароля</h3>
+        {% if pw_ok %}<div class="alert alert-success">Пароль изменён.</div>{% endif %}
+        {% if pw_error %}<div class="alert alert-danger">Текущий пароль неверен или новый короче 8 символов.</div>{% endif %}
+        <form method="post" action="/profile/password">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <div class="mb-3">
+            <label class="form-label">Текущий пароль</label>
+            <input class="form-control" name="current" type="password" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Новый пароль</label>
+            <input class="form-control" name="new_password" type="password" required minlength="8">
+          </div>
+          <button type="submit" class="btn btn-primary">Сменить</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

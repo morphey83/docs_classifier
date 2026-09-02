@@ -5,28 +5,42 @@
 {% set active = 'overview' %}
 {% include "_domain_nav.html" %}
 
-<hgroup>
-  <h1>{{ d.name }}</h1>
-  <p class="muted">ваша роль: {{ view.role }}</p>
-</hgroup>
-
-<div class="grid">
-  <article>
-    <h4>{{ doc_total }}</h4>
-    <p class="muted">документов</p>
-    <a href="/search?domain_id={{ d.id }}" role="button" class="outline">Найти</a>
-  </article>
-  <article>
-    <h4>{{ inbox }}</h4>
-    <p class="muted">в очереди на сортировку</p>
-    <a href="/inbox" role="button" class="outline secondary">К очереди</a>
-  </article>
-  <article>
-    <h4>{{ tag_count }}</h4>
-    <p class="muted">тегов</p>
-    <a href="/domains/{{ d.slug }}/tags" role="button" class="outline secondary">Словарь</a>
-  </article>
+<div class="d-flex align-items-baseline justify-content-between mb-3">
+  <h2 class="m-0">{{ d.name }}</h2>
+  <span class="text-secondary">ваша роль: {{ view.role }}</span>
 </div>
 
-<p><a href="/upload?domain={{ d.slug }}" role="button">Загрузить в этот домен</a></p>
+<div class="row row-cards">
+  <div class="col-sm-6 col-lg-4">
+    <div class="card card-sm">
+      <div class="card-body">
+        <div class="h1 m-0">{{ doc_total }}</div>
+        <div class="text-secondary mb-3">документов</div>
+        <a href="/search?domain_id={{ d.id }}" class="btn btn-outline-primary w-100">Найти</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-4">
+    <div class="card card-sm">
+      <div class="card-body">
+        <div class="h1 m-0">{{ inbox }}</div>
+        <div class="text-secondary mb-3">в очереди на сортировку</div>
+        <a href="/inbox" class="btn btn-outline-secondary w-100">К очереди</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-4">
+    <div class="card card-sm">
+      <div class="card-body">
+        <div class="h1 m-0">{{ tag_count }}</div>
+        <div class="text-secondary mb-3">тегов</div>
+        <a href="/domains/{{ d.slug }}/tags" class="btn btn-outline-secondary w-100">Словарь</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-3">
+  <a href="/upload?domain={{ d.slug }}" class="btn btn-primary">Загрузить в этот домен</a>
+</div>
 {% endblock %}

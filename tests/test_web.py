@@ -76,13 +76,13 @@ async def test_dashboard_table_has_counts_and_actions(alice, web_domain):
 
 async def test_profile_menu_present_when_authed(alice):
     home = (await alice.get("/")).text
-    assert "icons.svg#user" in home and "профиль" in home
+    assert 'href="/profile"' in home and "Профиль" in home
     assert 'action="/logout"' in home
 
 
-async def test_profile_icon_links_to_login_when_anonymous(client):
+async def test_login_form_present_when_anonymous(client):
     r = await client.get("/login")
-    assert 'href="/login"' in r.text and "icons.svg#user" in r.text
+    assert 'action="/login"' in r.text and 'name="password"' in r.text
 
 
 async def test_foreign_domain_is_404(alice, bob, web_domain):

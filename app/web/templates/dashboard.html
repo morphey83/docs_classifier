@@ -1,73 +1,83 @@
 {% extends "base.html" %}
 {% import "_icons.html" as ic %}
 {% block title %}Домены{% endblock %}
+{% block page_title %}Домены{% endblock %}
 {% block content %}
-<hgroup>
-  <h1>Домены</h1>
-  <p class="muted">Рабочие пространства с документами, тегами и правами доступа.</p>
-</hgroup>
-
-<article>
-  <h3>Новый домен</h3>
-  <form method="post" action="/domains" class="grid">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <input name="name" placeholder="Название домена" required maxlength="120">
-    <button type="submit">Создать</button>
-  </form>
-</article>
-
-{% if domains %}
-<figure style="overflow-x:auto">
-<table>
-  <thead>
-    <tr>
-      <th>Название</th>
-      <th title="пользователей с доступом">{{ ic.icon('users') }}</th>
-      <th title="в очереди на сортировку / всего документов">в очереди / всего</th>
-      <th>Действия</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for d in domains %}
-    <tr>
-      <td>
-        <a href="/domains/{{ d.domain.slug }}"><strong>{{ d.domain.name }}</strong></a>
-        <br><span class="muted">роль: {{ d.role }}</span>
-      </td>
-      <td>{{ d.members }}</td>
-      <td>{{ d.queue }} / {{ d.total }}</td>
-      <td>
-        <div class="icon-actions">
-          {% if 'manage' in d.caps %}
-          <a href="/domains/{{ d.domain.slug }}/settings" title="Настройки домена">{{ ic.icon('settings') }}</a>
-          {% endif %}
-          <a href="/search?domain_id={{ d.domain.id }}" title="Поиск в этом домене">{{ ic.icon('search') }}</a>
-          {% if 'upload' in d.caps %}
-          <a href="/upload?domain={{ d.domain.slug }}" title="Загрузить в этот домен">{{ ic.icon('upload') }}</a>
-          {% endif %}
-          {% if 'own' in d.caps %}
-          <form method="post" action="/domains/{{ d.domain.slug }}/delete" class="inline-form"
-                onsubmit="return confirm('Удалить домен «{{ d.domain.name }}» со всеми документами? Это необратимо.')">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}">
-            <button type="submit" class="danger" title="Удалить домен">{{ ic.icon('trash') }}</button>
-          </form>
-          {% endif %}
+<div class="row row-cards">
+  <div class="col-12 col-lg-4">
+    <form method="post" action="/domains" class="card">
+      <div class="card-body">
+        <h3 class="card-title">Новый домен</h3>
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <div class="mb-3">
+          <input class="form-control" name="name" placeholder="Название домена" required maxlength="120">
         </div>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
-</figure>
+        <button type="submit" class="btn btn-primary w-100">Создать</button>
+      </div>
+    </form>
+  </div>
 
-{% if pages > 1 %}
-<nav class="pager">
-  {% if page > 1 %}<a role="button" class="outline" href="/?page={{ page - 1 }}">← назад</a>{% endif %}
-  <span class="muted">стр. {{ page }} / {{ pages }} · всего {{ total }}</span>
-  {% if page < pages %}<a role="button" class="outline" href="/?page={{ page + 1 }}">вперёд →</a>{% endif %}
-</nav>
-{% endif %}
-{% else %}
-<p class="muted">У вас пока нет доменов.</p>
-{% endif %}
+  <div class="col-12 col-lg-8">
+    {% if domains %}
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+          <thead>
+            <tr>
+              <th>Название</th>
+              <th class="text-center" title="пользователей с доступом">{{ ic.icon('users') }}</th>
+              <th title="в очереди на сортировку / всего документов">в очереди / всего</th>
+              <th class="w-1">Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for d in domains %}
+            <tr>
+              <td>
+                <a href="/domains/{{ d.domain.slug }}" class="text-reset fw-bold">{{ d.domain.name }}</a>
+                <div class="text-secondary">роль: {{ d.role }}</div>
+              </td>
+              <td class="text-center text-secondary">{{ d.members }}</td>
+              <td class="text-secondary">{{ d.queue }} / {{ d.total }}</td>
+              <td>
+                <div class="btn-list flex-nowrap">
+                  {% if 'manage' in d.caps %}
+                  <a href="/domains/{{ d.domain.slug }}/settings" class="btn btn-icon btn-ghost-secondary"
+                     title="Настройки домена">{{ ic.icon('settings') }}</a>
+                  {% endif %}
+                  <a href="/search?domain_id={{ d.domain.id }}" class="btn btn-icon btn-ghost-secondary"
+                     title="Поиск в этом домене">{{ ic.icon('search') }}</a>
+                  {% if 'upload' in d.caps %}
+                  <a href="/upload?domain={{ d.domain.slug }}" class="btn btn-icon btn-ghost-secondary"
+                     title="Загрузить в этот домен">{{ ic.icon('upload') }}</a>
+                  {% endif %}
+                  {% if 'own' in d.caps %}
+                  <form method="post" action="/domains/{{ d.domain.slug }}/delete"
+                        onsubmit="return confirm('Удалить домен «{{ d.domain.name }}» со всеми документами? Это необратимо.')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+                    <button type="submit" class="btn btn-icon btn-ghost-danger" title="Удалить домен">{{ ic.icon('trash') }}</button>
+                  </form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if pages > 1 %}
+      <div class="card-footer d-flex align-items-center">
+        <span class="text-secondary">стр. {{ page }} / {{ pages }} · всего {{ total }}</span>
+        <ul class="pagination m-0 ms-auto">
+          <li class="page-item {{ 'disabled' if page <= 1 }}"><a class="page-link" href="/?page={{ page - 1 }}">← назад</a></li>
+          <li class="page-item {{ 'disabled' if page >= pages }}"><a class="page-link" href="/?page={{ page + 1 }}">вперёд →</a></li>
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="card"><div class="card-body text-secondary">У вас пока нет доменов.</div></div>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

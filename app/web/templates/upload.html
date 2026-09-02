@@ -1,75 +1,95 @@
 {% extends "base.html" %}
 {% block title %}Загрузка{% endblock %}
+{% block page_title %}Загрузить документ или архив{% endblock %}
 {% block content %}
-<h1>Загрузить документ или архив</h1>
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-7">
 
-{% if error %}<p class="flash err">{{ error }}</p>{% endif %}
+    {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
 
-{% if created %}
-<p class="flash ok">
-  Загружено: <a href="/documents/{{ created.document.id }}">{{ created.document.title }}</a>
-  ({{ created.outcome }})
-</p>
-{% endif %}
+    {% if created %}
+    <div class="alert alert-success">
+      Загружено:
+      <a href="/documents/{{ created.document.id }}">{{ created.document.title }}</a>
+      ({{ created.outcome }})
+    </div>
+    {% endif %}
 
-{% if conflict %}
-<article>
-  <p class="flash err">Документ с таким именем уже есть, но с другим содержимым.</p>
-  <form method="post" action="/upload" enctype="multipart/form-data">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <input type="hidden" name="domain" value="{{ picked }}">
-    <p class="muted">Выберите файл ещё раз и решите, что делать:</p>
-    <input type="file" name="file" required>
-    <fieldset>
-      <label><input type="radio" name="on_conflict" value="replace" checked> заменить (старая версия сохранится)</label>
-      <label><input type="radio" name="on_conflict" value="new"> загрузить как отдельный документ</label>
-    </fieldset>
-    <button type="submit">Продолжить</button>
-  </form>
-</article>
-{% endif %}
+    {% if conflict %}
+    <div class="card mb-3 border-danger">
+      <div class="card-body">
+        <div class="alert alert-danger">Документ с таким именем уже есть, но с другим содержимым.</div>
+        <form method="post" action="/upload" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <input type="hidden" name="domain" value="{{ picked }}">
+          <div class="mb-3">
+            <label class="form-label">Выберите файл ещё раз</label>
+            <input type="file" class="form-control" name="file" required>
+          </div>
+          <label class="form-check">
+            <input class="form-check-input" type="radio" name="on_conflict" value="replace" checked>
+            <span class="form-check-label">заменить (старая версия сохранится)</span>
+          </label>
+          <label class="form-check mb-3">
+            <input class="form-check-input" type="radio" name="on_conflict" value="new">
+            <span class="form-check-label">загрузить как отдельный документ</span>
+          </label>
+          <button type="submit" class="btn btn-primary">Продолжить</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
 
-{% if batch %}
-<article>
-  <p class="flash {{ 'ok' if batch.status == 'done' else 'err' }}">
-    Архив: статус «{{ batch.status }}», добавлено {{ batch.item_count }}, конфликтов {{ batch.conflict_count }}.
-    {% if batch.error %}<br>Ошибка: {{ batch.error }}{% endif %}
-  </p>
-  {% if items %}
-  <table>
-    <thead><tr><th>файл</th><th>результат</th><th></th></tr></thead>
-    <tbody>
-    {% for i in items %}
-      <tr>
-        <td>{{ i.entry_name }}</td>
-        <td>{{ i.outcome }}{% if i.note %} — <span class="muted">{{ i.note }}</span>{% endif %}</td>
-        <td>{% if i.document_id %}<a href="/documents/{{ i.document_id }}">открыть</a>{% endif %}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-</article>
-{% endif %}
+    {% if batch %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="alert alert-{{ 'success' if batch.status == 'done' else 'warning' }} mb-0">
+          Архив: статус «{{ batch.status }}», добавлено {{ batch.item_count }}, конфликтов {{ batch.conflict_count }}.
+          {% if batch.error %}<br>Ошибка: {{ batch.error }}{% endif %}
+        </div>
+      </div>
+      {% if items %}
+      <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+          <thead><tr><th>файл</th><th>результат</th><th class="w-1"></th></tr></thead>
+          <tbody>
+          {% for i in items %}
+            <tr>
+              <td>{{ i.entry_name }}</td>
+              <td>{{ i.outcome }}{% if i.note %} — <span class="text-secondary">{{ i.note }}</span>{% endif %}</td>
+              <td>{% if i.document_id %}<a href="/documents/{{ i.document_id }}">открыть</a>{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
 
-{% if domains %}
-<article>
-  <form method="post" action="/upload" enctype="multipart/form-data">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <label>Домен
-      <select name="domain" required>
-        {% for d in domains %}
-        <option value="{{ d.slug }}" {{ 'selected' if d.slug == picked }}>{{ d.name }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Файл (документ или zip/7z/rar/tar)
-      <input type="file" name="file" required>
-    </label>
-    <button type="submit">Загрузить</button>
-  </form>
-</article>
-{% else %}
-<p class="muted">Нет доменов, в которые можно загружать. Создайте домен или попросите доступ.</p>
-{% endif %}
+    {% if domains %}
+    <form method="post" action="/upload" enctype="multipart/form-data" class="card">
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">Домен</label>
+          <select class="form-select" name="domain" required>
+            {% for d in domains %}
+            <option value="{{ d.slug }}" {{ 'selected' if d.slug == picked }}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Файл <span class="form-hint d-inline">документ или zip / 7z / rar / tar</span></label>
+          <input type="file" class="form-control" name="file" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Загрузить</button>
+      </div>
+    </form>
+    {% else %}
+    <div class="card"><div class="card-body text-secondary">
+      Нет доменов, в которые можно загружать. Создайте домен или попросите доступ.
+    </div></div>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

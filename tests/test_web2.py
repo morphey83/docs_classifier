@@ -79,7 +79,7 @@ async def test_inbox_table_and_modal_tagging(alice, web_domain):
 
     page = await alice.get("/inbox")
     assert "в очереди: 2" in page.text
-    assert "Разметить" in page.text and "<dialog" in page.text
+    assert "Разметить" in page.text and 'id="tagdlg"' in page.text
 
     card = await alice.get("/inbox/card", headers={"HX-Request": "true"})
     doc_id = re.search(r'data-doc="([0-9a-f-]{36})"', card.text).group(1)

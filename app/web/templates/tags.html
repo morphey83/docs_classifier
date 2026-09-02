@@ -6,57 +6,73 @@
 {% set active = 'tags' %}
 {% include "_domain_nav.html" %}
 
-<h1>Словарь тегов</h1>
+<h2 class="mb-3">Словарь тегов</h2>
 
-<table>
-  <thead><tr><th>тег</th><th>документов</th>{% if can_manage %}<th></th>{% endif %}</tr></thead>
-  <tbody>
-  {% for tag, count in tags %}
-  <tr>
-    <td>
-      {% if can_manage %}
-      <form method="post" action="/domains/{{ d.slug }}/tags/{{ tag.id }}" class="inline-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf }}">
-        <input name="name" value="{{ tag.name }}" style="width:12rem;display:inline-block">
-        <input name="color" value="{{ tag.color or '' }}" placeholder="#цвет" style="width:6rem;display:inline-block">
-        <button class="outline">✓</button>
-      </form>
-      {% else %}<span class="tag">{{ tag.name }}</span>{% endif %}
-    </td>
-    <td>{{ count }}</td>
-    {% if can_manage %}
-    <td>
-      <form method="post" action="/domains/{{ d.slug }}/tags/{{ tag.id }}/merge" class="inline-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf }}">
-        <select name="into" required>
-          <option value="" disabled selected>слить в…</option>
-          {% for other, _c in tags %}{% if other.id != tag.id %}
-          <option value="{{ other.id }}">{{ other.name }}</option>
-          {% endif %}{% endfor %}
-        </select>
-        <button class="outline">слить</button>
-      </form>
-      <form method="post" action="/domains/{{ d.slug }}/tags/{{ tag.id }}/delete" class="inline-form"
-            onsubmit="return confirm('Удалить тег «{{ tag.name }}»? Он снимется со всех документов.')">
-        <input type="hidden" name="csrf_token" value="{{ csrf }}">
-        <button class="outline contrast">✕</button>
-      </form>
-    </td>
-    {% endif %}
-  </tr>
-  {% else %}
-  <tr><td colspan="3" class="muted">Тегов пока нет.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="card mb-3">
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead><tr><th>тег</th><th class="w-1">документов</th>{% if can_manage %}<th></th>{% endif %}</tr></thead>
+      <tbody>
+      {% for tag, count in tags %}
+      <tr>
+        <td>
+          {% if can_manage %}
+          <form method="post" action="/domains/{{ d.slug }}/tags/{{ tag.id }}" class="d-flex gap-2 align-items-center">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <input class="form-control form-control-sm" style="max-width:14rem" name="name" value="{{ tag.name }}">
+            <input class="form-control form-control-sm" style="max-width:7rem" name="color" value="{{ tag.color or '' }}" placeholder="#цвет">
+            <button class="btn btn-sm btn-outline-primary" title="Сохранить">✓</button>
+          </form>
+          {% else %}<span class="badge bg-secondary-lt">{{ tag.name }}</span>{% endif %}
+        </td>
+        <td class="text-secondary">{{ count }}</td>
+        {% if can_manage %}
+        <td>
+          <div class="d-flex gap-2 align-items-center">
+            <form method="post" action="/domains/{{ d.slug }}/tags/{{ tag.id }}/merge" class="d-flex gap-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf }}">
+              <select class="form-select form-select-sm w-auto" name="into" required>
+                <option value="" disabled selected>слить в…</option>
+                {% for other, _c in tags %}{% if other.id != tag.id %}
+                <option value="{{ other.id }}">{{ other.name }}</option>
+                {% endif %}{% endfor %}
+              </select>
+              <button class="btn btn-sm btn-ghost-secondary">слить</button>
+            </form>
+            <form method="post" action="/domains/{{ d.slug }}/tags/{{ tag.id }}/delete"
+                  onsubmit="return confirm('Удалить тег «{{ tag.name }}»? Он снимется со всех документов.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf }}">
+              <button class="btn btn-sm btn-ghost-danger" title="Удалить">✕</button>
+            </form>
+          </div>
+        </td>
+        {% endif %}
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="text-secondary">Тегов пока нет.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 
-<article>
-  <h3>Новый тег</h3>
-  <form method="post" action="/domains/{{ d.slug }}/tags" class="grid">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <input name="name" placeholder="Название" required maxlength="120">
-    <input name="color" placeholder="#2563eb (необязательно)" maxlength="16">
-    <button type="submit">Создать</button>
-  </form>
-</article>
+<div class="row">
+  <div class="col-12 col-lg-6">
+    <form method="post" action="/domains/{{ d.slug }}/tags" class="card">
+      <div class="card-body">
+        <h3 class="card-title">Новый тег</h3>
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <div class="row">
+          <div class="col-sm-7 mb-3">
+            <input class="form-control" name="name" placeholder="Название" required maxlength="120">
+          </div>
+          <div class="col-sm-5 mb-3">
+            <input class="form-control" name="color" placeholder="#2563eb (необязательно)" maxlength="16">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Создать</button>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}

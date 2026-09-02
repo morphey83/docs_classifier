@@ -1,13 +1,13 @@
 {% if not doc %}
-<div data-empty="1">
-  <p class="flash ok">Очередь пуста 🎉</p>
-  <button onclick="closeTag()">Закрыть</button>
+<div data-empty="1" class="text-center py-3">
+  <div class="alert alert-success d-inline-block">Очередь пуста 🎉</div>
+  <div><button class="btn btn-outline-secondary" data-bs-dismiss="modal">Закрыть</button></div>
 </div>
 {% else %}
 <div data-doc="{{ doc.id }}">
-  <p class="muted" style="margin-bottom:.5rem">
-    [{{ domain.name }}] · {{ doc.mime }} · {{ doc.size_bytes|humansize }} ·
-    {{ doc.doc_date|shortdate }} ·
+  <p class="text-secondary mb-2">
+    <span class="badge bg-blue-lt">{{ domain.name }}</span> ·
+    {{ doc.mime }} · {{ doc.size_bytes|humansize }} · {{ doc.doc_date|shortdate }} ·
     <a href="/documents/{{ doc.id }}" target="_blank">открыть ↗</a>
   </p>
 
@@ -19,18 +19,20 @@
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <input type="hidden" name="domain_id" value="{{ picked }}">
 
-    <label>Название
-      <input name="title" value="{{ doc.title }}" autocomplete="off" maxlength="500" required>
-    </label>
+    <div class="mb-3">
+      <label class="form-label">Название</label>
+      <input class="form-control" name="title" value="{{ doc.title }}" autocomplete="off" maxlength="500" required>
+    </div>
 
-    <label>Теги
-      <input name="tags" id="tagfield" autocomplete="off" autofocus
+    <div class="mb-2">
+      <label class="form-label">Теги</label>
+      <input class="form-control" name="tags" id="tagfield" autocomplete="off" autofocus
              value="{{ cur_tags|join(', ') }}" placeholder="через запятую">
-    </label>
+    </div>
 
     {% if freq %}
     <div class="freq-tags">
-      <span class="freq-label muted">частые:</span>
+      <span class="freq-label">частые:</span>
       {% for name in freq %}
       <button type="button" class="freq" data-tag="{{ name }}">{{ name }}</button>
       {% endfor %}
@@ -39,8 +41,8 @@
 
     <div class="tag-actions">
       <button type="button" hx-post="/inbox/{{ doc.id }}/defer" hx-target="#tagcard"
-              hx-include="closest form" class="secondary outline">Отложить</button>
-      <button type="submit">Готово, дальше →</button>
+              hx-include="closest form" class="btn btn-outline-secondary">Отложить</button>
+      <button type="submit" class="btn btn-primary">Готово, дальше →</button>
     </div>
   </form>
 </div>
@@ -56,9 +58,7 @@
   function sync() {
     var have = cur();
     chips.forEach(function (c) {
-      var used = have.indexOf(c.dataset.tag.toLowerCase()) !== -1;
-      c.classList.toggle('used', used);
-      c.disabled = used;
+      c.disabled = have.indexOf(c.dataset.tag.toLowerCase()) !== -1;
     });
   }
   chips.forEach(function (c) {

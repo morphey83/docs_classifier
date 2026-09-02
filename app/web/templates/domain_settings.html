@@ -5,63 +5,95 @@
 {% set active = 'settings' %}
 {% include "_domain_nav.html" %}
 
-<h1>Настройки домена</h1>
+<h2 class="mb-3">Настройки домена</h2>
 
-<form method="post" action="/domains/{{ d.slug }}/settings">
-  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+<div class="row row-cards">
+  <div class="col-12 col-lg-8">
+    <form method="post" action="/domains/{{ d.slug }}/settings" class="card">
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">Название</label>
+          <input class="form-control" name="name" value="{{ d.name }}" required maxlength="120">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Описание</label>
+          <textarea class="form-control" name="description" rows="2">{{ d.description or '' }}</textarea>
+        </div>
 
-  <label>Название <input name="name" value="{{ d.name }}" required maxlength="120"></label>
-  <label>Описание <textarea name="description" rows="2">{{ d.description or '' }}</textarea></label>
+        <div class="mb-3">
+          <label class="form-check">
+            <input class="form-check-input" type="checkbox" name="auto_ocr" {{ 'checked' if s.get('auto_ocr') }}>
+            <span class="form-check-label">авто-OCR при загрузке</span>
+          </label>
+          <label class="form-check">
+            <input class="form-check-input" type="checkbox" name="auto_index" {{ 'checked' if s.get('auto_index') }}>
+            <span class="form-check-label">авто-индексация при загрузке</span>
+          </label>
+          <label class="form-check">
+            <input class="form-check-input" type="checkbox" name="allow_public_links" {{ 'checked' if s.get('allow_public_links', True) }}>
+            <span class="form-check-label">разрешить публичные ссылки</span>
+          </label>
+        </div>
 
-  <fieldset>
-    <label><input type="checkbox" name="auto_ocr" {{ 'checked' if s.get('auto_ocr') }}> авто-OCR при загрузке</label>
-    <label><input type="checkbox" name="auto_index" {{ 'checked' if s.get('auto_index') }}> авто-индексация при загрузке</label>
-    <label><input type="checkbox" name="allow_public_links" {{ 'checked' if s.get('allow_public_links', True) }}> разрешить публичные ссылки</label>
-  </fieldset>
+        <div class="mb-3">
+          <label class="form-label">Язык OCR по умолчанию</label>
+          <input class="form-control" name="default_ocr_lang" value="{{ s.get('default_ocr_lang', '') }}" placeholder="rus+eng">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Разрешённые типы файлов
+            <span class="form-hint d-inline">расширения через запятую; пусто = любые</span></label>
+          <input class="form-control" name="allowed_types" value="{{ (s.get('allowed_types') or [])|join(', ') }}" placeholder="pdf, docx, png">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">При конфликте имён в архиве</label>
+          <select class="form-select" name="archive_on_conflict">
+            <option value="skip" {{ 'selected' if s.get('archive_on_conflict') != 'new' }}>пропускать</option>
+            <option value="new" {{ 'selected' if s.get('archive_on_conflict') == 'new' }}>грузить как отдельный</option>
+          </select>
+        </div>
 
-  <label>Язык OCR по умолчанию
-    <input name="default_ocr_lang" value="{{ s.get('default_ocr_lang', '') }}" placeholder="rus+eng">
-  </label>
-  <label>Разрешённые типы файлов (расширения через запятую; пусто = любые)
-    <input name="allowed_types" value="{{ (s.get('allowed_types') or [])|join(', ') }}" placeholder="pdf, docx, png">
-  </label>
-  <label>При конфликте имён в архиве
-    <select name="archive_on_conflict">
-      <option value="skip" {{ 'selected' if s.get('archive_on_conflict') != 'new' }}>пропускать</option>
-      <option value="new" {{ 'selected' if s.get('archive_on_conflict') == 'new' }}>грузить как отдельный</option>
-    </select>
-  </label>
+        <div class="row">
+          <div class="col-sm-6 mb-3">
+            <label class="form-label">Квота хранилища, МБ <span class="form-hint d-inline">макс. {{ caps.quota }}</span></label>
+            <input class="form-control" name="storage_quota_mb" type="number" min="0" max="{{ caps.quota }}"
+                   value="{{ s.get('storage_quota_mb', caps.quota) }}">
+          </div>
+          <div class="col-sm-6 mb-3">
+            <label class="form-label">Макс. загрузка, МБ <span class="form-hint d-inline">макс. {{ caps.upload }}</span></label>
+            <input class="form-control" name="max_upload_mb" type="number" min="0" max="{{ caps.upload }}"
+                   value="{{ s.get('max_upload_mb', caps.upload) }}">
+          </div>
+          <div class="col-sm-6 mb-3">
+            <label class="form-label">Хранить корзину, дней</label>
+            <input class="form-control" name="trash_retention_days" type="number" min="0"
+                   value="{{ s.get('trash_retention_days', caps.trash) }}">
+          </div>
+          <div class="col-sm-6 mb-3">
+            <label class="form-label">Хранить архив набора, дней</label>
+            <input class="form-control" name="set_archive_ttl_days" type="number" min="0"
+                   value="{{ s.get('set_archive_ttl_days', 7) }}">
+          </div>
+        </div>
 
-  <div class="grid">
-    <label>Квота хранилища, МБ (макс. {{ caps.quota }})
-      <input name="storage_quota_mb" type="number" min="0" max="{{ caps.quota }}"
-             value="{{ s.get('storage_quota_mb', caps.quota) }}">
-    </label>
-    <label>Макс. загрузка, МБ (макс. {{ caps.upload }})
-      <input name="max_upload_mb" type="number" min="0" max="{{ caps.upload }}"
-             value="{{ s.get('max_upload_mb', caps.upload) }}">
-    </label>
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
   </div>
-  <div class="grid">
-    <label>Хранить корзину, дней
-      <input name="trash_retention_days" type="number" min="0"
-             value="{{ s.get('trash_retention_days', caps.trash) }}">
-    </label>
-    <label>Хранить архив набора, дней
-      <input name="set_archive_ttl_days" type="number" min="0" value="{{ s.get('set_archive_ttl_days', 7) }}">
-    </label>
+
+  {% if is_owner %}
+  <div class="col-12 col-lg-4">
+    <div class="card border-danger">
+      <div class="card-body">
+        <h3 class="card-title text-danger">Опасная зона</h3>
+        <p class="text-secondary">Удаление домена необратимо и уносит все документы.</p>
+        <form method="post" action="/domains/{{ d.slug }}/delete"
+              onsubmit="return confirm('Удалить домен «{{ d.name }}» со всеми документами? Это необратимо.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <button class="btn btn-danger">Удалить домен</button>
+        </form>
+      </div>
+    </div>
   </div>
-
-  <button type="submit">Сохранить</button>
-</form>
-
-{% if is_owner %}
-<hr>
-<h4>Опасная зона</h4>
-<form method="post" action="/domains/{{ d.slug }}/delete"
-      onsubmit="return confirm('Удалить домен «{{ d.name }}» со всеми документами? Это необратимо.')">
-  <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <button class="contrast">Удалить домен</button>
-</form>
-{% endif %}
+  {% endif %}
+</div>
 {% endblock %}

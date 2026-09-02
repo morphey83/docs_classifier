@@ -1,39 +1,46 @@
-<p class="muted">в очереди: {{ docs|length }}{% if docs|length == 500 %}+{% endif %}</p>
+<p class="text-secondary">в очереди: {{ docs|length }}{% if docs|length == 500 %}+{% endif %}</p>
 
 {% if not docs %}
-<p class="flash ok">Очередь пуста 🎉</p>
-<form method="post" action="/inbox/undefer" class="inline-form">
-  <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <button class="outline secondary">Вернуть отложенные</button>
-</form>
+<div class="card">
+  <div class="card-body text-center py-4">
+    <div class="alert alert-success d-inline-block">Очередь пуста 🎉</div>
+    <div>
+      <form method="post" action="/inbox/undefer">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <button class="btn btn-outline-secondary">Вернуть отложенные</button>
+      </form>
+    </div>
+  </div>
+</div>
 {% else %}
-<figure style="overflow-x:auto">
-<table>
-  <thead>
-    <tr><th></th><th>Название</th><th>Домен</th><th>Тип</th><th>Дата</th><th>Размер</th><th></th></tr>
-  </thead>
-  <tbody>
-  {% for doc in docs %}
-    <tr>
-      <td>
-        {% if can_thumb.get(doc.id) %}
-        <img src="/documents/{{ doc.id }}/thumb" alt="" loading="lazy"
-             style="width:44px;height:44px;object-fit:cover;border-radius:.3rem">
-        {% endif %}
-      </td>
-      <td><a href="/documents/{{ doc.id }}">{{ doc.title }}</a></td>
-      <td>{{ domain_names.get(doc.domain_id, '?') }}</td>
-      <td>{{ doc.ext or (doc.mime.split('/')|last) }}</td>
-      <td>{{ doc.doc_date|shortdate }}</td>
-      <td>{{ doc.size_bytes|humansize }}</td>
-      <td>
-        <button class="outline" style="padding:.2rem .7rem"
-                hx-get="/inbox/card?doc={{ doc.id }}&domain_id={{ picked }}"
-                hx-target="#tagcard">Разметить</button>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
-</figure>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead>
+        <tr><th class="w-1"></th><th>Название</th><th>Домен</th><th>Тип</th><th>Дата</th><th>Размер</th><th class="w-1"></th></tr>
+      </thead>
+      <tbody>
+      {% for doc in docs %}
+        <tr>
+          <td class="cell-thumb">
+            {% if can_thumb.get(doc.id) %}
+            <img src="/documents/{{ doc.id }}/thumb" alt="" loading="lazy">
+            {% endif %}
+          </td>
+          <td><a href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a></td>
+          <td class="text-secondary">{{ domain_names.get(doc.domain_id, '?') }}</td>
+          <td class="text-secondary">{{ doc.ext or (doc.mime.split('/')|last) }}</td>
+          <td class="text-secondary">{{ doc.doc_date|shortdate }}</td>
+          <td class="text-secondary">{{ doc.size_bytes|humansize }}</td>
+          <td>
+            <button class="btn btn-sm btn-primary"
+                    hx-get="/inbox/card?doc={{ doc.id }}&domain_id={{ picked }}"
+                    hx-target="#tagcard">Разметить</button>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endif %}
