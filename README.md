@@ -60,8 +60,8 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
   (send file, edit tags / title, request OCR / index, add to a set); `/sets`
   lists sets and hands back the archive (as a file ≤ 50 MB or a share link).
   Current domain + last search persist in `bot_user_state`.
-- **7 web UI** (HTMX + Jinja, `app/web/`, served at `/`; vendored `pico.css` +
-  `htmx`, no CDN, no build; session cookie + signed CSRF) —
+- **7 web UI** (HTMX + Jinja on **Tabler** — Bootstrap 5, vendored, no CDN,
+  no build; session cookie + signed CSRF) —
   **The JSON API moved under `/api`** (`/d/{token}`, `/tg/link/*`, `/health`
   stay at the root).
   - **7a** login / register / logout; dashboard; domain overview; faceted
@@ -88,12 +88,16 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
     field, one-line chips, Отложить/Готово row); the bot now sends image
     documents as photo cards, including in `/find` results; web search
     results show image thumbnails; readable tag chips.
+  - **7h** full reskin onto **Tabler** (`@tabler/core` 1.4.0, MIT,
+    Bootstrap 5.3) — vendored CSS/JS, no build; top navbar, native cards,
+    forms, tables, badges, tabs, and a real Bootstrap modal for inbox
+    tagging. pico.css dropped.
 
 ## Stack
 
 Python 3.12 · FastAPI · PostgreSQL 16 · SQLAlchemy 2 (async) · Alembic ·
 SAQ (Postgres-backed jobs, no Redis) · aiogram 3 (bot, long-polling) ·
-Pillow (thumbnails) · Caddy · Docker Compose.
+Pillow (thumbnails) · Tabler / Bootstrap 5 (web UI) · Caddy · Docker Compose.
 
 The bot runs as an opt-in compose service:
 
