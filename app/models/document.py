@@ -207,7 +207,6 @@ class Tag(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = uuid_pk()
     name: Mapped[str] = mapped_column(String(120))
     slug: Mapped[str] = mapped_column(String(64), unique=True)
-    color: Mapped[str | None] = mapped_column(String(16), nullable=True)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
@@ -229,6 +228,21 @@ class DocumentTag(Base):
     assigned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class UserTagColor(Base):
+    """A tag's colour is a per-user preference (§7): a new user sees no
+    colours, and one person's choice never changes another's view."""
+
+    __tablename__ = "user_tag_color"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), primary_key=True
+    )
+    tag_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True
+    )
+    color: Mapped[str] = mapped_column(String(16))
 
 
 class DocumentVersion(Base):

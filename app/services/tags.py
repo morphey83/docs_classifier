@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from sqlalchemy import delete, exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import DocStatus, Document, DocumentTag, Domain, Tag, User
+from app.models import DocStatus, Document, DocumentTag, Domain, Tag, User, UserTagColor
 from app.util.slug import slugify
 
 
@@ -95,23 +95,33 @@ async def resolve_names(db: AsyncSession, names: Sequence[str], *, actor: User) 
     return out
 
 
-# --- edit ---------------------------------------------------------------
-async def rename_tag(db: AsyncSession, tag: Tag, name: str) -> Tag:
-    name = name.strip()
-    if not name:
-        raise TagError("tag name is empty")
-    new_slug = slugify(name)
-    if new_slug != tag.slug and await db.scalar(select(Tag.id).where(Tag.slug == new_slug)):
-        raise TagError("another tag already uses that name")
-    tag.name, tag.slug = name, new_slug
+# --- per-user colours --------------------------------------------------
+# A tag's colour is a personal preference, kept in ``user_tag_color`` — a new
+# user sees none, and setting one never touches anyone else's view.
+async def set_tag_color(
+    db: AsyncSession, *, user_id: uuid.UUID, tag_id: uuid.UUID, color: str | None
+) -> None:
+    row = await db.get(UserTagColor, {"user_id": user_id, "tag_id": tag_id})
+    if color:
+        if row is None:
+            db.add(UserTagColor(user_id=user_id, tag_id=tag_id, color=color))
+        else:
+            row.color = color
+    elif row is not None:
+        await db.delete(row)
     await db.flush()
-    return tag
 
 
-async def recolor_tag(db: AsyncSession, tag: Tag, color: str | None) -> Tag:
-    tag.color = color or None
-    await db.flush()
-    return tag
+async def tag_colors(
+    db: AsyncSession, user_id: uuid.UUID, tag_ids: Sequence[uuid.UUID] | None = None
+) -> dict[uuid.UUID, str]:
+    """``{tag id: colour}`` for this user only."""
+    stmt = select(UserTagColor.tag_id, UserTagColor.color).where(
+        UserTagColor.user_id == user_id
+    )
+    if tag_ids is not None:
+        stmt = stmt.where(UserTagColor.tag_id.in_(list(tag_ids)))
+    return dict((await db.execute(stmt)).all())
 
 
 async def merge_tags(

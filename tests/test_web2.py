@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 
 from tests.conftest import web_csrf
 from tests.conftest import web_upload as _upload
@@ -397,7 +398,7 @@ async def test_image_thumbnail(alice, web_domain):
 
 
 # --- tag vocabulary --------------------------------------------
-async def test_global_tag_page_rename(alice, web_domain):
+async def test_global_tag_page_names_are_read_only(alice, web_domain):
     await _upload(alice, web_domain, "tg.txt")
     doc_id = await _doc_id(alice, web_domain)
     dp = (await alice.get(f"/documents/{doc_id}")).text
@@ -408,16 +409,10 @@ async def test_global_tag_page_rename(alice, web_domain):
     )
 
     listing = await alice.get("/tags")
-    assert "Контракт" in listing.text
-    tag_id = re.search(r"/tags/([0-9a-f-]{36})/rename", listing.text).group(1)
-
-    upd = await alice.post(
-        f"/tags/{tag_id}/rename",
-        data={"name": "Договор", "csrf_token": web_csrf(listing.text)},
-        headers={"HX-Request": "true"},
-    )
-    assert upd.status_code == 204
-    assert "Договор" in (await alice.get("/tags")).text
+    assert "Контракт" in listing.text and "Редактирование списка тегов" in listing.text
+    # names are fixed — no rename control, and the route is gone
+    assert "/rename" not in listing.text
+    assert (await alice.post(f"/tags/{uuid.uuid4()}/rename")).status_code in (404, 405)
 
 
 async def test_search_result_tag_uses_its_colour(alice, web_domain):

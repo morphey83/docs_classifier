@@ -166,20 +166,24 @@ async def _tags_by_doc(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID
 
 
 async def _tag_chips_by_doc(
-    db: AsyncSession, ids: list[uuid.UUID]
+    db: AsyncSession, ids: list[uuid.UUID], user_id: uuid.UUID
 ) -> dict[uuid.UUID, list[tuple[str, str | None]]]:
-    """``{doc id: [(name, color), …]}`` — colour drives the result-card chips."""
+    """``{doc id: [(name, color), …]}`` — the viewer's own colour drives the
+    result-card chips (§7)."""
     if not ids:
         return {}
-    rows = await db.execute(
-        select(DocumentTag.document_id, Tag.name, Tag.color)
-        .join(Tag, Tag.id == DocumentTag.tag_id)
-        .where(DocumentTag.document_id.in_(ids))
-        .order_by(Tag.name)
+    rows = list(
+        await db.execute(
+            select(DocumentTag.document_id, DocumentTag.tag_id, Tag.name)
+            .join(Tag, Tag.id == DocumentTag.tag_id)
+            .where(DocumentTag.document_id.in_(ids))
+            .order_by(Tag.name)
+        )
     )
+    colors = await tags_svc.tag_colors(db, user_id, {tid for _, tid, _ in rows})
     out: dict[uuid.UUID, list[tuple[str, str | None]]] = {}
-    for did, name, color in rows:
-        out.setdefault(did, []).append((name, color or None))
+    for did, tid, name in rows:
+        out.setdefault(did, []).append((name, colors.get(tid)))
     return out
 
 
@@ -236,7 +240,7 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
     return {
         "partial": "_results.html",
         "docs": docs,
-        "tag_map": await _tag_chips_by_doc(db, [d.id for d in docs]),
+        "tag_map": await _tag_chips_by_doc(db, [d.id for d in docs], user.id),
         "domain_names": {d.id: d.name for d, _ in memberships},
         "domain_slugs": {d.id: d.slug for d, _ in memberships},
         "doc_caps": {d.id: caps.get(d.domain_id, frozenset()) for d in docs},

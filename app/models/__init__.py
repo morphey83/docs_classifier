@@ -23,6 +23,7 @@ from app.models.document import (
     TextSource,
     UploadBatch,
     UploadBatchItem,
+    UserTagColor,
 )
 from app.models.domain import Domain, DomainInvite, DomainMember
 from app.models.tglink import TgLinkToken
@@ -58,4 +59,5 @@ __all__ = [
     "UploadBatch",
     "UploadBatchItem",
     "User",
+    "UserTagColor",
 ]

@@ -1,5 +1,6 @@
-"""The global tag pool (§7 rev 2). Tags aren't domain-owned; anyone signed in
-can rename / recolour / merge. Deletion is automatic (nightly orphan sweep)."""
+"""The global tag pool (§7 rev 2). Tags aren't domain-owned. Names are fixed;
+each user sets their own colour. Merge moves a tag's documents onto another tag
+(only in domains the caller owns). Deletion is automatic (nightly orphan sweep)."""
 
 from __future__ import annotations
 
@@ -17,9 +18,10 @@ from app.services import tags as svc
 router = APIRouter(tags=["tags"])
 
 
-def _out(tag: Tag, usage: int = 0) -> TagOut:
+def _out(tag: Tag, usage: int = 0, color: str | None = None) -> TagOut:
     o = TagOut.model_validate(tag)
     o.usage_count = usage
+    o.color = color
     return o
 
 
@@ -32,27 +34,22 @@ async def _load(db: AsyncSession, tag_id: uuid.UUID) -> Tag:
 
 @router.get("/tags/all", response_model=list[TagOut])
 async def list_all_tags(
-    _: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)
 ) -> list[TagOut]:
-    return [_out(tag, usage) for tag, usage in await svc.list_tags(db)]
+    colors = await svc.tag_colors(db, user.id)
+    return [_out(tag, usage, colors.get(tag.id)) for tag, usage in await svc.list_tags(db)]
 
 
 @router.patch("/tags/{tag_id}", response_model=TagOut)
 async def update_tag(
     tag_id: uuid.UUID,
     body: TagUpdate,
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> TagOut:
     tag = await _load(db, tag_id)
-    try:
-        if body.name is not None:
-            await svc.rename_tag(db, tag, body.name)
-        if body.color is not None:
-            await svc.recolor_tag(db, tag, body.color)
-    except svc.TagError as err:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(err)) from err
-    return _out(tag)
+    await svc.set_tag_color(db, user_id=user.id, tag_id=tag_id, color=body.color or None)
+    return _out(tag, 0, body.color or None)
 
 
 @router.post("/tags/{tag_id}/merge", status_code=status.HTTP_200_OK)

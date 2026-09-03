@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 
 class TagUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=120)
+    # names are fixed; only the caller's own colour is editable ("" clears it)
     color: str | None = Field(default=None, max_length=16)
 
 
@@ -21,8 +21,8 @@ class TagOut(BaseModel):
     id: uuid.UUID
     name: str
     slug: str
-    color: str | None
-    description: str | None
+    color: str | None = None  # the requesting user's own colour, if any
+    description: str | None = None
     created_at: datetime
     usage_count: int = 0
 

@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% import "_icons.html" as ic %}
-{% block title %}Теги{% endblock %}
-{% block page_title %}Теги{% endblock %}
+{% block title %}Редактирование списка тегов{% endblock %}
+{% block page_title %}Редактирование списка тегов{% endblock %}
 {% block content %}
 
 <p class="text-secondary">
   Единый пул тегов для всех доменов. Теги создаются при разметке документов;
-  тег без документов автоматически исчезает при ночной уборке. Название и цвет
-  сохраняются сразу. «Слить» переносит тег на другой — но только на ваших
+  тег без документов автоматически исчезает при ночной уборке. Названия менять
+  нельзя. Цвет — личная настройка: он виден только вам и не влияет на других.
+  «Миграция документов» переносит документы тега на другой — но только на ваших
   документах (в доменах, где вы owner); чужие документы не затрагиваются.
 </p>
 
@@ -24,7 +25,7 @@
 {% include "_tags_table.html" %}
 
 <script>
-  // pick a tag in a row's "слить в…" select → confirm → merge → refresh the table
+  // pick a target in a row's "миграция документов" select → confirm → merge → refresh
   document.body.addEventListener('change', function (e) {
     var sel = e.target.closest && e.target.closest('.tag-merge');
     if (!sel || !sel.value) return;
@@ -34,7 +35,8 @@
     var q = (document.getElementById('tags-search') || {}).value || '';
     sel.value = '';
     window.dcConfirm(
-      'Слить тег «' + src + '» в «' + dst + '»? На ваших документах он будет заменён на «' + dst + '».',
+      'Перенести документы тега «' + src + '» на «' + dst + '»? На ваших документах ' +
+      '«' + src + '» будет заменён на «' + dst + '».',
       function () {
         window.htmx.ajax('POST', '/tags/' + sel.dataset.tag + '/merge', {
           target: '#tags-table', swap: 'outerHTML', values: { into: into, q: q }

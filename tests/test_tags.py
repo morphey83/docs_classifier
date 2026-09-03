@@ -37,24 +37,35 @@ async def test_tags_are_created_on_use_and_shared(alice, domain):
     assert tags["договоры"]["usage_count"] == 2
 
 
-async def test_rename_and_merge(alice, domain):
+async def test_merge_moves_documents_onto_the_target(alice, domain):
     d = domain["id"]
     doc = await _upload(alice, d, "x.txt")
     await alice.patch(f"/api/documents/{doc['id']}/tags", json={"tag_names": ["old", "keep"]})
     tags = {t["name"]: t["id"] for t in (await alice.get("/api/tags/all")).json()}
 
-    ren = await alice.patch(f"/api/tags/{tags['keep']}", json={"name": "Итоговый"})
-    assert ren.json()["name"] == "Итоговый"
-
     r = await alice.post(f"/api/tags/{tags['old']}/merge", json={"into": tags["keep"]})
     assert r.status_code == 200
     doc_now = await alice.get(f"/api/documents/{doc['id']}")
-    assert [t["name"] for t in doc_now.json()["tags"]] == ["Итоговый"]
+    assert [t["name"] for t in doc_now.json()["tags"]] == ["keep"]
     # «old» now has 0 documents → hidden from the pool, but the row lives until the sweep
-    assert {t["name"] for t in (await alice.get("/api/tags/all")).json()} == {"Итоговый"}
+    assert {t["name"] for t in (await alice.get("/api/tags/all")).json()} == {"keep"}
     async with get_sessionmaker()() as db:
         rows = await tags_svc.list_tags(db, include_orphans=True)
-    assert {t.name for t, _ in rows} == {"Итоговый", "old"}
+    assert {t.name for t, _ in rows} == {"keep", "old"}
+
+
+async def test_tag_colour_is_per_user(alice, bob, domain):
+    d = domain["id"]
+    doc = await _upload(alice, d, "c.txt")
+    await alice.patch(f"/api/documents/{doc['id']}/tags", json={"tag_names": ["hot"]})
+    tag_id = next(t["id"] for t in (await alice.get("/api/tags/all")).json() if t["name"] == "hot")
+
+    await alice.patch(f"/api/tags/{tag_id}", json={"color": "#d63939"})
+    mine = next(t for t in (await alice.get("/api/tags/all")).json() if t["id"] == tag_id)
+    assert mine["color"] == "#d63939"
+    # bob sees the same shared tag, but with no colour of his own
+    his = next(t for t in (await bob.get("/api/tags/all")).json() if t["id"] == tag_id)
+    assert his["color"] is None
 
 
 async def test_orphan_sweep_removes_unused_tags(alice, domain):
