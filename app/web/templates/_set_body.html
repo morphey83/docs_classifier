@@ -3,193 +3,246 @@
 
 <h3 class="mb-3">{{ set.name }}</h3>
 
-<form hx-post="/sets/{{ set.id }}" hx-target="#setbody" hx-swap="outerHTML" class="mb-3">
-  <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <div class="mb-2">
-    <label class="form-label">Название</label>
-    <input class="form-control" name="name" value="{{ set.name }}" required maxlength="200">
-  </div>
-  <div class="mb-2">
-    <label class="form-label">Описание</label>
-    <textarea class="form-control" name="description" rows="4"
-              placeholder="Свободный текст">{{ set.description or '' }}</textarea>
-  </div>
-  <button class="btn">Сохранить</button>
-</form>
+<ul class="nav nav-tabs mb-3" id="set-tabs">
+  <li class="nav-item">
+    <button type="button" class="nav-link active" data-set-tab="general">Общие</button>
+  </li>
+  <li class="nav-item">
+    <button type="button" class="nav-link" data-set-tab="share">Поделиться ссылкой</button>
+  </li>
+</ul>
 
-{% if building %}
-<div class="alert alert-info">Архив готовится — нажмите «Скачать» ещё раз через несколько секунд.</div>
-{% endif %}
-{% if export %}
-<div class="alert alert-{{ 'success' if export.status == 'ready' else ('danger' if export.status == 'failed' else 'info') }}">
-  {% if export.status == 'ready' %}
-    Полная выгрузка готова.
-    <a href="/sets/{{ set.id }}/export/{{ export.id }}/download" class="alert-link">Скачать ({{ export.size_bytes|humansize }})</a>
-  {% elif export.status == 'failed' %}
-    Не удалось собрать полную выгрузку: {{ export.error }}
-  {% else %}
-    Полная выгрузка готовится — откройте набор снова через несколько секунд.
-  {% endif %}
-</div>
-{% endif %}
+<div class="tab-content">
 
-<div class="row g-3 mb-3">
-  <div class="col-md-6">
-    <div class="card card-sm h-100"><div class="card-body">
-      <div class="fw-bold mb-1">Для отправки</div>
-      <div class="text-secondary small mb-2">
-        Только публичные документы — {{ public_count }} из {{ resolved_count }}. Этим можно делиться.
-      </div>
-      <div class="btn-list">
-        <a href="/sets/{{ set.id }}/archive" class="btn btn-sm btn-outline-primary">
-          {{ ic.icon('download') }} Скачать
-        </a>
-        <form hx-post="/sets/{{ set.id }}/links" hx-target="#setbody" hx-swap="outerHTML" class="btn-list">
-          <input type="hidden" name="csrf_token" value="{{ csrf }}">
-          <button name="kind" value="one_time" class="btn btn-sm btn-outline-secondary">{{ ic.icon('link') }} разовая ссылка</button>
-          <button name="kind" value="permanent" class="btn btn-sm btn-outline-secondary">{{ ic.icon('link') }} постоянная</button>
-          <button name="mode" value="gallery" class="btn btn-sm btn-outline-secondary">{{ ic.icon('photo') }} галерея</button>
-        </form>
-      </div>
-    </div></div>
-  </div>
-  <div class="col-md-6">
-    <div class="card card-sm h-100"><div class="card-body">
-      <div class="fw-bold mb-1">Полная выгрузка</div>
-      <div class="text-secondary small mb-2">
-        Все документы ваших доменов и все доступные вам из чужих. Только для вас.
-      </div>
-      <form hx-post="/sets/{{ set.id }}/export" hx-target="#setbody" hx-swap="outerHTML">
-        <input type="hidden" name="csrf_token" value="{{ csrf }}">
-        <button class="btn btn-sm btn-outline-secondary">{{ ic.icon('download') }} Скачать всё</button>
-      </form>
-    </div></div>
-  </div>
-</div>
+{# ============================ Общие ============================ #}
+<div class="set-pane" data-set-pane="general">
 
-{% if links %}
-<div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Ссылки</h3></div>
-  <div class="table-responsive"><table class="table table-vcenter card-table">
-    <thead><tr><th>ссылка</th><th>тип</th><th>скачано</th><th class="w-1"></th></tr></thead>
-    <tbody>
-    {% for link, url in links %}
-      <tr>
-        <td><a href="{{ url }}" target="_blank" rel="noopener" class="text-secondary">{{ url }}</a></td>
-        <td>{{ 'галерея' if link.mode == 'gallery' else ('одноразовая' if link.max_downloads == 1 else 'постоянная') }}</td>
-        <td>{{ link.download_count }}{% if link.max_downloads %}/{{ link.max_downloads }}{% endif %}</td>
-        <td>
-          <form hx-post="/links/{{ link.id }}/revoke" hx-target="#setbody" hx-swap="outerHTML"
-                hx-confirm="Отозвать эту ссылку? Действующие копии перестанут работать.">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}">
-            <button class="btn btn-sm btn-ghost-danger">отозвать</button>
-          </form>
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table></div>
-</div>
-{% endif %}
+  <form hx-post="/sets/{{ set.id }}" hx-target="#setbody" hx-swap="outerHTML" class="mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="mb-2">
+      <label class="form-label">Название</label>
+      <input class="form-control" name="name" value="{{ set.name }}" required maxlength="200">
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Описание</label>
+      <textarea class="form-control" name="description" rows="4"
+                placeholder="Свободный текст">{{ set.description or '' }}</textarea>
+    </div>
+    <button class="btn">Сохранить</button>
+  </form>
 
-<div class="card mb-3">
-  <div class="card-header">
-    <h3 class="card-title">Фильтры</h3>
-    {% if filter_total %}<span class="badge bg-secondary-lt ms-2">{{ filter_total }}</span>{% endif %}
-  </div>
-  <div class="table-responsive"><table class="table table-vcenter card-table">
-    <thead><tr>
-      <th>Описание</th>
-      <th class="text-center">Публичных</th>
-      <th class="text-center">Всего доступно</th>
-      <th class="w-1"></th>
-    </tr></thead>
-    <tbody>
-    {% for r in filter_rows %}
-      <tr>
-        <td>{{ r.f.description or 'все документы' }}</td>
-        <td class="text-center">{{ r.public }}</td>
-        <td class="text-center">{{ r.total }}</td>
-        <td class="text-nowrap text-end">
-          <a href="{{ r.link }}" class="btn btn-sm btn-ghost-secondary">открыть</a>
-          <form class="d-inline" hx-post="/sets/{{ set.id }}/filters/{{ r.f.id }}/remove"
-                hx-target="#setbody" hx-swap="outerHTML"
-                hx-confirm="Убрать этот фильтр из набора?">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}">
-            <button class="btn btn-sm btn-ghost-danger">убрать</button>
-          </form>
-        </td>
-      </tr>
+  {% if export %}
+  <div class="alert alert-{{ 'success' if export.status == 'ready' else ('danger' if export.status == 'failed' else 'info') }}">
+    {% if export.status == 'ready' %}
+      Полная выгрузка готова.
+      <a href="/sets/{{ set.id }}/export/{{ export.id }}/download" class="alert-link">Скачать ({{ export.size_bytes|humansize }})</a>
+    {% elif export.status == 'failed' %}
+      Не удалось собрать полную выгрузку: {{ export.error }}
     {% else %}
-      <tr><td colspan="4" class="text-secondary">
-        Фильтров нет. Сохраните поисковый запрос в набор со страницы «Поиск».
-      </td></tr>
-    {% endfor %}
-    </tbody>
-  </table></div>
-  {% if fpages > 1 %}
-  <div class="card-footer">
-    <ul class="pagination pagination-sm m-0">
-      {% for p in range(1, fpages + 1) %}
-      <li class="page-item {{ 'active' if p == fpage }}">
-        <a class="page-link" hx-get="/sets/{{ set.id }}?fpage={{ p }}&dpage={{ dpage }}"
-           hx-target="#setbody" hx-swap="outerHTML">{{ p }}</a>
-      </li>
-      {% endfor %}
-    </ul>
+      Полная выгрузка готовится — откройте набор снова через несколько секунд.
+    {% endif %}
   </div>
   {% endif %}
-</div>
 
-<div class="card">
-  <div class="card-header">
-    <h3 class="card-title">Явно привязанные документы</h3>
-    {% if item_total %}<span class="badge bg-secondary-lt ms-2">{{ item_total }}</span>{% endif %}
-  </div>
-  <div class="table-responsive"><table class="table table-vcenter card-table">
-    <thead><tr>
-      <th>Название</th><th>Размер</th><th>Дата</th>
-      <th class="text-center">Публичный</th><th class="w-1"></th>
-    </tr></thead>
-    <tbody>
-    {% for doc in items %}
-      <tr>
-        <td><a data-detail href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a></td>
-        <td class="text-secondary">{{ doc.size_bytes|humansize }}</td>
-        <td class="text-secondary">{{ doc.doc_date|shortdate }}</td>
-        <td class="text-center">{% if doc.is_public %}<span class="text-green">{{ ic.icon('check') }}</span>{% endif %}</td>
-        <td>
-          <form hx-post="/sets/{{ set.id }}/items/{{ doc.id }}/remove"
-                hx-target="#setbody" hx-swap="outerHTML">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}">
-            <button class="btn btn-sm btn-ghost-danger">убрать</button>
-          </form>
-        </td>
-      </tr>
-    {% else %}
-      <tr><td colspan="5" class="text-secondary">
-        Вручную документы не добавляли. Отметьте их в поиске → «В набор».
-      </td></tr>
-    {% endfor %}
-    </tbody>
-  </table></div>
-  {% if dpages > 1 %}
-  <div class="card-footer">
-    <ul class="pagination pagination-sm m-0">
-      {% for p in range(1, dpages + 1) %}
-      <li class="page-item {{ 'active' if p == dpage }}">
-        <a class="page-link" hx-get="/sets/{{ set.id }}?fpage={{ fpage }}&dpage={{ p }}"
-           hx-target="#setbody" hx-swap="outerHTML">{{ p }}</a>
-      </li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
-  <div class="card-footer">
-    <form hx-post="/sets/{{ set.id }}/delete" hx-confirm="Удалить набор?">
+  <div class="card card-sm mb-3"><div class="card-body">
+    <div class="fw-bold mb-1">Полная выгрузка</div>
+    <div class="text-secondary small mb-2">
+      Все документы ваших доменов и все доступные вам из чужих. Только для вас.
+    </div>
+    <form hx-post="/sets/{{ set.id }}/export" hx-target="#setbody" hx-swap="outerHTML">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
-      <button class="btn btn-outline-danger">Удалить набор</button>
+      <button class="btn btn-sm btn-outline-secondary">{{ ic.icon('download') }} Скачать всё</button>
     </form>
+  </div></div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <h3 class="card-title">Фильтры</h3>
+      {% if filter_total %}<span class="badge bg-secondary-lt ms-2">{{ filter_total }}</span>{% endif %}
+    </div>
+    <div class="table-responsive"><table class="table table-vcenter card-table">
+      <thead><tr>
+        <th>Описание</th>
+        <th class="text-center">Публичных</th>
+        <th class="text-center">Всего доступно</th>
+        <th class="w-1"></th>
+      </tr></thead>
+      <tbody>
+      {% for r in filter_rows %}
+        <tr>
+          <td>{{ r.f.description or 'все документы' }}</td>
+          <td class="text-center">{{ r.public }}</td>
+          <td class="text-center">{{ r.total }}</td>
+          <td class="text-nowrap text-end">
+            <a href="{{ r.link }}" class="btn btn-sm btn-ghost-secondary">открыть</a>
+            <form class="d-inline" hx-post="/sets/{{ set.id }}/filters/{{ r.f.id }}/remove"
+                  hx-target="#setbody" hx-swap="outerHTML"
+                  hx-confirm="Убрать этот фильтр из набора?">
+              <input type="hidden" name="csrf_token" value="{{ csrf }}">
+              <button class="btn btn-sm btn-ghost-danger">убрать</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-secondary">
+          Фильтров нет. Сохраните поисковый запрос в набор со страницы «Поиск».
+        </td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% if fpages > 1 %}
+    <div class="card-footer">
+      <ul class="pagination pagination-sm m-0">
+        {% for p in range(1, fpages + 1) %}
+        <li class="page-item {{ 'active' if p == fpage }}">
+          <a class="page-link" hx-get="/sets/{{ set.id }}?fpage={{ p }}&dpage={{ dpage }}"
+             hx-target="#setbody" hx-swap="outerHTML">{{ p }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
   </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <h3 class="card-title">Явно привязанные документы</h3>
+      {% if item_total %}<span class="badge bg-secondary-lt ms-2">{{ item_total }}</span>{% endif %}
+    </div>
+    <div class="table-responsive"><table class="table table-vcenter card-table">
+      <thead><tr>
+        <th>Название</th><th>Размер</th><th>Дата</th>
+        <th class="text-center">Публичный</th><th class="w-1"></th>
+      </tr></thead>
+      <tbody>
+      {% for doc in items %}
+        <tr>
+          <td><a data-detail href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a></td>
+          <td class="text-secondary">{{ doc.size_bytes|humansize }}</td>
+          <td class="text-secondary">{{ doc.doc_date|shortdate }}</td>
+          <td class="text-center">{% if doc.is_public %}<span class="text-green">{{ ic.icon('check') }}</span>{% endif %}</td>
+          <td>
+            <form hx-post="/sets/{{ set.id }}/items/{{ doc.id }}/remove"
+                  hx-target="#setbody" hx-swap="outerHTML">
+              <input type="hidden" name="csrf_token" value="{{ csrf }}">
+              <button class="btn btn-sm btn-ghost-danger">убрать</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-secondary">
+          Вручную документы не добавляли. Отметьте их в поиске → «В набор».
+        </td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% if dpages > 1 %}
+    <div class="card-footer">
+      <ul class="pagination pagination-sm m-0">
+        {% for p in range(1, dpages + 1) %}
+        <li class="page-item {{ 'active' if p == dpage }}">
+          <a class="page-link" hx-get="/sets/{{ set.id }}?fpage={{ fpage }}&dpage={{ p }}"
+             hx-target="#setbody" hx-swap="outerHTML">{{ p }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    <div class="card-footer">
+      <form hx-post="/sets/{{ set.id }}/delete" hx-confirm="Удалить набор?">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <button class="btn btn-outline-danger">Удалить набор</button>
+      </form>
+    </div>
+  </div>
+
 </div>
+
+{# ===================== Поделиться ссылкой ===================== #}
+<div class="set-pane d-none" data-set-pane="share">
+
+  {% if building %}
+  <div class="alert alert-info">Архив готовится — нажмите «Скачать» ещё раз через несколько секунд.</div>
+  {% endif %}
+
+  <div class="card card-sm mb-3"><div class="card-body">
+    <div class="fw-bold mb-1">Для отправки</div>
+    <div class="text-secondary small mb-2">
+      Только публичные документы — {{ public_count }} из {{ resolved_count }}. Этим можно делиться.
+    </div>
+    <div class="btn-list mb-2">
+      <a href="/sets/{{ set.id }}/archive" class="btn btn-sm btn-outline-primary">
+        {{ ic.icon('download') }} Скачать архив
+      </a>
+    </div>
+    <form hx-post="/sets/{{ set.id }}/links" hx-target="#setbody" hx-swap="outerHTML" class="btn-list">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      {% set one_full = link_counts.one_time >= link_limits.one_time %}
+      {% set perm_full = link_counts.permanent >= link_limits.permanent %}
+      {% set gal_full = link_counts.gallery >= link_limits.gallery %}
+      <button name="kind" value="one_time" class="btn btn-sm btn-outline-secondary"
+              {{ 'disabled' if one_full }}>
+        {{ ic.icon('link') }} разовая ({{ link_counts.one_time }}/{{ link_limits.one_time }})
+      </button>
+      <button name="kind" value="permanent" class="btn btn-sm btn-outline-secondary"
+              {{ 'disabled' if perm_full }}>
+        {{ ic.icon('link') }} постоянная ({{ link_counts.permanent }}/{{ link_limits.permanent }})
+      </button>
+      <button name="mode" value="gallery" class="btn btn-sm btn-outline-secondary"
+              {{ 'disabled' if gal_full }}>
+        {{ ic.icon('photo') }} галерея ({{ link_counts.gallery }}/{{ link_limits.gallery }})
+      </button>
+    </form>
+    <div class="text-secondary small mt-2">
+      Ссылок «постоянная» и «галерея» — по одной; «разовых» — до {{ link_limits.one_time }}.
+      Считаются только действующие: отозванные и уже использованные не в счёт.
+    </div>
+  </div></div>
+
+  <div class="card">
+    <div class="card-header"><h3 class="card-title">Ссылки</h3></div>
+    <div class="table-responsive"><table class="table table-vcenter card-table">
+      <thead><tr><th>ссылка</th><th>тип</th><th>скачано</th><th class="w-1"></th></tr></thead>
+      <tbody>
+      {% for link, url in links %}
+        <tr>
+          <td><a href="{{ url }}" target="_blank" rel="noopener" class="text-secondary">{{ url }}</a></td>
+          <td>{{ 'галерея' if link.mode == 'gallery' else ('разовая' if link.max_downloads == 1 else 'постоянная') }}</td>
+          <td>{{ link.download_count }}{% if link.max_downloads %}/{{ link.max_downloads }}{% endif %}</td>
+          <td>
+            <form hx-post="/links/{{ link.id }}/revoke" hx-target="#setbody" hx-swap="outerHTML"
+                  hx-confirm="Отозвать эту ссылку? Действующие копии перестанут работать.">
+              <input type="hidden" name="csrf_token" value="{{ csrf }}">
+              <button class="btn btn-sm btn-ghost-danger">отозвать</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-secondary">Ссылок пока нет.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+
+</div>
+
+</div>
+
+<script>
+  (function () {
+    var bar = document.getElementById('set-tabs');
+    if (!bar) return;
+    bar.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-set-tab]');
+      if (!btn) return;
+      var name = btn.dataset.setTab;
+      bar.querySelectorAll('[data-set-tab]').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+      document.querySelectorAll('#setbody .set-pane').forEach(function (p) {
+        p.classList.toggle('d-none', p.dataset.setPane !== name);
+      });
+    });
+  })();
+</script>
 </div>

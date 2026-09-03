@@ -9,6 +9,7 @@
         <th class="text-center">Публичных</th>
         <th class="text-center">Доступно</th>
         <th>Обновлён</th>
+        <th class="w-1 text-center">Действия</th>
       </tr></thead>
       <tbody>
       {% for r in rows %}
@@ -19,9 +20,13 @@
           <td class="text-center">{{ r.public }}</td>
           <td class="text-center">{{ r.accessible }}</td>
           <td class="text-secondary">{{ r.set.updated_at|shortdate }}</td>
+          <td class="text-center">
+            <a data-detail href="/sets/{{ r.set.id }}" class="btn btn-sm btn-ghost-secondary"
+               title="Открыть набор">{{ ic.icon('settings') }}</a>
+          </td>
         </tr>
       {% else %}
-        <tr><td colspan="6" class="text-secondary">
+        <tr><td colspan="7" class="text-secondary">
           {% if q %}По запросу «{{ q }}» наборов нет.{% else %}Наборов пока нет — создайте выше.{% endif %}
         </td></tr>
       {% endfor %}

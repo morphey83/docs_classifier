@@ -115,6 +115,7 @@ async def _detail_ctx(request: Request, db: AsyncSession, user: User, s, *, expo
         (link, absolute_url(f"/{'g' if link.mode == 'gallery' else 'd'}/{link.token}"))
         for link in await svc.links_of_set(db, s.id)
     ]
+    link_counts = await svc.active_link_counts(db, s.id)
 
     export = None
     aid = export_id or request.query_params.get("export")
@@ -137,6 +138,8 @@ async def _detail_ctx(request: Request, db: AsyncSession, user: User, s, *, expo
         "resolved_count": len(resolved),
         "public_count": sum(1 for d in resolved if d.is_public),
         "links": links,
+        "link_counts": link_counts,
+        "link_limits": svc.LINK_LIMITS,
         "export": export,
         "building": request.query_params.get("building"),
     }
@@ -319,11 +322,14 @@ async def set_link_create(
     db: AsyncSession = Depends(get_session),
 ) -> Response:
     s = await _load(db, user, set_id)
-    await svc.create_share_link(
-        db, None, s=s, user=user,
-        kind="permanent" if kind == "permanent" else "one_time",
-        mode="gallery" if mode == "gallery" else "archive",
-    )
+    try:
+        await svc.create_share_link(
+            db, None, s=s, user=user,
+            kind="permanent" if kind == "permanent" else "one_time",
+            mode="gallery" if mode == "gallery" else "archive",
+        )
+    except svc.SetError as err:
+        return await _set_response(request, db, user, s, toast=str(err))
     return await _set_response(request, db, user, s, toast="Ссылка создана")
 
 

@@ -190,6 +190,27 @@ async def test_one_time_and_permanent_links(alice, domain):
     assert (await alice.get(perm["url"])).status_code == 404
 
 
+async def test_share_link_limits_per_kind(alice, domain):
+    d = domain["id"]
+    doc = await _upload(alice, d, "lim.txt", public=True)
+    s = (
+        await alice.post("/api/sets", json={"name": "lim", "document_ids": [doc["id"]]})
+    ).json()
+
+    links = f"/api/sets/{s['id']}/links"
+    assert (await alice.post(links, json={"kind": "permanent"})).status_code == 201
+    # a second permanent link is refused — only one per set
+    dup = await alice.post(links, json={"kind": "permanent"})
+    assert dup.status_code == 409 and "лимит" in dup.json()["detail"]
+    # a one-time link is a different kind and still allowed
+    assert (await alice.post(links, json={"kind": "one_time"})).status_code == 201
+    # …and once that one-time link is spent it stops counting → room for another
+    once = (await alice.get(links)).json()
+    tok = next(link_["url"] for link_ in once if link_["max_downloads"] == 1)
+    await _ready(alice, tok)  # download it → spent
+    assert (await alice.post(links, json={"kind": "one_time"})).status_code == 201
+
+
 async def test_gallery_link_serves_only_public_images(alice, domain):
     d = domain["id"]
     img = await _upload(alice, d, "pic.png", b"\x89PNG\r\n\x1a\n" + b"0" * 40, public=True)

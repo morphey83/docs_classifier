@@ -277,9 +277,12 @@ async def create_link(
     db: AsyncSession = Depends(get_session),
 ) -> LinkOut:
     s = await _owned(db, set_id, user)
-    link = await svc.create_share_link(
-        db, background, s=s, user=user, kind=body.kind, expires_at=body.expires_at
-    )
+    try:
+        link = await svc.create_share_link(
+            db, background, s=s, user=user, kind=body.kind, expires_at=body.expires_at
+        )
+    except svc.SetError as err:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(err)) from err
     return _link_out(link)
 
 

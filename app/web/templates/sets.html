@@ -4,26 +4,26 @@
 {% block page_title %}Мои наборы{% endblock %}
 {% block content %}
 
-<form method="post" action="/sets" class="card mb-3">
-  <div class="card-body row g-2 align-items-end">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <div class="col">
-      <label class="form-label">Новый набор</label>
+<div class="row g-2 mb-3 align-items-start">
+  <div class="col-12 col-md-auto">
+    <form method="post" action="/sets" class="d-flex gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <div class="input-icon">
         <span class="input-icon-addon">{{ ic.icon('clipboard') }}</span>
-        <input class="form-control" name="name" placeholder="Название набора" required maxlength="200">
+        <input class="form-control" name="name" placeholder="Новый набор" required maxlength="200"
+               autocomplete="off">
       </div>
-    </div>
-    <div class="col-auto"><button type="submit" class="btn btn-primary">Создать</button></div>
+      <button type="submit" class="btn btn-primary flex-shrink-0">Создать</button>
+    </form>
   </div>
-</form>
-
-<div class="mb-3">
-  <div class="input-icon">
-    <span class="input-icon-addon">{{ ic.icon('search') }}</span>
-    <input class="form-control" name="q" value="{{ q }}" placeholder="фильтр по названию" autocomplete="off"
-           hx-get="/sets" hx-target="#sets-table" hx-swap="outerHTML" hx-push-url="true"
-           hx-trigger="input changed delay:300ms, search">
+  <div class="col">
+    <div class="input-icon">
+      <span class="input-icon-addon">{{ ic.icon('search') }}</span>
+      <input class="form-control" name="q" value="{{ q }}" placeholder="фильтр по названию"
+             autocomplete="off"
+             hx-get="/sets" hx-target="#sets-table" hx-swap="outerHTML" hx-push-url="true"
+             hx-trigger="input changed delay:300ms, search">
+    </div>
   </div>
 </div>
 

@@ -520,6 +520,34 @@ async def start_full_export(
 
 
 # --- share links -------------------------------------------------------
+# --- share-link limits ------------------------------------------------
+# gallery / permanent: at most one each. one-time links: a service-wide cap
+# (only links that can still be used count — revoked or spent ones don't).
+LINK_LIMITS = {"gallery": 1, "permanent": 1, "one_time": settings.max_temporary_links}
+
+
+def link_kind(link: DownloadLink) -> str:
+    if link.mode == "gallery":
+        return "gallery"
+    return "one_time" if link.max_downloads == 1 else "permanent"
+
+
+def link_is_active(link: DownloadLink) -> bool:
+    if link.revoked_at is not None:
+        return False
+    if link.max_downloads is not None and link.download_count >= link.max_downloads:
+        return False
+    return not (link.expires_at is not None and as_aware(link.expires_at) <= utcnow())
+
+
+async def active_link_counts(db: AsyncSession, set_id: uuid.UUID) -> dict[str, int]:
+    out = {"gallery": 0, "permanent": 0, "one_time": 0}
+    for link in await links_of_set(db, set_id):  # already non-revoked
+        if link_is_active(link):
+            out[link_kind(link)] += 1
+    return out
+
+
 async def create_share_link(
     db: AsyncSession,
     background,
@@ -530,6 +558,13 @@ async def create_share_link(
     mode: str = "archive",
     expires_at: datetime | None = None,
 ) -> DownloadLink:
+    want = "gallery" if mode == "gallery" else ("one_time" if kind == "one_time" else "permanent")
+    if (await active_link_counts(db, s.id))[want] >= LINK_LIMITS[want]:
+        label = {"gallery": "галерея", "permanent": "постоянная", "one_time": "разовая"}[want]
+        raise SetError(
+            f"достигнут лимит ссылок «{label}» ({LINK_LIMITS[want]}). "
+            "Отзовите ненужную и попробуйте снова."
+        )
     artifact, _ = await ensure_current_archive(db, background, s, requested_by=user.id)
     link = DownloadLink(
         artifact_id=artifact.id,
