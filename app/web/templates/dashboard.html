@@ -46,7 +46,7 @@
               <td>
                 <div class="btn-list flex-nowrap">
                   {% if 'manage' in d.caps %}
-                  <a href="/domains/{{ d.domain.slug }}/settings" class="btn btn-icon btn-ghost-secondary"
+                  <a data-detail href="/domains/{{ d.domain.slug }}/settings" class="btn btn-icon btn-ghost-secondary"
                      title="Настройки домена">{{ ic.icon('settings') }}</a>
                   {% endif %}
                   <a href="/search?domain_id={{ d.domain.id }}" class="btn btn-icon btn-ghost-secondary"
@@ -56,8 +56,8 @@
                      title="Загрузить в этот домен">{{ ic.icon('upload') }}</a>
                   {% endif %}
                   {% if 'own' in d.caps %}
-                  <form method="post" action="/domains/{{ d.domain.slug }}/delete"
-                        data-confirm="Удалить домен «{{ d.domain.name }}» со всеми документами? Это необратимо.">
+                  <form hx-post="/domains/{{ d.domain.slug }}/delete" hx-swap="none"
+                        hx-confirm="Удалить домен «{{ d.domain.name }}» со всеми документами? Это необратимо.">
                     <input type="hidden" name="csrf_token" value="{{ csrf }}">
                     <button type="submit" class="btn btn-icon btn-ghost-danger" title="Удалить домен">{{ ic.icon('trash') }}</button>
                   </form>

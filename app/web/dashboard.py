@@ -86,5 +86,5 @@ async def create_domain(
         return RedirectResponse("/", status_code=303)
     domain = await domains_svc.create_domain(db, user, name=name)
     await db.flush()
-    slug = domain.slug
-    return RedirectResponse(f"/domains/{slug}", status_code=303)
+    # /domains/{slug} then 303s to "/" — the modal is the only way into a domain
+    return RedirectResponse(f"/domains/{domain.slug}", status_code=303)

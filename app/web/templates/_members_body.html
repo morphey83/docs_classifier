@@ -1,51 +1,44 @@
-{% extends "base.html" %}
 {% import "_icons.html" as ic %}
 {% set d = view.domain %}
-{% block title %}Участники — {{ d.name }}{% endblock %}
-{% block content %}
 {% set active = 'members' %}
-{% include "_domain_nav.html" %}
-
-<h2 class="mb-3">Участники</h2>
+{% include "_domain_tabs.html" %}
 
 <div class="card mb-3">
-  <div class="table-responsive">
-    <table class="table table-vcenter card-table">
-      <thead><tr><th>пользователь</th><th>роль</th><th class="w-1"></th></tr></thead>
-      <tbody>
-      {% for m, u in members %}
-      <tr>
-        <td>{{ u.username }} <span class="text-secondary">{{ u.email }}</span></td>
-        <td>
-          {% if u.id == owner_id %}<span class="badge bg-blue-lt">owner</span>
-          {% else %}
-          <form method="post" action="/domains/{{ d.slug }}/members/{{ u.id }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}">
-            <select class="form-select form-select-sm w-auto" name="role" onchange="this.form.submit()">
-              {% for r in roles %}<option value="{{ r }}" {{ 'selected' if m.role == r }}>{{ r }}</option>{% endfor %}
-            </select>
-          </form>
-          {% endif %}
-        </td>
-        <td>
-          {% if u.id != owner_id %}
-          <form method="post" action="/domains/{{ d.slug }}/members/{{ u.id }}/remove"
-                data-confirm="Убрать участника из домена?">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}">
-            <button class="btn btn-sm btn-ghost-danger">убрать</button>
-          </form>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <div class="table-responsive"><table class="table table-vcenter card-table">
+    <thead><tr><th>пользователь</th><th>роль</th><th class="w-1"></th></tr></thead>
+    <tbody>
+    {% for m, u in members %}
+    <tr>
+      <td>{{ u.username }} <span class="text-secondary">{{ u.email }}</span></td>
+      <td>
+        {% if u.id == owner_id %}<span class="badge bg-blue-lt">owner</span>
+        {% else %}
+        <select class="form-select form-select-sm w-auto" name="role"
+                hx-post="/domains/{{ d.slug }}/members/{{ u.id }}" hx-trigger="change"
+                hx-target="#detailbody" hx-swap="innerHTML">
+          {% for r in roles %}<option value="{{ r }}" {{ 'selected' if m.role == r }}>{{ r }}</option>{% endfor %}
+        </select>
+        {% endif %}
+      </td>
+      <td>
+        {% if u.id != owner_id %}
+        <form hx-post="/domains/{{ d.slug }}/members/{{ u.id }}/remove"
+              hx-target="#detailbody" hx-swap="innerHTML"
+              hx-confirm="Убрать участника из домена?">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <button class="btn btn-sm btn-ghost-danger">убрать</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
 </div>
 
 <div class="row row-cards">
   <div class="col-12 col-lg-5">
-    <form method="post" action="/domains/{{ d.slug }}/members" class="card">
+    <form hx-post="/domains/{{ d.slug }}/members" hx-target="#detailbody" hx-swap="innerHTML" class="card">
       <div class="card-body">
         <h3 class="card-title">Добавить участника</h3>
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
@@ -66,7 +59,7 @@
   </div>
 
   <div class="col-12 col-lg-7">
-    <form method="post" action="/domains/{{ d.slug }}/invites" class="card">
+    <form hx-post="/domains/{{ d.slug }}/invites" hx-target="#detailbody" hx-swap="innerHTML" class="card">
       <div class="card-body">
         <h3 class="card-title">Пригласить по ссылке</h3>
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
@@ -108,11 +101,7 @@
           </tbody>
         </table>
       </div>
-      <div class="card-footer text-secondary">
-        Приглашённый принимает приглашение через <code>POST /api/invites/{токен}/accept</code>.
-      </div>
       {% endif %}
     </form>
   </div>
 </div>
-{% endblock %}

@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Document, DocumentTag, Tag, User
+from app.models import Document, DocumentTag, Domain, Tag, User
 from app.util.slug import slugify
 
 
@@ -21,15 +21,19 @@ class TagError(ValueError):
 
 
 # --- reads ---------------------------------------------------------------
-async def list_tags(db: AsyncSession) -> list[tuple[Tag, int]]:
+async def list_tags(
+    db: AsyncSession, *, q: str | None = None
+) -> list[tuple[Tag, int]]:
     """Every tag with its live document count, most-used first."""
-    rows = await db.execute(
+    stmt = (
         select(Tag, func.count(DocumentTag.document_id))
         .outerjoin(DocumentTag, DocumentTag.tag_id == Tag.id)
         .group_by(Tag.id)
         .order_by(func.count(DocumentTag.document_id).desc(), Tag.name)
     )
-    return list(rows.all())
+    if q and q.strip():
+        stmt = stmt.where(Tag.name.ilike(f"%{q.strip()}%"))
+    return list((await db.execute(stmt)).all())
 
 
 async def suggest_tags(
@@ -105,20 +109,41 @@ async def recolor_tag(db: AsyncSession, tag: Tag, color: str | None) -> Tag:
     return tag
 
 
-async def merge_tags(db: AsyncSession, *, source: Tag, target: Tag) -> None:
-    """Repoint every link from ``source`` to ``target`` (dedup), drop ``source``."""
+async def merge_tags(
+    db: AsyncSession, *, source: Tag, target: Tag, owner_id: uuid.UUID
+) -> int:
+    """Move ``source`` → ``target`` on every document in a domain ``owner_id``
+    owns (dedup). Documents in other people's domains keep ``source``. If that
+    leaves ``source`` on no documents at all, it is deleted. Returns the number
+    of documents changed."""
     if source.id == target.id:
         raise TagError("cannot merge a tag into itself")
+
+    owned_docs = select(Document.id).where(
+        Document.domain_id.in_(select(Domain.id).where(Domain.owner_id == owner_id))
+    )
     already = set(
         await db.scalars(select(DocumentTag.document_id).where(DocumentTag.tag_id == target.id))
     )
-    for link in await db.scalars(select(DocumentTag).where(DocumentTag.tag_id == source.id)):
+    changed = 0
+    for link in await db.scalars(
+        select(DocumentTag).where(
+            DocumentTag.tag_id == source.id, DocumentTag.document_id.in_(owned_docs)
+        )
+    ):
         if link.document_id in already:
             await db.delete(link)
         else:
             link.tag_id = target.id
+        changed += 1
     await db.flush()
-    await db.delete(source)
+
+    still_used = await db.scalar(
+        select(func.count()).select_from(DocumentTag).where(DocumentTag.tag_id == source.id)
+    )
+    if not still_used:
+        await db.delete(source)
+    return changed
 
 
 # --- assignment -----------------------------------------------------

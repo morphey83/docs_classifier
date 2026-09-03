@@ -37,7 +37,8 @@ from app.web.templating import render
 
 router = APIRouter()
 
-PAGE_SIZE = 25
+# 12 = 2·3·4 — a full page of cards always fills complete rows at every breakpoint
+PAGE_SIZE = 12
 SORTS = {
     "uploaded_at": "загружен",
     "doc_date": "дата документа",

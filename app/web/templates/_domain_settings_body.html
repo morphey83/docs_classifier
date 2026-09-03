@@ -1,0 +1,107 @@
+{% import "_icons.html" as ic %}
+{% set d = view.domain %}
+{% set active = 'settings' %}
+{% include "_domain_tabs.html" %}
+
+<form hx-post="/domains/{{ d.slug }}/settings" hx-target="#detailbody" hx-swap="innerHTML" class="card mb-3">
+  <div class="card-body">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="mb-3">
+      <label class="form-label">Название</label>
+      <div class="input-icon">
+        <span class="input-icon-addon">{{ ic.icon('folder') }}</span>
+        <input class="form-control" name="name" value="{{ d.name }}" required maxlength="120">
+      </div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Описание</label>
+      <textarea class="form-control" name="description" rows="2">{{ d.description or '' }}</textarea>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-check">
+        <input class="form-check-input" type="checkbox" name="auto_ocr" {{ 'checked' if s.get('auto_ocr') }}>
+        <span class="form-check-label">авто-OCR при загрузке</span>
+      </label>
+      <label class="form-check">
+        <input class="form-check-input" type="checkbox" name="auto_index" {{ 'checked' if s.get('auto_index') }}>
+        <span class="form-check-label">авто-индексация при загрузке</span>
+      </label>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Видимость новых документов</label>
+      <select class="form-select" name="default_document_visibility">
+        <option value="private" {{ 'selected' if s.get('default_document_visibility') != 'public' }}>приватные (по умолчанию)</option>
+        <option value="public" {{ 'selected' if s.get('default_document_visibility') == 'public' }}>публичные</option>
+      </select>
+      <div class="form-hint">
+        Публичные документы могут попасть в архив набора и уйти по ссылке.
+        Влияет только на новые загрузки; для старых используйте массовое действие в поиске.
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Язык OCR по умолчанию</label>
+      <div class="input-icon">
+        <span class="input-icon-addon">{{ ic.icon('scan') }}</span>
+        <input class="form-control" name="default_ocr_lang" value="{{ s.get('default_ocr_lang', '') }}" placeholder="rus+eng">
+      </div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Разрешённые типы файлов
+        <span class="form-hint d-inline">расширения через запятую; пусто = любые</span></label>
+      <div class="input-icon">
+        <span class="input-icon-addon">{{ ic.icon('file') }}</span>
+        <input class="form-control" name="allowed_types" value="{{ (s.get('allowed_types') or [])|join(', ') }}" placeholder="pdf, docx, png">
+      </div>
+      {% if master_types %}
+      <div class="form-hint mt-1">
+        Инстанс разрешает только: <strong>{{ master_types|join(', ') }}</strong>.
+        Всё, что вне этого списка, будет проигнорировано.
+      </div>
+      {% endif %}
+    </div>
+    <div class="mb-3">
+      <label class="form-label">При конфликте имён в архиве</label>
+      <select class="form-select" name="archive_on_conflict">
+        <option value="skip" {{ 'selected' if s.get('archive_on_conflict') != 'new' }}>пропускать</option>
+        <option value="new" {{ 'selected' if s.get('archive_on_conflict') == 'new' }}>грузить как отдельный</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <div class="col-sm-6 mb-3">
+        <label class="form-label">Квота хранилища, МБ <span class="form-hint d-inline">макс. {{ caps.quota }}</span></label>
+        <input class="form-control" name="storage_quota_mb" type="number" min="0" max="{{ caps.quota }}"
+               value="{{ s.get('storage_quota_mb', caps.quota) }}">
+      </div>
+      <div class="col-sm-6 mb-3">
+        <label class="form-label">Макс. загрузка, МБ <span class="form-hint d-inline">макс. {{ caps.upload }}</span></label>
+        <input class="form-control" name="max_upload_mb" type="number" min="0" max="{{ caps.upload }}"
+               value="{{ s.get('max_upload_mb', caps.upload) }}">
+      </div>
+      <div class="col-sm-6 mb-3">
+        <label class="form-label">Хранить корзину, дней</label>
+        <input class="form-control" name="trash_retention_days" type="number" min="0"
+               value="{{ s.get('trash_retention_days', caps.trash) }}">
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Сохранить</button>
+  </div>
+</form>
+
+{% if is_owner %}
+<div class="card border-danger">
+  <div class="card-body">
+    <h3 class="card-title text-danger">Опасная зона</h3>
+    <p class="text-secondary">Удаление домена необратимо и уносит все документы.</p>
+    <form hx-post="/domains/{{ d.slug }}/delete" hx-swap="none"
+          hx-confirm="Удалить домен «{{ d.name }}» со всеми документами? Это необратимо.">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <button class="btn btn-danger">Удалить домен</button>
+    </form>
+  </div>
+</div>
+{% endif %}

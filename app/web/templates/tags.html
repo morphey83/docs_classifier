@@ -6,54 +6,41 @@
 
 <p class="text-secondary">
   Единый пул тегов для всех доменов. Теги создаются при разметке документов;
-  тег без документов автоматически исчезает при ночной уборке. Переименовать,
-  перекрасить или слить может любой пользователь.
+  тег без документов автоматически исчезает при ночной уборке. Название и цвет
+  сохраняются сразу. «Слить» переносит тег на другой — но только на ваших
+  документах (в доменах, где вы owner); чужие документы не затрагиваются.
 </p>
 
-<div class="card">
-  <div class="table-responsive">
-    <table class="table table-vcenter card-table">
-      <thead><tr><th>тег</th><th class="w-1">документов</th><th>слить</th></tr></thead>
-      <tbody>
-      {% for tag, count in tags %}
-      <tr>
-        <td>
-          {% set swatches = ['', '#206bc4', '#4299e1', '#2fb344', '#f76707', '#d63939', '#ae3ec9', '#868e96'] %}
-          <form method="post" action="/tags/{{ tag.id }}" class="d-flex gap-2 align-items-center flex-wrap">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}">
-            <input class="form-control form-control-sm" style="max-width:16rem" name="name" value="{{ tag.name }}">
-            <span class="d-inline-flex gap-1">
-              {% for c in swatches %}
-              <label class="form-colorinput" title="{{ c or 'без цвета' }}">
-                <input name="color" type="radio" value="{{ c }}" class="form-colorinput-input"
-                       {{ 'checked' if (tag.color or '') == c }}>
-                <span class="form-colorinput-color rounded"
-                      style="{{ 'background:%s' % c if c else 'background:transparent;border:1px dashed var(--tblr-border-color)' }}"></span>
-              </label>
-              {% endfor %}
-            </span>
-            <button class="btn btn-sm btn-outline-primary" title="Сохранить">✓</button>
-          </form>
-        </td>
-        <td class="text-secondary">{{ count }}</td>
-        <td>
-          <form method="post" action="/tags/{{ tag.id }}/merge" class="d-flex gap-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}">
-            <select class="form-select form-select-sm w-auto" name="into" required>
-              <option value="" disabled selected>слить в…</option>
-              {% for other, _c in tags %}{% if other.id != tag.id %}
-              <option value="{{ other.id }}">{{ other.name }}</option>
-              {% endif %}{% endfor %}
-            </select>
-            <button class="btn btn-sm btn-ghost-secondary">слить</button>
-          </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="3" class="text-secondary">Тегов пока нет — они появятся, когда вы разметите документы.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
+<div class="mb-3">
+  <div class="input-icon">
+    <span class="input-icon-addon">{{ ic.icon('search') }}</span>
+    <input class="form-control" id="tags-search" name="q" value="{{ q }}"
+           placeholder="поиск по названию" autocomplete="off"
+           hx-get="/tags" hx-target="#tags-table" hx-swap="outerHTML" hx-push-url="true"
+           hx-trigger="input changed delay:300ms, search">
   </div>
 </div>
+
+{% include "_tags_table.html" %}
+
+<script>
+  // pick a tag in a row's "слить в…" select → confirm → merge → refresh the table
+  document.body.addEventListener('change', function (e) {
+    var sel = e.target.closest && e.target.closest('.tag-merge');
+    if (!sel || !sel.value) return;
+    var into = sel.value;
+    var src = sel.dataset.name;
+    var dst = sel.options[sel.selectedIndex].textContent.trim();
+    var q = (document.getElementById('tags-search') || {}).value || '';
+    sel.value = '';
+    window.dcConfirm(
+      'Слить тег «' + src + '» в «' + dst + '»? На ваших документах он будет заменён на «' + dst + '».',
+      function () {
+        window.htmx.ajax('POST', '/tags/' + sel.dataset.tag + '/merge', {
+          target: '#tags-table', swap: 'outerHTML', values: { into: into, q: q }
+        });
+      }
+    );
+  });
+</script>
 {% endblock %}

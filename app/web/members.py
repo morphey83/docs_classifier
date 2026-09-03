@@ -1,4 +1,4 @@
-"""Web UI: domain members and invites (manage capability)."""
+"""Web UI: the domain modal's Участники tab — members and invites (manage cap)."""
 
 from __future__ import annotations
 
@@ -20,13 +20,7 @@ from app.web.templating import render
 router = APIRouter()
 
 
-@router.get("/domains/{slug}/members")
-async def members_page(
-    request: Request,
-    view: DomainView = Depends(domain_by_slug),
-    db: AsyncSession = Depends(get_session),
-) -> Response:
-    require_cap(view, Cap.manage)
+async def _members_ctx(db: AsyncSession, view: DomainView) -> dict:
     members = await svc.list_members(db, view.domain.id)
     invites = list(
         await db.scalars(
@@ -35,17 +29,29 @@ async def members_page(
             .order_by(DomainInvite.created_at.desc())
         )
     )
-    return render(
-        request,
-        "members.html",
-        {
-            "view": view,
-            "members": list(members),
-            "invites": invites,
-            "roles": [r.value for r in ASSIGNABLE_ROLES],
-            "owner_id": view.domain.owner_id,
-        },
-    )
+    return {
+        "view": view,
+        "members": list(members),
+        "invites": invites,
+        "roles": [r.value for r in ASSIGNABLE_ROLES],
+        "owner_id": view.domain.owner_id,
+    }
+
+
+async def _respond(request: Request, db: AsyncSession, view: DomainView, *, toast=None) -> Response:
+    if request.headers.get("HX-Request"):
+        return render(request, "_members_body.html", await _members_ctx(db, view), toast=toast)
+    return RedirectResponse("/", status_code=303)
+
+
+@router.get("/domains/{slug}/members")
+async def members_page(
+    request: Request,
+    view: DomainView = Depends(domain_by_slug),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    require_cap(view, Cap.manage)
+    return await _respond(request, db, view)
 
 
 @router.post("/domains/{slug}/members")
@@ -67,7 +73,7 @@ async def member_add(
         )
     except (svc.DomainError, ValueError) as err:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(err)) from err
-    return RedirectResponse(f"/domains/{view.domain.slug}/members", status_code=303)
+    return await _respond(request, db, view, toast=f"{target.username} добавлен")
 
 
 @router.post("/domains/{slug}/members/{user_id}")
@@ -89,11 +95,12 @@ async def member_role(
         )
     except (svc.DomainError, ValueError) as err:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(err)) from err
-    return RedirectResponse(f"/domains/{view.domain.slug}/members", status_code=303)
+    return await _respond(request, db, view, toast="Роль изменена")
 
 
 @router.post("/domains/{slug}/members/{user_id}/remove")
 async def member_remove(
+    request: Request,
     user_id: uuid.UUID,
     _: None = CsrfGuard,
     view: DomainView = Depends(domain_by_slug),
@@ -104,7 +111,7 @@ async def member_remove(
         await svc.remove_member(db, view.domain, user_id)
     except svc.DomainError as err:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(err)) from err
-    return RedirectResponse(f"/domains/{view.domain.slug}/members", status_code=303)
+    return await _respond(request, db, view, toast="Участник убран")
 
 
 @router.post("/domains/{slug}/invites")
@@ -126,4 +133,4 @@ async def invite_create(
         )
     except (svc.DomainError, ValueError) as err:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(err)) from err
-    return RedirectResponse(f"/domains/{view.domain.slug}/members", status_code=303)
+    return await _respond(request, db, view, toast="Приглашение создано")

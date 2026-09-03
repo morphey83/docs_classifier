@@ -1,4 +1,4 @@
-"""Web UI: a single domain's overview — opens in the shared detail modal."""
+"""Web UI: a domain's Обзор tab — lives only inside the shared detail modal."""
 
 from __future__ import annotations
 
@@ -22,7 +22,6 @@ async def _overview_ctx(db: AsyncSession, view: DomainView) -> dict:
         db, [view.domain.id], search_svc.SearchFilters(page=1, page_size=1)
     )
     return {
-        "partial": "_domain_body.html",
         "view": view,
         "doc_total": total,
         "inbox": await docs_svc.inbox_count(db, view.domain.id),
@@ -35,7 +34,9 @@ async def domain_overview(
     view: DomainView = Depends(domain_by_slug),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
-    return render(request, "domain.html", await _overview_ctx(db, view))
+    if not request.headers.get("HX-Request"):
+        return RedirectResponse("/", status_code=303)
+    return render(request, "_domain_body.html", await _overview_ctx(db, view))
 
 
 @router.post("/domains/{slug}/rename")
@@ -52,5 +53,6 @@ async def domain_rename(
         view.domain.name = name
         await db.flush()
     if request.headers.get("HX-Request"):
-        return render(request, "domain.html", await _overview_ctx(db, view), toast="Сохранено")
-    return RedirectResponse(f"/domains/{view.domain.slug}", status_code=303)
+        ctx = await _overview_ctx(db, view)
+        return render(request, "_domain_body.html", ctx, toast="Сохранено")
+    return RedirectResponse("/", status_code=303)

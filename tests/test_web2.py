@@ -348,13 +348,14 @@ async def test_global_tag_page_rename(alice, web_domain):
 
     listing = await alice.get("/tags")
     assert "Контракт" in listing.text
-    tag_id = re.search(r'action="/tags/([0-9a-f-]{36})"', listing.text).group(1)
+    tag_id = re.search(r"/tags/([0-9a-f-]{36})/rename", listing.text).group(1)
 
     upd = await alice.post(
-        f"/tags/{tag_id}",
-        data={"name": "Договор", "color": "", "csrf_token": web_csrf(listing.text)},
+        f"/tags/{tag_id}/rename",
+        data={"name": "Договор", "csrf_token": web_csrf(listing.text)},
+        headers={"HX-Request": "true"},
     )
-    assert upd.status_code == 303
+    assert upd.status_code == 204
     assert "Договор" in (await alice.get("/tags")).text
 
 
@@ -368,54 +369,59 @@ async def test_search_result_tag_uses_its_colour(alice, web_domain):
         headers={"HX-Request": "true"},
     )
     listing = (await alice.get("/tags")).text
-    tag_id = re.search(r'action="/tags/([0-9a-f-]{36})"', listing).group(1)
+    tag_id = re.search(r"/tags/([0-9a-f-]{36})/color", listing).group(1)
     await alice.post(
-        f"/tags/{tag_id}",
-        data={"name": "срочно", "color": "#d63939", "csrf_token": web_csrf(listing)},
+        f"/tags/{tag_id}/color",
+        data={"color": "#d63939", "csrf_token": web_csrf(listing)},
+        headers={"HX-Request": "true"},
     )
 
     results = (await alice.get("/search?q=col", headers={"HX-Request": "true"})).text
     assert "background:#d63939" in results
 
 
-# --- members ---------------------------------------------------
+# --- members (domain modal tab) --------------------------------
 async def test_members_add_and_role_change(alice, bob, web_domain):
-    page = (await alice.get(f"/domains/{web_domain}/members")).text
+    hx = {"HX-Request": "true"}
+    page = (await alice.get(f"/domains/{web_domain}/members", headers=hx)).text
     r = await alice.post(
         f"/domains/{web_domain}/members",
         data={"username": "bob", "role": "viewer", "csrf_token": web_csrf(page)},
+        headers=hx,
     )
-    assert r.status_code == 303
-
-    listing = await alice.get(f"/domains/{web_domain}/members")
-    assert "bob" in listing.text
-    bob_id = re.search(r"/members/([0-9a-f-]{36})/remove", listing.text).group(1)
+    assert r.status_code == 200 and "bob" in r.text
+    bob_id = re.search(r"/members/([0-9a-f-]{36})/remove", r.text).group(1)
 
     ch = await alice.post(
         f"/domains/{web_domain}/members/{bob_id}",
-        data={"role": "editor", "csrf_token": web_csrf(listing.text)},
+        data={"role": "editor", "csrf_token": web_csrf(r.text)},
+        headers=hx,
     )
-    assert ch.status_code == 303
+    assert ch.status_code == 200
     rm = await alice.post(
         f"/domains/{web_domain}/members/{bob_id}/remove",
-        data={"csrf_token": web_csrf(listing.text)},
+        data={"csrf_token": web_csrf(r.text)},
+        headers=hx,
     )
-    assert rm.status_code == 303
+    assert rm.status_code == 200
 
 
 async def test_members_page_forbidden_for_viewer(alice, bob, web_domain):
-    page = (await alice.get(f"/domains/{web_domain}/members")).text
+    hx = {"HX-Request": "true"}
+    page = (await alice.get(f"/domains/{web_domain}/members", headers=hx)).text
     await alice.post(
         f"/domains/{web_domain}/members",
         data={"username": "bob", "role": "viewer", "csrf_token": web_csrf(page)},
+        headers=hx,
     )
+    # a plain (non-HX) request — the HX error handler would soften a 403 to a 200 toast
     assert (await bob.get(f"/domains/{web_domain}/members")).status_code == 403
 
 
 # --- settings + trash ----------------------------------------
 async def test_post_forms_carry_a_csrf_field(alice, web_domain):
     # a real browser submit uses the token in the form, not the body hx-headers
-    for url in (f"/upload?domain={web_domain}", f"/domains/{web_domain}/settings"):
+    for url in ("/", f"/upload?domain={web_domain}"):
         page = (await alice.get(url)).text
         forms = re.findall(r"<form[^>]*method=\"post\"[^>]*>(.*?)</form>", page, re.S)
         assert forms, url
@@ -448,7 +454,8 @@ async def test_hx_upload_returns_just_the_result_fragment(alice, web_domain):
 
 
 async def test_settings_save_allowed_types(alice, web_domain):
-    page = (await alice.get(f"/domains/{web_domain}/settings")).text
+    hx = {"HX-Request": "true"}
+    page = (await alice.get(f"/domains/{web_domain}/settings", headers=hx)).text
     r = await alice.post(
         f"/domains/{web_domain}/settings",
         data={
@@ -457,8 +464,9 @@ async def test_settings_save_allowed_types(alice, web_domain):
             "auto_ocr": "on",
             "csrf_token": web_csrf(page),
         },
+        headers=hx,
     )
-    assert r.status_code == 303
+    assert r.status_code == 200 and "<html" not in r.text
     # a disallowed type is now rejected on upload
     up = (await alice.get(f"/upload?domain={web_domain}")).text
     bad = await alice.post(
@@ -531,14 +539,39 @@ async def test_domain_overview_is_a_modal_partial(alice, web_domain):
 
 
 async def test_domain_rename_from_the_modal(alice, web_domain):
-    page = (await alice.get(f"/domains/{web_domain}")).text
+    hx = {"HX-Request": "true"}
+    page = (await alice.get(f"/domains/{web_domain}", headers=hx)).text
     r = await alice.post(
         f"/domains/{web_domain}/rename",
         data={"name": "Переименован", "csrf_token": web_csrf(page)},
-        headers={"HX-Request": "true"},
+        headers=hx,
     )
     assert r.status_code == 200 and "Переименован" in r.text
     assert "Переименован" in (await alice.get("/")).text
+
+
+async def test_tag_merge_is_scoped_to_owned_domains(alice, bob, web_domain):
+    await _upload(alice, web_domain, "mine.txt")
+    my_doc = await _doc_id(alice, web_domain)
+    bob_dom = (await bob.post("/api/domains", json={"name": "BobDom"})).json()["id"]
+    bd = (
+        await bob.post(
+            f"/api/domains/{bob_dom}/uploads",
+            files={"file": ("b.txt", b"b", "text/plain")},
+        )
+    ).json()["document"]["id"]
+    await alice.patch(f"/api/documents/{my_doc}/tags", json={"tag_names": ["old", "keep"]})
+    await bob.patch(f"/api/documents/{bd}/tags", json={"tag_names": ["old", "keep"]})
+
+    tags = {t["name"]: t["id"] for t in (await alice.get("/api/tags/all")).json()}
+    r = await alice.post(f"/api/tags/{tags['old']}/merge", json={"into": tags["keep"]})
+    assert r.status_code == 200
+
+    mine = [t["name"] for t in (await alice.get(f"/api/documents/{my_doc}")).json()["tags"]]
+    assert mine == ["keep"]  # merged away on alice's own document
+    his = sorted(t["name"] for t in (await bob.get(f"/api/documents/{bd}")).json()["tags"])
+    assert his == ["keep", "old"]  # bob's document is untouched
+    assert "old" in {t["name"] for t in (await alice.get("/api/tags/all")).json()}
 
 
 # --- profile + global search --------------------------------

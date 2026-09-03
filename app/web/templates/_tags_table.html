@@ -1,0 +1,65 @@
+{% import "_icons.html" as ic %}
+<div id="tags-table">
+  <div class="card">
+    <div class="table-responsive"><table class="table table-vcenter card-table">
+      <thead><tr>
+        <th>Тег</th>
+        <th>Цвет</th>
+        <th class="text-center w-1">документов</th>
+        <th class="w-1">слить в…</th>
+      </tr></thead>
+      <tbody>
+      {% for tag, count in tags %}
+      <tr>
+        <td>
+          <input class="form-control form-control-sm" style="max-width:16rem" value="{{ tag.name }}"
+                 name="name" autocomplete="off"
+                 hx-post="/tags/{{ tag.id }}/rename" hx-trigger="change" hx-swap="none">
+        </td>
+        <td>
+          <span class="d-inline-flex gap-1">
+            {% for c in swatches %}
+            <label class="form-colorinput" title="{{ c or 'без цвета' }}">
+              <input type="radio" name="tc-{{ tag.id }}" value="{{ c }}" class="form-colorinput-input"
+                     {{ 'checked' if (tag.color or '') == c }}
+                     hx-post="/tags/{{ tag.id }}/color" hx-trigger="change" hx-swap="none"
+                     hx-vals='{"color": "{{ c }}"}'>
+              <span class="form-colorinput-color rounded"
+                    style="{{ 'background:%s' % c if c else 'background:transparent;border:1px dashed var(--tblr-border-color)' }}"></span>
+            </label>
+            {% endfor %}
+          </span>
+        </td>
+        <td class="text-center text-secondary">{{ count }}</td>
+        <td>
+          <select class="form-select form-select-sm w-auto tag-merge"
+                  data-tag="{{ tag.id }}" data-name="{{ tag.name }}">
+            <option value="" selected>—</option>
+            {% for other, _c in all_tags if other.id != tag.id %}
+            <option value="{{ other.id }}">{{ other.name }}</option>
+            {% endfor %}
+          </select>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-secondary">
+        {% if q %}По запросу «{{ q }}» тегов нет.{% else %}Тегов пока нет — они появятся, когда вы разметите документы.{% endif %}
+      </td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% if pages > 1 %}
+    <div class="card-footer d-flex align-items-center justify-content-between">
+      <span class="text-secondary small">всего: {{ total }}</span>
+      <ul class="pagination pagination-sm m-0">
+        {% for p in range(1, pages + 1) %}
+        <li class="page-item {{ 'active' if p == page }}">
+          <a class="page-link" hx-get="/tags?q={{ q|urlencode }}&page={{ p }}"
+             hx-target="#tags-table" hx-swap="outerHTML" hx-push-url="true">{{ p }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+</div>

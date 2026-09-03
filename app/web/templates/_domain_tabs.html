@@ -1,0 +1,19 @@
+{# tab bar for the domain modal — every tab swaps the modal body #}
+{% set d = view.domain %}
+{% set active = active|default('overview') %}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link{{ ' active' if active == 'overview' }}" role="button"
+       hx-get="/domains/{{ d.slug }}" hx-target="#detailbody" hx-swap="innerHTML">Обзор</a>
+  </li>
+  {% if view.has('manage') %}
+  <li class="nav-item">
+    <a class="nav-link{{ ' active' if active == 'members' }}" role="button"
+       hx-get="/domains/{{ d.slug }}/members" hx-target="#detailbody" hx-swap="innerHTML">Участники</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link{{ ' active' if active == 'settings' }}" role="button"
+       hx-get="/domains/{{ d.slug }}/settings" hx-target="#detailbody" hx-swap="innerHTML">Настройки</a>
+  </li>
+  {% endif %}
+</ul>

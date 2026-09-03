@@ -55,9 +55,12 @@ async def test_create_domain_and_overview(alice, web_domain):
     home = await alice.get("/")
     assert "Рабочий" in home.text
 
-    page = await alice.get(f"/domains/{web_domain}")
+    # the domain card is a modal partial now — a plain GET bounces to the dashboard
+    assert (await alice.get(f"/domains/{web_domain}")).status_code == 303
+    page = await alice.get(f"/domains/{web_domain}", headers={"HX-Request": "true"})
     assert page.status_code == 200
-    assert "Рабочий" in page.text and "owner" in page.text
+    assert "Рабочий" in page.text and 'id="domainbody"' in page.text
+    assert "<html" not in page.text
 
 
 async def test_dashboard_table_has_counts_and_actions(alice, web_domain):

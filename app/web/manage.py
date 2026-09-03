@@ -1,4 +1,4 @@
-"""Web UI: domain settings + trash."""
+"""Web UI: the domain modal's Настройки tab + trash helpers."""
 
 from __future__ import annotations
 
@@ -24,26 +24,28 @@ def _int(value: str, cap: int) -> int | None:
         return None
 
 
+def _settings_ctx(view: DomainView) -> dict:
+    return {
+        "view": view,
+        "s": view.domain.settings or {},
+        "caps": {
+            "quota": cfg.default_domain_quota_mb,
+            "upload": cfg.max_upload_mb,
+            "trash": cfg.default_trash_retention_days,
+        },
+        "master_types": sorted(cfg.allowed_types_master_set or []),
+        "is_owner": view.has(Cap.own),
+    }
+
+
 @router.get("/domains/{slug}/settings")
 async def settings_page(
     request: Request, view: DomainView = Depends(domain_by_slug)
 ) -> Response:
     require_cap(view, Cap.manage)
-    return render(
-        request,
-        "domain_settings.html",
-        {
-            "view": view,
-            "s": view.domain.settings or {},
-            "caps": {
-                "quota": cfg.default_domain_quota_mb,
-                "upload": cfg.max_upload_mb,
-                "trash": cfg.default_trash_retention_days,
-            },
-            "master_types": sorted(cfg.allowed_types_master_set or []),
-            "is_owner": view.has(Cap.own),
-        },
-    )
+    if not request.headers.get("HX-Request"):
+        return RedirectResponse("/", status_code=303)
+    return render(request, "_domain_settings_body.html", _settings_ctx(view))
 
 
 @router.post("/domains/{slug}/settings")
@@ -89,17 +91,23 @@ async def settings_save(
             s[key] = v
     d.settings = s
     await db.flush()
-    return RedirectResponse(f"/domains/{d.slug}/settings", status_code=303)
+    if request.headers.get("HX-Request"):
+        return render(request, "_domain_settings_body.html", _settings_ctx(view), toast="Сохранено")
+    return RedirectResponse("/", status_code=303)
 
 
 @router.post("/domains/{slug}/delete")
 async def domain_delete(
+    request: Request,
     _: None = CsrfGuard,
     view: DomainView = Depends(domain_by_slug),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
     require_cap(view, Cap.own)
     await db.delete(view.domain)
+    await db.commit()
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204, headers={"HX-Redirect": "/"})
     return RedirectResponse("/", status_code=303)
 
 

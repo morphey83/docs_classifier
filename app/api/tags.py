@@ -59,13 +59,13 @@ async def update_tag(
 async def merge_tag(
     tag_id: uuid.UUID,
     body: TagMerge,
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, str]:
     source = await _load(db, tag_id)
     target = await _load(db, body.into)
     try:
-        await svc.merge_tags(db, source=source, target=target)
+        await svc.merge_tags(db, source=source, target=target, owner_id=user.id)
     except svc.TagError as err:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(err)) from err
     return {"merged_into": str(target.id)}
