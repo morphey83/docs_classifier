@@ -112,6 +112,12 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
     remote Garage/MinIO host later — only `S3_ENDPOINT` changes).
     Derived/artifact caches stay local. `python -m app.storage.migrate`
     moves existing blobs between backends.
+  - **7p** document sets are now **user-owned** (§15 rev 4): a set is
+    *N saved search filters + explicit adds*, resolved live. Share
+    links expose only `is_public` documents (`default_document_visibility`
+    per domain, overridable per-doc / in bulk); the owner gets a
+    private «Полная выгрузка» of everything they can reach. Routes
+    moved to `/sets/*`; migration 0010.
 - **8 email confirmation** (opt-in) — set `SMTP_HOST` to require a
   verified address before a new account can log in (migration 0009,
   `app/services/email.py`, `GET /verify/{token}`); unset keeps sign-up
