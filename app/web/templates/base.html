@@ -128,7 +128,7 @@
             {% if user %}
             {% set nav = [
               ('/search', 'Поиск', 'search'),
-              ('/inbox', 'Очередь на сортировку', 'inbox'),
+              ('/search?preset=inbox', 'Не размечено', 'inbox'),
               ('/upload', 'Загрузка', 'upload'),
               ('/sets', 'Наборы', 'clipboard'),
               ('/tags', 'Теги', 'hash'),

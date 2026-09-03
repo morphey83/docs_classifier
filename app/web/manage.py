@@ -12,7 +12,6 @@ from app.rbac import Cap
 from app.services import trash as trash_svc
 from app.web.csrf import CsrfGuard
 from app.web.deps import DomainView, domain_by_slug, require_cap
-from app.web.search import _tags_by_doc
 from app.web.templating import render
 
 router = APIRouter()
@@ -103,26 +102,11 @@ async def domain_delete(
     return RedirectResponse("/", status_code=303)
 
 
-# --- trash -------------------------------------------------------
+# --- trash — now the "Корзина" search preset (§14 rev 2) --------------
 @router.get("/domains/{slug}/trash")
-async def trash_page(
-    request: Request,
-    page: int = 1,
-    view: DomainView = Depends(domain_by_slug),
-    db: AsyncSession = Depends(get_session),
-) -> Response:
-    require_cap(view, Cap.delete)
-    docs, total = await trash_svc.list_trash(db, view.domain.id, page=page, page_size=50)
-    return render(
-        request,
-        "trash.html",
-        {
-            "view": view,
-            "docs": docs,
-            "tag_map": await _tags_by_doc(db, [d.id for d in docs]),
-            "total": total,
-            "is_owner": view.has(Cap.own),
-        },
+async def trash_redirect(view: DomainView = Depends(domain_by_slug)) -> Response:
+    return RedirectResponse(
+        f"/search?preset=trash&domain_id={view.domain.id}", status_code=307
     )
 
 
@@ -134,4 +118,6 @@ async def trash_purge(
 ) -> Response:
     require_cap(view, Cap.own)
     await trash_svc.purge_domain_trash(db, view.domain.id)
-    return RedirectResponse(f"/domains/{view.domain.slug}/trash", status_code=303)
+    return RedirectResponse(
+        f"/search?preset=trash&domain_id={view.domain.id}", status_code=303
+    )

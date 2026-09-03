@@ -440,6 +440,22 @@ counts by status / has_ocr / has_index) to drive filter UIs.
 
 ## 7. Search & filtering
 
+> **Rev 2 (2026-09-03).** Search is the one document surface. **Корзина** and
+> **Очередь на сортировку** are search *presets*, not separate pages:
+> `?preset=active` (default, `deleted_at IS NULL`), `?preset=inbox`
+> (`status=inbox` + hide the docs this user deferred), `?preset=trash`
+> (`deleted_at IS NOT NULL`). Results carry state-aware actions — a trashed row
+> offers *restore* / *purge*, an inbox row opens the tagging modal. The
+> card-by-card tagging flow (`/inbox/card`) launches from the inbox preset.
+> `/inbox` and `/domains/{d}/trash` 307-redirect to the presets.
+>
+> **Tags are one global pool** — not owned by a domain. Created on use, matched
+> by slug (`slugify`, case/space-insensitive → one tag per slug), shared across
+> every domain. `GET /tags` (root page) renames / recolours / merges; anyone
+> signed in. No manual delete: a tag lives while ≥1 document carries it and the
+> nightly `cleanup` sweeps the rest. Frequent-tag suggestions =
+> `suggest_tags(owner's domain ids)`.
+
 ### Why Postgres-only
 
 On ~2 GB RAM the budget is roughly: Postgres ~256–400 MB, `web` ~150 MB,
@@ -939,8 +955,10 @@ are **dropped** (test-phase data). `document_set_item` keeps its shape.
 ## 14. Trash & retention
 
 - **Soft delete** (`delete` capability): `deleted_at` + `deleted_by` set. The
-  document leaves search / inbox / exports and appears in the domain's
-  **Корзина** view (`?include_trash=true` or `GET /domains/{d}/trash`).
+  document leaves the default search / inbox / exports and shows up under the
+  **Корзина** search preset (`/search?preset=trash`), where a `delete`-holder
+  can bulk-restore or bulk-purge. `POST /domains/{d}/trash/purge` (owner) still
+  empties a whole domain's trash.
 - **Auto-purge**: the daily `cleanup` job hard-deletes documents where
   `deleted_at < now() - domain.trash_retention_days` (default 30, per-domain
   setting). Hard delete removes the `document` row and its `document_tag` /

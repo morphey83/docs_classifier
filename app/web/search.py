@@ -9,7 +9,7 @@ from collections.abc import Mapping
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -28,6 +28,7 @@ from app.rbac import ROLE_CAPS, Cap, Role
 from app.services import docsets as docsets_svc
 from app.services import domains as domains_svc
 from app.services import search as search_svc
+from app.services import trash as trash_svc
 from app.services.search import describe_filters, index_document
 from app.web.csrf import CsrfGuard
 from app.web.deps import current_user
@@ -117,17 +118,28 @@ def _scope(params: Mapping[str, str], dom_by_id: dict) -> tuple[uuid.UUID | None
     return None, list(dom_by_id)
 
 
+PRESETS = ("active", "inbox", "trash")
+
+
 async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
     memberships = await domains_svc.list_memberships(db, user)
+    caps = {d.id: ROLE_CAPS[Role(m.role)] for d, m in memberships}
     dom_by_id = {d.id: d for d, _ in memberships}
     picked, scope_ids = _scope(params, dom_by_id)
 
+    preset = params.get("preset") if params.get("preset") in PRESETS else "active"
     sort = params.get("sort") if params.get("sort") in SORTS else "uploaded_at"
     sort_dir = "asc" if params.get("dir") == "asc" else "desc"
     view = "table" if params.get("view") == "table" else "cards"
-    status_enum = _status(params.get("status"))
 
     f = _filters_from_params(params)
+    if preset == "inbox":
+        f.status = DocStatus.inbox
+        f.exclude_deferred_by = user.id
+    elif preset == "trash":
+        f.only_trash = True
+        f.status = None
+    status_enum = f.status
     f.sort, f.sort_dir = sort, sort_dir
     f.page = max(1, int(params.get("page") or 1))
     f.page_size = PAGE_SIZE
@@ -141,6 +153,7 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
         "has_ocr": params.get("has_ocr") or "",
         "has_index": params.get("has_index") or "",
         "domain_id": str(picked) if picked else "",
+        "preset": preset,
         "sort": sort,
         "dir": sort_dir,
     }
@@ -150,21 +163,25 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
         "tag_map": await _tags_by_doc(db, [d.id for d in docs]),
         "domain_names": {d.id: d.name for d, _ in memberships},
         "domain_slugs": {d.id: d.slug for d, _ in memberships},
+        "doc_caps": {d.id: caps.get(d.domain_id, frozenset()) for d in docs},
         "total": total,
         "page": f.page,
         "pages": max(1, -(-total // PAGE_SIZE)),
         "ext_options": await _distinct_exts(db, list(dom_by_id)),
         "sorts": SORTS,
         "view": view,
+        "preset": preset,
         "domains": [d for d, _ in memberships],
+        "purge_domains": [
+            dom_by_id[did] for did, c in caps.items() if Cap.own in c and did in dom_by_id
+        ],
         "user_sets": await docsets_svc.list_sets(db, user.id),
-        "can_publish_any": any(
-            Cap.manage in ROLE_CAPS[Role(m.role)] for _, m in memberships
-        ),
+        "can_publish_any": any(Cap.manage in c for c in caps.values()),
         # everything that narrows the result set (not page / sort / view) —
         # the client wipes its selection when this string changes.
         "filter_sig": "|".join(
-            fd[k] for k in ("domain_id", "q", "tags", "type", "status", "has_ocr", "has_index")
+            fd[k]
+            for k in ("preset", "domain_id", "q", "tags", "type", "status", "has_ocr", "has_index")
         ),
         "f": fd,
     }
@@ -198,9 +215,14 @@ async def search_bulk(
     memberships = await domains_svc.list_memberships(db, user)
     dom_by_id = {d.id: d for d, _ in memberships}
     caps = {d.id: ROLE_CAPS[Role(m.role)] for d, m in memberships}
+    # trash actions operate on deleted rows, so don't filter them out here
+    trash_scope = action in ("restore", "purge")
     docs = list(
         await db.scalars(
-            select(Document).where(Document.id.in_(ids), Document.deleted_at.is_(None))
+            select(Document).where(
+                Document.id.in_(ids),
+                true() if trash_scope else Document.deleted_at.is_(None),
+            )
         )
     ) if ids else []
     docs = [d for d in docs if d.domain_id in caps]
@@ -240,6 +262,25 @@ async def _apply_bulk(db, user, action, docs, caps, dom_by_id, form) -> str:
             n += 1
         tail = f", пропущено (тип не поддерживается): {skipped}" if skipped else ""
         return f"Отправлено на распознавание: {n}{tail}"
+
+    if action == "restore":
+        n = 0
+        for d in docs:
+            if Cap.delete in caps[d.domain_id] and d.deleted_at is not None:
+                try:
+                    await trash_svc.restore(db, d)
+                    n += 1
+                except trash_svc.TrashError:
+                    pass
+        return f"Восстановлено: {n}"
+
+    if action == "purge":
+        n = 0
+        for d in docs:
+            if Cap.delete in caps[d.domain_id] and d.deleted_at is not None:
+                await trash_svc.hard_purge(db, d)
+                n += 1
+        return f"Удалено навсегда: {n}"
 
     if action in ("public", "private"):
         want = action == "public"

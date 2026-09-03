@@ -90,7 +90,9 @@ class SearchFilters:
     ocr_from: datetime | None = None
     ocr_to: datetime | None = None
     text_source: TextSource | None = None
-    include_trash: bool = False
+    include_trash: bool = False  # deleted + active
+    only_trash: bool = False  # deleted only (the "Корзина" search preset, §14)
+    exclude_deferred_by: uuid.UUID | None = None  # drop docs this user deferred (inbox preset)
     # Domain scope — only meaningful for a saved set filter (§15); empty means
     # "every domain the owner can currently reach". The live /search UI passes
     # its scope to search_documents() directly and leaves this empty.
@@ -231,8 +233,20 @@ def _apply(
     tag_index: TagIndex,
 ) -> Select:
     stmt = stmt.where(Document.domain_id.in_(domain_ids))
-    if not f.include_trash:
+    if f.only_trash:
+        stmt = stmt.where(Document.deleted_at.is_not(None))
+    elif not f.include_trash:
         stmt = stmt.where(Document.deleted_at.is_(None))
+    if f.exclude_deferred_by is not None:
+        from app.models import InboxDefer
+
+        stmt = stmt.where(
+            Document.id.not_in(
+                select(InboxDefer.document_id).where(
+                    InboxDefer.user_id == f.exclude_deferred_by
+                )
+            )
+        )
     if f.status is not None:
         stmt = stmt.where(Document.status == f.status)
     if f.ext:

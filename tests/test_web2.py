@@ -184,19 +184,16 @@ async def test_set_share_link_and_revoke(alice, web_domain):
 
 
 # --- inbox (table + modal tagging) --------------------------------
-async def test_inbox_table_and_modal_tagging(alice, web_domain):
+async def test_inbox_preset_and_modal_tagging(alice, web_domain):
     await _upload(alice, web_domain, "i1.txt")
     await _upload(alice, web_domain, "i2.txt")
 
-    page = await alice.get("/inbox")
-    assert "в очереди: 2" in page.text
-    assert "Разметить" in page.text and 'id="tagdlg"' in page.text
+    page = await alice.get("/search?preset=inbox")
+    assert "Найдено: 2" in page.text
+    assert "Разметить по очереди" in page.text and 'id="tagdlg"' in page.text
 
     card = await alice.get("/inbox/card", headers={"HX-Request": "true"})
     doc_id = re.search(r'data-doc="([0-9a-f-]{36})"', card.text).group(1)
-    assert 'class="freq' in card.text or "частые" not in card.text  # chips section optional
-
-    # the card carries an editable "Название" field prefilled with the title
     assert 'name="title"' in card.text
 
     r = await alice.post(
@@ -213,15 +210,13 @@ async def test_inbox_table_and_modal_tagging(alice, web_domain):
     assert r.headers.get("HX-Trigger") == "inbox-refresh"
     assert "data-doc" in r.text  # the next card
 
-    table = await alice.get("/inbox/table", headers={"HX-Request": "true"})
-    assert "в очереди: 1" in table.text
-
-    # the rename from the modal stuck
+    r2 = await alice.get("/search?preset=inbox", headers={"HX-Request": "true"})
+    assert "Найдено: 1" in r2.text
     doc_page = await alice.get(f"/documents/{doc_id}")
     assert "Переименованный документ" in doc_page.text
 
 
-async def test_inbox_defer_advances(alice, web_domain):
+async def test_inbox_defer_drops_out_of_the_preset(alice, web_domain):
     await _upload(alice, web_domain, "d1.txt")
     await _upload(alice, web_domain, "d2.txt")
     card = await alice.get("/inbox/card", headers={"HX-Request": "true"})
@@ -233,9 +228,8 @@ async def test_inbox_defer_advances(alice, web_domain):
         headers={"HX-Request": "true"},
     )
     assert r.status_code == 200 and r.headers.get("HX-Trigger") == "inbox-refresh"
-    # deferred doc drops out of this user's queue
-    table = await alice.get("/inbox/table", headers={"HX-Request": "true"})
-    assert "в очереди: 1" in table.text
+    r2 = await alice.get("/search?preset=inbox", headers={"HX-Request": "true"})
+    assert "Найдено: 1" in r2.text
 
 
 async def test_image_thumbnail(alice, web_domain):
@@ -376,18 +370,30 @@ async def test_settings_save_allowed_types(alice, web_domain):
     assert "не разрешён" in bad.text
 
 
-async def test_trash_restore_flow(alice, web_domain):
+async def test_trash_preset_and_bulk_restore(alice, web_domain):
     await _upload(alice, web_domain, "del.txt")
     doc_id = await _doc_id(alice, web_domain)
     dp = (await alice.get(f"/documents/{doc_id}")).text
     r = await alice.post(f"/documents/{doc_id}/delete", data={"csrf_token": web_csrf(dp)})
     assert r.status_code == 303
 
-    trash = await alice.get(f"/domains/{web_domain}/trash")
-    assert "del" in trash.text
-    rs = await alice.post(f"/documents/{doc_id}/restore", data={"csrf_token": web_csrf(trash.text)})
-    assert rs.status_code == 303
-    assert "Корзина пуста" in (await alice.get(f"/domains/{web_domain}/trash")).text
+    trash = await alice.get("/search?preset=trash", headers={"HX-Request": "true"})
+    assert "del" in trash.text and "Найдено: 1" in trash.text
+
+    page = (await alice.get("/search?preset=trash")).text
+    rs = await alice.post(
+        "/search/bulk",
+        data={
+            "csrf_token": web_csrf(page),
+            "doc_ids": doc_id,
+            "action": "restore",
+            "preset": "trash",
+        },
+        headers={"HX-Request": "true"},
+    )
+    assert rs.status_code == 200 and "Восстановлено: 1" in _toast(rs)
+    empty = await alice.get("/search?preset=trash", headers={"HX-Request": "true"})
+    assert "Найдено: 0" in empty.text
 
 
 # --- profile + global search --------------------------------

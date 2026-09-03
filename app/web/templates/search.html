@@ -3,6 +3,22 @@
 {% block title %}Поиск документов{% endblock %}
 {% block page_title %}Поиск документов{% endblock %}
 {% block content %}
+
+<div class="btn-list mb-3">
+  {% set presets = [('active', 'Активные'), ('inbox', 'Не размечено'), ('trash', 'Корзина')] %}
+  {% for key, label in presets %}
+  <a class="btn btn-sm {{ 'btn-primary' if preset == key else 'btn-outline-secondary' }}"
+     hx-get="/search?preset={{ key }}{% if f.domain_id %}&domain_id={{ f.domain_id }}{% endif %}&view={{ view }}"
+     hx-target="#results" hx-push-url="true">{{ label }}</a>
+  {% endfor %}
+  {% if preset == 'inbox' %}
+  <button type="button" class="btn btn-sm btn-primary ms-2"
+          hx-get="/inbox/card?domain_id={{ f.domain_id }}" hx-target="#tagcard">
+    {{ ic.icon('check') }} Разметить по очереди
+  </button>
+  {% endif %}
+</div>
+
 <div class="row row-cards">
   <div class="col-12 col-lg-3">
     <form id="filters" method="get" action="/search"
@@ -14,6 +30,7 @@
       </div>
       <div class="card-body">
         <input type="hidden" name="view" value="{{ view }}">
+        <input type="hidden" name="preset" value="{{ preset }}">
         <input type="hidden" name="sort" value="{{ f.sort }}">
         <input type="hidden" name="dir" value="{{ f.dir }}">
 
@@ -91,9 +108,13 @@
   </div>
 
   <div class="col-12 col-lg-9">
-    <div id="results">
+    <div id="results"
+         hx-get="/search" hx-include="#filters" hx-trigger="inbox-refresh from:body"
+         hx-target="this" hx-swap="innerHTML">
       {% include "_results.html" %}
     </div>
   </div>
 </div>
+
+{% include "_tagcard_modal.html" %}
 {% endblock %}

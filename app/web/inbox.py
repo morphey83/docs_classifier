@@ -1,5 +1,6 @@
-"""Web UI: "Очередь на сортировку" — a table of unlabelled documents plus a
-modal tagging flow (open one, tag it, "Готово, дальше", table refreshes)."""
+"""Web UI: the card-by-card tagging modal used by the /search inbox preset
+(open one, tag it, next). The queue itself is now the search preset; this
+module is just the modal flow (docs/architecture.md §14 rev 2)."""
 
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from app.services import thumbs
 from app.web.csrf import CsrfGuard
 from app.web.deps import current_user
 from app.web.search import _tags_by_doc
-from app.web.templating import render, templates
+from app.web.templating import templates
 
 router = APIRouter()
 
@@ -62,34 +63,9 @@ async def _queue(db: AsyncSession, domain_ids: list[uuid.UUID], user_id: uuid.UU
     return list(rows)
 
 
-async def _table_ctx(request: Request, db: AsyncSession, user, raw_domain: str | None) -> dict:
-    doms = await _taggable(db, user)
-    ids = _scope(doms, raw_domain)
-    docs = await _queue(db, ids, user.id)
-    return {
-        "docs": docs,
-        "tag_map": await _tags_by_doc(db, [d.id for d in docs]),
-        "domain_names": {d.id: d.name for d in doms.values()},
-        "domains": sorted(doms.values(), key=lambda d: d.name),
-        "picked": raw_domain or "",
-        "can_thumb": {d.id: thumbs.can_thumb(d.mime, d.ext) for d in docs},
-    }
-
-
 @router.get("/inbox")
-async def inbox_page(
-    request: Request, user=Depends(current_user), db: AsyncSession = Depends(get_session)
-) -> Response:
-    ctx = await _table_ctx(request, db, user, request.query_params.get("domain_id"))
-    return render(request, "inbox.html", ctx)
-
-
-@router.get("/inbox/table")
-async def inbox_table(
-    request: Request, user=Depends(current_user), db: AsyncSession = Depends(get_session)
-) -> Response:
-    ctx = await _table_ctx(request, db, user, request.query_params.get("domain_id"))
-    return templates.TemplateResponse(request, "_inbox_table.html", {**ctx, "csrf": _csrf(request)})
+async def inbox_redirect() -> Response:
+    return RedirectResponse("/search?preset=inbox", status_code=307)
 
 
 def _csrf(request: Request) -> str:
@@ -210,4 +186,4 @@ async def inbox_undefer(
 ) -> Response:
     for domain_id in await _taggable(db, user):
         await docs_svc.clear_defers(db, domain_id, user.id)
-    return RedirectResponse("/inbox", status_code=303)
+    return RedirectResponse("/search?preset=inbox", status_code=303)

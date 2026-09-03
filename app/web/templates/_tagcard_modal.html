@@ -1,0 +1,29 @@
+{# The card-by-card tagging modal — shared by the /search inbox preset. #}
+<div class="modal modal-blur fade" id="tagdlg" tabindex="-1" aria-hidden="true"
+     data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Разметка</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+      </div>
+      <div class="modal-body" id="tagcard"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var _tagModal;
+  function _tm() {
+    if (!_tagModal) {
+      _tagModal = window.tabler.Modal.getOrCreateInstance(document.getElementById('tagdlg'));
+    }
+    return _tagModal;
+  }
+  function openTag() { _tm().show(); }
+  function closeTag() { _tm().hide(); }
+  document.body.addEventListener('htmx:afterSwap', function (e) {
+    if (e.detail.target.id !== 'tagcard') return;
+    if (e.detail.target.querySelector('[data-doc], [data-empty]')) openTag();
+  });
+</script>

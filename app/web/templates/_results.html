@@ -38,6 +38,11 @@
   <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
     <span><strong id="bulk-count">0</strong>&nbsp;выбрано</span>
     <div class="btn-list ms-auto">
+      {% if preset == 'trash' %}
+      <button type="button" class="btn btn-sm" data-bulk="restore">Восстановить</button>
+      <button type="button" class="btn btn-sm btn-ghost-danger" data-bulk="purge"
+              onclick="return confirm('Удалить выбранное навсегда?')">Удалить навсегда</button>
+      {% else %}
       <button type="button" class="btn btn-sm" data-bulk="index">
         {{ ic.icon('search') }} Индексировать
       </button>
@@ -60,12 +65,14 @@
           <a class="dropdown-item" href="#" data-bulk-set="__new__">➕ Новый набор…</a>
         </div>
       </div>
+      {% endif %}
       <button type="button" class="btn btn-sm btn-ghost-secondary" id="bulk-clear">Снять</button>
     </div>
   </div>
 </div>
 
 {# save the current search as a set filter (no selection needed) #}
+{% if preset != 'trash' %}
 <div class="mb-2">
   <div class="dropdown">
     <button type="button" class="btn btn-sm btn-ghost-secondary dropdown-toggle" data-bs-toggle="dropdown">
@@ -80,6 +87,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 {% if total == 0 %}
 <div class="card"><div class="card-body text-secondary">Ничего не найдено.</div></div>
