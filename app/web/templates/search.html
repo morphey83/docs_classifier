@@ -140,6 +140,21 @@
     line-height:1.4; transition:filter .1s ease, box-shadow .1s ease; }
   .dc-fbtn:hover { filter:brightness(.93); }
   .dc-fbtn:focus-visible { outline:0; box-shadow:0 0 0 .15rem rgba(var(--tblr-primary-rgb, 4 111 209), .4); }
+
+  /* «i» help button next to a filter field's label */
+  .dc-fieldhead { display:flex; align-items:center; gap:.15rem; margin-bottom:.35rem; }
+  .dc-help { border:0; background:transparent; padding:.1rem .2rem; line-height:0; cursor:pointer;
+    color:var(--tblr-secondary); border-radius:4px; }
+  .dc-help:hover, .dc-help[aria-describedby] { color:var(--tblr-primary); background:var(--tblr-bg-surface-secondary); }
+  .dc-help .icon { width:1rem; height:1rem; }
+  .dc-help:focus-visible { outline:2px solid var(--tblr-primary); outline-offset:1px; }
+  .dc-help-pop { max-width:320px;
+    box-shadow:0 .5rem 1.5rem -.35rem rgba(0,0,0,.28), 0 0 0 1px var(--tblr-border-color); }
+  .dc-help-pop .popover-body { font-size:.8125rem; line-height:1.5; padding:.55rem .7rem; }
+  .dc-help-pop .dc-hr { padding:3px 0; }
+  .dc-help-pop .dc-hr + .dc-hr { border-top:1px solid var(--tblr-border-color); }
+  .dc-help-pop .mono { font-family:var(--tblr-font-monospace, ui-monospace, monospace);
+    background:var(--tblr-bg-surface-secondary); padding:0 4px; border-radius:3px; font-size:.95em; }
 </style>
 
 <div class="row row-cards">
@@ -177,24 +192,44 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Запрос</label>
+          <div class="dc-fieldhead">
+            <label class="form-label mb-0" for="q-input">Запрос</label>
+            <button type="button" class="dc-help" data-help="q-help" aria-label="Подсказка по запросу">
+              {{ ic.icon('info') }}</button>
+          </div>
           <div class="input-icon dc-clearable">
             <span class="input-icon-addon">{{ ic.icon('search') }}</span>
-            <input type="text" class="form-control" name="q" value="{{ f.q }}"
+            <input type="text" class="form-control" name="q" id="q-input" value="{{ f.q }}"
                    placeholder="слова из названия / текста">
             <button type="button" class="dc-clear" tabindex="-1" aria-label="Очистить">{{ ic.icon('x') }}</button>
+          </div>
+          <div id="q-help" hidden>
+            <div class="dc-hr"><span class="mono">слово слово</span> — все слова должны встретиться</div>
+            <div class="dc-hr"><span class="mono">слово or слово</span> — любое из</div>
+            <div class="dc-hr"><span class="mono">-слово</span> — исключить</div>
+            <div class="dc-hr"><span class="mono">"точная фраза"</span> — идёт подряд</div>
+            <div class="text-secondary mt-1" style="font-size:.9em">поиск по названию и распознанному тексту</div>
           </div>
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Теги
-            <span class="form-hint d-inline">через запятую · клик по тегу — исключить</span></label>
+          <div class="dc-fieldhead">
+            <label class="form-label mb-0">Теги</label>
+            <button type="button" class="dc-help" data-help="tags-help" aria-label="Подсказка по тегам">
+              {{ ic.icon('info') }}</button>
+          </div>
           <div class="dc-tags" id="dc-tags">
             <input class="dc-tags-entry" id="dc-tags-entry" type="text" autocomplete="off"
                    placeholder="договор, 2024" aria-label="Теги">
             <div class="dc-suggest" id="tag-suggest" hidden role="listbox"></div>
           </div>
           <input type="hidden" name="tags" id="dc-tags-value" value="{{ f.tags }}">
+          <div id="tags-help" hidden>
+            <div class="dc-hr">имя тега, затем <b>Enter</b> или <b>запятая</b> — добавить</div>
+            <div class="dc-hr"><b>клик по тегу</b> — искать документы <i>без</i> него (тег станет зачёркнутым, с <span class="mono">−</span>)</div>
+            <div class="dc-hr"><span class="mono">×</span> на теге — убрать из фильтра</div>
+            <div class="dc-hr"><span class="mono">-имя</span> при вводе — сразу добавить как исключение</div>
+          </div>
         </div>
 
         <div class="mb-3">
@@ -464,6 +499,25 @@
     } else if (tag && window.dcAddTagFilter) {
       window.dcAddTagFilter(tag.dataset.tag);
     }
+  });
+
+  // «i» popovers with syntax help for the query / tag fields
+  // (deferred — window.tabler is a defer'd script, not ready during inline parse)
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!window.tabler || !window.tabler.Popover) return;
+    Array.prototype.slice.call(document.querySelectorAll('#filters .dc-help[data-help]')).forEach(function (btn) {
+      var src = document.getElementById(btn.dataset.help);
+      if (!src) return;
+      new window.tabler.Popover(btn, {
+        content: src.innerHTML,
+        html: true,
+        trigger: 'focus',
+        placement: 'right',
+        fallbackPlacements: ['bottom', 'left', 'top'],
+        customClass: 'dc-help-pop',
+        container: 'body'
+      });
+    });
   });
 
   // "Тип" toggles: "Любое" is exclusive with the specific types

@@ -162,6 +162,9 @@ async def test_search_page_has_the_tag_chip_editor(alice, web_domain):
     page = (await alice.get("/search")).text
     assert 'id="dc-tags"' in page
     assert 'id="dc-tags-value"' in page and 'name="tags"' in page
+    # syntax help moved into «i» popovers; the inline label hint is gone
+    assert 'data-help="q-help"' in page and 'data-help="tags-help"' in page
+    assert "клик по тегу — исключить" not in page
 
 
 async def test_search_domain_filter(alice):
