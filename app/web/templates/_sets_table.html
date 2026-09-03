@@ -1,0 +1,44 @@
+{% import "_icons.html" as ic %}
+<div id="sets-table">
+  <div class="card">
+    <div class="table-responsive"><table class="table table-vcenter card-table">
+      <thead><tr>
+        <th>Название</th>
+        <th class="text-center">Фильтры</th>
+        <th class="text-center">Явные док-ты</th>
+        <th class="text-center">Публичных</th>
+        <th class="text-center">Доступно</th>
+        <th>Обновлён</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td><a data-detail href="/sets/{{ r.set.id }}" class="text-reset fw-bold">{{ r.set.name }}</a></td>
+          <td class="text-center">{{ r.n_filters }}</td>
+          <td class="text-center">{{ r.n_explicit }}</td>
+          <td class="text-center">{{ r.public }}</td>
+          <td class="text-center">{{ r.accessible }}</td>
+          <td class="text-secondary">{{ r.set.updated_at|shortdate }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-secondary">
+          {% if q %}По запросу «{{ q }}» наборов нет.{% else %}Наборов пока нет — создайте выше.{% endif %}
+        </td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% if pages > 1 %}
+    <div class="card-footer d-flex align-items-center justify-content-between">
+      <span class="text-secondary small">Всего: {{ total }}</span>
+      <ul class="pagination pagination-sm m-0">
+        {% for p in range(1, pages + 1) %}
+        <li class="page-item {{ 'active' if p == page }}">
+          <a class="page-link" hx-get="/sets?q={{ q|urlencode }}&page={{ p }}"
+             hx-target="#sets-table" hx-swap="outerHTML" hx-push-url="true">{{ p }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+</div>
