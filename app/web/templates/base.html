@@ -194,6 +194,22 @@
 </div>
 {% endif %}
 
+{# one-off success notice shown after linking Telegram (?tg_linked=1) #}
+<div class="modal modal-blur fade" id="tglinkeddlg" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-status bg-success"></div>
+      <div class="modal-body text-center py-4">
+        <h3 class="mb-1">Telegram привязан</h3>
+        <div class="text-secondary">Бот теперь работает с вашим аккаунтом.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-success w-100" data-bs-dismiss="modal">Понятно</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {# shared confirmation modal — replaces window.confirm() and htmx hx-confirm #}
 <div class="modal modal-blur fade" id="confirmdlg" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-sm modal-dialog-centered">
@@ -377,7 +393,19 @@
       refresh();
     }
 
-    document.addEventListener('DOMContentLoaded', function () { initTooltips(); dcInitSelection(); });
+    function showTgLinked() {
+      try {
+        var p = new URLSearchParams(location.search);
+        if (!p.get('tg_linked') || !window.tabler) return;
+        window.tabler.Modal.getOrCreateInstance(document.getElementById('tglinkeddlg')).show();
+        p.delete('tg_linked');
+        history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p : '') + location.hash);
+      } catch (e) {}
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      initTooltips(); dcInitSelection(); showTgLinked();
+    });
     document.body.addEventListener('htmx:afterSettle', function (e) {
       initTooltips(e.target);
       dcInitSelection();

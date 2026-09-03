@@ -161,6 +161,17 @@ async def test_web_initiated_link_deep_link_none_without_bot_username(alice):
     assert r.json()["deep_link"] is None
 
 
+async def test_link_page_bounces_anonymous_to_login(client):
+    async with get_sessionmaker()() as db:
+        tok = await tglink_svc.create_bot_initiated(db, tg_id=999, tg_username="z")
+        await db.commit()
+        token = tok.token
+
+    r = await client.get(f"/tg/link/{token}", follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == f"/login?next=%2Ftg%2Flink%2F{token}"
+
+
 async def test_bot_initiated_flow_confirmed_from_web(alice):
     async with get_sessionmaker()() as db:
         tok = await tglink_svc.create_bot_initiated(db, tg_id=555, tg_username="ivan")
