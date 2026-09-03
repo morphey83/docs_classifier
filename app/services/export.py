@@ -127,6 +127,9 @@ def write_document_zip(path, docs: list[Document], tag_map: dict) -> tuple[str, 
     used: set[str] = set()
     manifest: list[dict] = []
     blobs = storage.blobs_store()
+    # hard guarantee: a trashed document never lands in an archive, whatever the
+    # caller passed (§14 — e.g. a set item deleted after it was pinned)
+    docs = [d for d in docs if d.deleted_at is None]
 
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
         for doc in docs:

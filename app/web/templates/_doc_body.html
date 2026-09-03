@@ -28,7 +28,7 @@
 <div class="alert alert-warning d-flex align-items-center">
   <div class="flex-fill">Документ в корзине (удалён {{ doc.deleted_at|datetimefmt }}).</div>
   {% if view.has('delete') %}
-  <form method="post" action="/documents/{{ doc.id }}/restore">
+  <form hx-post="/documents/{{ doc.id }}/restore" hx-target="#doc">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <button class="btn btn-sm btn-outline-primary">Восстановить</button>
   </form>
@@ -127,7 +127,7 @@
             <div class="datagrid-content">{{ doc.ext or '—' }} · <span class="text-secondary">{{ doc.mime }}</span></div></div>
         </div>
         {% if can_write %}
-        <form method="post" action="/documents/{{ doc.id }}">
+        <form hx-post="/documents/{{ doc.id }}" hx-target="#doc">
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
           <div class="mb-3">
             <label class="form-label">Название</label>

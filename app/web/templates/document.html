@@ -2,7 +2,5 @@
 {% set d = view.domain %}
 {% block title %}{{ doc.title }} — DocsClassifier{% endblock %}
 {% block content %}
-<div id="doc">
-  {% include "_doc_body.html" %}
-</div>
+{% include "_doc_modal.html" %}
 {% endblock %}

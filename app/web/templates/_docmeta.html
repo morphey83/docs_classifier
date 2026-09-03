@@ -23,7 +23,7 @@
 
 {#- big media area at the top of a result card -#}
 {% macro card_media(doc) -%}
-  <a href="/documents/{{ doc.id }}" class="card-media"
+  <a data-detail href="/documents/{{ doc.id }}" class="card-media"
      style="background-image:url({{ thumb_src(doc)|trim }})"
      aria-label="{{ doc.title }}"></a>
 {%- endmacro %}

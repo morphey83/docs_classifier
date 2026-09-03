@@ -129,6 +129,27 @@ async def test_archive_contains_only_public_documents(alice, domain):
     assert _names(ready2.content) == ["files/priv.txt", "files/pub.txt"]
 
 
+async def test_a_deleted_document_never_enters_an_archive(alice, domain):
+    d = domain["id"]
+    keep = await _upload(alice, d, "keep.txt", public=True)
+    gone = await _upload(alice, d, "gone.txt", public=True)
+    s = (
+        await alice.post(
+            "/api/sets", json={"name": "x", "document_ids": [keep["id"], gone["id"]]}
+        )
+    ).json()
+
+    # explicitly pinned, then trashed
+    assert (await alice.request("DELETE", f"/api/documents/{gone['id']}")).status_code == 204
+
+    ready = await _ready(alice, f"/api/sets/{s['id']}/archive/download")
+    assert _names(ready.content) == ["files/keep.txt"]
+
+    full = (await alice.post(f"/api/sets/{s['id']}/export")).json()
+    got = await _ready(alice, f"/api/artifacts/{full['id']}/download")
+    assert _names(got.content) == ["files/keep.txt"]
+
+
 async def test_full_export_includes_private_documents(alice, domain):
     d = domain["id"]
     pub = await _upload(alice, d, "a.txt", public=True)

@@ -63,6 +63,44 @@ async def sets_create(
     return RedirectResponse(f"/sets/{s.id}", status_code=303)
 
 
+async def _detail_ctx(request: Request, db: AsyncSession, user: User, s, *, export_id=None) -> dict:
+    filters = await svc.list_filters(db, s.id)
+    resolved = await svc.resolve_set(db, s, view="full")
+    explicit_ids = set(
+        await db.scalars(
+            select(DocumentSetItem.document_id).where(DocumentSetItem.set_id == s.id)
+        )
+    )
+    links = [(link, absolute_url(f"/d/{link.token}")) for link in await svc.links_of_set(db, s.id)]
+
+    export = None
+    aid = export_id or request.query_params.get("export")
+    if aid and _is_uuid(str(aid)):
+        art = await db.get(Artifact, uuid.UUID(str(aid)))
+        if art is not None and art.source_id == s.id and art.requested_by == user.id:
+            export = art
+
+    return {
+        "partial": "_set_body.html",
+        "set": s,
+        "filters": [(f, _filter_link(f)) for f in filters],
+        "preview": resolved[:_PREVIEW],
+        "resolved_count": len(resolved),
+        "public_count": sum(1 for d in resolved if d.is_public),
+        "explicit_ids": explicit_ids,
+        "links": links,
+        "export": export,
+        "building": request.query_params.get("building"),
+    }
+
+
+async def _set_response(request, db, user, s, *, toast=None, export_id=None) -> Response:
+    ctx = await _detail_ctx(request, db, user, s, export_id=export_id)
+    if request.headers.get("HX-Request"):
+        return render(request, "set.html", ctx, toast=toast)
+    return RedirectResponse(f"/sets/{s.id}", status_code=303)
+
+
 @router.get("/sets/{set_id}")
 async def set_detail(
     request: Request,
@@ -71,38 +109,7 @@ async def set_detail(
     db: AsyncSession = Depends(get_session),
 ) -> Response:
     s = await _load(db, user, set_id)
-    filters = await svc.list_filters(db, s.id)
-    resolved = await svc.resolve_set(db, s, view="full")
-    explicit_ids = set(
-        await db.scalars(
-            select(DocumentSetItem.document_id).where(DocumentSetItem.set_id == s.id)
-        )
-    )
-    public_n = sum(1 for d in resolved if d.is_public)
-    links = [(link, absolute_url(f"/d/{link.token}")) for link in await svc.links_of_set(db, s.id)]
-
-    export = None
-    aid = request.query_params.get("export")
-    if aid:
-        art = await db.get(Artifact, uuid.UUID(aid)) if _is_uuid(aid) else None
-        if art is not None and art.source_id == s.id and art.requested_by == user.id:
-            export = art
-
-    return render(
-        request,
-        "set.html",
-        {
-            "set": s,
-            "filters": [(f, _filter_link(f)) for f in filters],
-            "preview": resolved[:_PREVIEW],
-            "resolved_count": len(resolved),
-            "public_count": public_n,
-            "explicit_ids": explicit_ids,
-            "links": links,
-            "export": export,
-            "building": request.query_params.get("building"),
-        },
-    )
+    return render(request, "set.html", await _detail_ctx(request, db, user, s))
 
 
 def _is_uuid(v: str) -> bool:
@@ -143,7 +150,7 @@ async def set_rename(
 ) -> Response:
     s = await _load(db, user, set_id)
     await svc.rename_set(db, s, name=name, description=description)
-    return RedirectResponse(f"/sets/{s.id}", status_code=303)
+    return await _set_response(request, db, user, s, toast="Сохранено")
 
 
 @router.post("/sets/{set_id}/delete")
@@ -156,6 +163,10 @@ async def set_delete(
 ) -> Response:
     s = await _load(db, user, set_id)
     await svc.delete_set(db, s)
+    if request.headers.get("HX-Request"):
+        r = Response(status_code=204)
+        r.headers["HX-Redirect"] = "/sets"
+        return r
     return RedirectResponse("/sets", status_code=303)
 
 
@@ -170,7 +181,7 @@ async def set_filter_remove(
 ) -> Response:
     s = await _load(db, user, set_id)
     await svc.remove_filter(db, s, filter_id)
-    return RedirectResponse(f"/sets/{s.id}", status_code=303)
+    return await _set_response(request, db, user, s)
 
 
 @router.post("/sets/{set_id}/items/{document_id}/remove")
@@ -184,7 +195,7 @@ async def set_item_remove(
 ) -> Response:
     s = await _load(db, user, set_id)
     await svc.remove_item(db, s, document_id)
-    return RedirectResponse(f"/sets/{s.id}", status_code=303)
+    return await _set_response(request, db, user, s)
 
 
 @router.get("/sets/{set_id}/archive")
@@ -218,7 +229,7 @@ async def set_full_export(
         artifact = await svc.start_full_export(db, None, s, user)
     except svc.SetError as err:
         raise HTTPException(status.HTTP_409_CONFLICT, str(err)) from err
-    return RedirectResponse(f"/sets/{s.id}?export={artifact.id}", status_code=303)
+    return await _set_response(request, db, user, s, export_id=artifact.id)
 
 
 @router.get("/sets/{set_id}/export/{artifact_id}/download")
@@ -256,11 +267,12 @@ async def set_link_create(
     await svc.create_share_link(
         db, None, s=s, user=user, kind="permanent" if kind == "permanent" else "one_time"
     )
-    return RedirectResponse(f"/sets/{s.id}", status_code=303)
+    return await _set_response(request, db, user, s, toast="Ссылка создана")
 
 
 @router.post("/links/{link_id}/revoke")
 async def link_revoke(
+    request: Request,
     link_id: uuid.UUID,
     _: None = CsrfGuard,
     user: User = Depends(current_user),
@@ -274,7 +286,7 @@ async def link_revoke(
     if link is None or s is None or s.owner_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "ссылка не найдена")
     await svc.revoke_link(db, link)
-    return RedirectResponse(f"/sets/{s.id}", status_code=303)
+    return await _set_response(request, db, user, s, toast="Ссылка отозвана")
 
 
 # used by web/search.py when saving the current query as a set filter

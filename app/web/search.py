@@ -236,6 +236,8 @@ async def search_bulk(
 
 
 async def _apply_bulk(db, user, action, docs, caps, dom_by_id, form) -> str:
+    if (form.get("preset") or "") == "trash" and action in ("set", "save_filter"):
+        return "Документы из корзины в наборы не добавляются."
     if action == "save_filter":
         return await _save_filter(db, user, form)
     if not docs:

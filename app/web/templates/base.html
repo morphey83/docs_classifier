@@ -180,6 +180,21 @@
 
 <div class="toast-container position-fixed bottom-0 end-0 p-3" id="dc-toasts" style="z-index:1090"></div>
 
+{% if user %}
+{# shared detail modal — document / set cards open here instead of navigating #}
+<div class="modal modal-blur fade" id="detaildlg" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-body p-0">
+        <button type="button" class="btn-close position-absolute end-0 top-0 m-3" style="z-index:5"
+                data-bs-dismiss="modal" aria-label="Закрыть"></button>
+        <div class="p-3" id="detailbody"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <script>
   (function () {
     function showToast(msg) {
@@ -316,6 +331,27 @@
       initTooltips(e.target);
       dcInitSelection();
     });
+
+    // --- shared detail modal: open document / set cards without navigating ---
+    var _detail;
+    function detailModal() {
+      if (!_detail) _detail = window.tabler.Modal.getOrCreateInstance(document.getElementById('detaildlg'));
+      return _detail;
+    }
+    window.dcCloseDetail = function () { if (_detail) _detail.hide(); };
+    document.body.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a[data-detail]');
+      if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+      var dlg = document.getElementById('detaildlg');
+      if (!dlg) return;  // anonymous / no modal on page
+      e.preventDefault();
+      document.getElementById('detailbody').innerHTML =
+        '<div class="text-secondary p-4 text-center">Загрузка…</div>';
+      detailModal().show();
+      window.htmx.ajax('GET', a.getAttribute('href'), { target: '#detailbody', swap: 'innerHTML' });
+    });
+    // an action inside the modal can ask it to close (delete) or the list to refresh
+    document.body.addEventListener('dc-detail-close', function () { window.dcCloseDetail(); });
 
     var toggle = document.getElementById('theme-toggle');
     if (toggle) {

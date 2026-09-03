@@ -9,7 +9,7 @@
   <div class="col-sm-6 col-lg-4">
     <div class="card card-sm">
       <div class="card-body">
-        <a href="/sets/{{ s.id }}" class="text-reset fw-bold d-block">{{ s.name }}</a>
+        <a data-detail href="/sets/{{ s.id }}" class="text-reset fw-bold d-block">{{ s.name }}</a>
         <div class="text-secondary small">
           {{ item_counts.get(s.id, 0) }} явно · обновлён {{ s.updated_at|shortdate }}
         </div>

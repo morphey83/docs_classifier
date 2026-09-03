@@ -176,7 +176,7 @@ async def document_page(
         "document.html",
         {
             **(await _doc_ctx(db, user, doc, view)),
-            "partial": "_doc_body.html",
+            "partial": "_doc_modal.html",
         },
     )
 
@@ -204,6 +204,8 @@ async def document_update(
         db, doc, title=title, doc_date=parsed_date, notes=notes,
         clear_doc_date=(not doc_date),
     )
+    if request.headers.get("HX-Request"):
+        return await _doc_fragment(request, db, user, document_id, toast="Сохранено")
     return RedirectResponse(f"/documents/{document_id}", status_code=303)
 
 
@@ -350,6 +352,8 @@ async def document_restore(
         await trash_svc.restore(db, doc)
     except trash_svc.TrashError as err:
         raise HTTPException(status.HTTP_409_CONFLICT, str(err)) from err
+    if request.headers.get("HX-Request"):
+        return await _doc_fragment(request, db, user, document_id, toast="Восстановлено")
     return RedirectResponse(f"/documents/{document_id}", status_code=303)
 
 

@@ -15,7 +15,7 @@
           <span class="ms-auto">{{ dm.state_icons(doc) }}</span>
         </div>
         <div class="fw-bold mb-1">
-          <a href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a>
+          <a data-detail href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a>
         </div>
         <div class="text-secondary small">
           {{ doc.ext or (doc.mime.split('/')|last) }} · {{ doc.size_bytes|humansize }}{% if doc.doc_date %} · {{ doc.doc_date|shortdate }}{% endif %}
