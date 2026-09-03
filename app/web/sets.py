@@ -127,9 +127,14 @@ def _filter_link(f) -> str:
     """Rebuild a /search URL from a stored filter so the owner can eyeball it."""
     d = f.filter or {}
     parts: list[str] = []
-    for key, qs in (("q", "q"), ("ext", "type"), ("status", "status")):
-        if d.get(key):
-            parts.append(f"{qs}={d[key]}")
+    if d.get("q"):
+        parts.append(f"q={d['q']}")
+    if d.get("status"):
+        parts.append(f"status={d['status']}")
+    for t in d.get("types", []):
+        parts.append(f"type={t}")
+    if d.get("ext"):
+        parts.append(f"type={d['ext']}")
     if d.get("tags_all"):
         parts.append("tags=" + ",".join(d["tags_all"]))
     if d.get("has_ocr") is True:

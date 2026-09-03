@@ -153,12 +153,19 @@ async def test_search_type_filter_lists_existing_extensions(alice, web_domain):
     await _upload(alice, web_domain, "a.txt")
     await _upload(alice, web_domain, "b.md")
     page = (await alice.get("/search")).text
-    # the type filter is a <select> built from real extensions, no free-text input
-    assert 'name="type"' in page and 'form-select' in page
-    assert ">txt</option>" in page and ">md</option>" in page
-    # facets block and the "архив" status option are gone
+    # the type filter is a multi-select toggle group built from real extensions
+    assert 'id="type-group"' in page and 'name="type"' in page
+    assert 'value="txt"' in page and 'value="md"' in page
+    assert 'value="image"' in page and 'value="text"' in page
     assert "Фасеты" not in page
-    assert ">архив</option>" not in page
+
+    # multi-select: filter to two extensions at once
+    hx = await alice.get(
+        "/search?type=txt&type=md", headers={"HX-Request": "true"}
+    )
+    assert "Найдено: 2" in hx.text
+    one = await alice.get("/search?type=txt", headers={"HX-Request": "true"})
+    assert "Найдено: 1" in one.text
 
 
 # --- document ----------------------------------------------------

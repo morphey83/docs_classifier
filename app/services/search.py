@@ -76,9 +76,11 @@ class SearchFilters:
     tags_all: list[str] = field(default_factory=list)
     tags_any: list[str] = field(default_factory=list)
     tags_none: list[str] = field(default_factory=list)
-    ext: str | None = None
+    ext: str | None = None  # single-extension (API back-compat)
     mime: str | None = None
-    image_only: bool = False  # "type = изображения" — any image mime/ext
+    # multi-type filter (web UI): a mix of bare extensions and the category
+    # tokens "image" / "text". Empty = any type. OR-combined.
+    types: list[str] = field(default_factory=list)
     size_min: int | None = None
     size_max: int | None = None
     doc_date_from: datetime | None = None
@@ -107,9 +109,10 @@ class SearchFilters:
 
     # --- serialization for document_set_filter.filter (JSON) --------------
     _SCALARS = (
-        "q", "ext", "mime", "image_only", "size_min", "size_max", "uploaded_by",
+        "q", "ext", "mime", "size_min", "size_max", "uploaded_by",
         "has_index", "has_ocr", "include_trash", "sort", "sort_dir",
     )
+    _LISTS = ("tags_all", "tags_any", "tags_none", "types")
     _DATES = (
         "doc_date_from", "doc_date_to", "uploaded_from", "uploaded_to",
         "indexed_from", "indexed_to", "ocr_from", "ocr_to",
@@ -122,7 +125,7 @@ class SearchFilters:
         d = self.to_dict()
         d.pop("sort", None)
         d.pop("sort_dir", None)
-        for k in ("tags_all", "tags_any", "tags_none", "domain_ids"):
+        for k in (*self._LISTS, "domain_ids"):
             if k in d:
                 d[k] = sorted(d[k])
         blob = json.dumps(d, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
@@ -138,7 +141,7 @@ class SearchFilters:
             v = getattr(self, k)
             if v is not None:
                 out[k] = v.isoformat()
-        for k in ("tags_all", "tags_any", "tags_none"):
+        for k in self._LISTS:
             if getattr(self, k):
                 out[k] = list(getattr(self, k))
         if self.status is not None:
@@ -165,7 +168,7 @@ class SearchFilters:
             if data.get(k):
                 with contextlib.suppress(TypeError, ValueError):
                     setattr(f, k, datetime.fromisoformat(data[k]))
-        for k in ("tags_all", "tags_any", "tags_none"):
+        for k in cls._LISTS:
             if data.get(k):
                 setattr(f, k, [str(t) for t in data[k]])
         if data.get("status"):
@@ -221,8 +224,9 @@ def describe_filters(f: SearchFilters, domain_names: Mapping[uuid.UUID, str] | N
     parts += [f"#{t}" for t in f.tags_all]
     parts += [f"~{t}" for t in f.tags_any]
     parts += [f"-{t}" for t in f.tags_none]
-    if f.image_only:
-        parts.append("изображения")
+    _type_label = {"image": "изображения", "text": "текстовые"}
+    if f.types:
+        parts.append(", ".join(_type_label.get(t, t) for t in f.types))
     elif f.ext:
         parts.append(f.ext.lower().lstrip("."))
     if f.status is not None:
@@ -240,6 +244,28 @@ def describe_filters(f: SearchFilters, domain_names: Mapping[uuid.UUID, str] | N
             span += f" - {hi:%Y-%m-%d}" if hi else " - ..."
             parts.append(f"{label} {span}")
     return " · ".join(parts) or "все документы"
+
+
+# word-processing + plain-text extensions for the "текстовые документы" category
+TEXT_EXTS = frozenset(
+    {"txt", "md", "markdown", "rst", "log", "doc", "docx", "odt", "rtf"}
+)
+
+
+def _type_conditions(types: Sequence[str]):
+    from app.services.thumbs import IMAGE_EXTS
+
+    conds = []
+    exts = {t.lower().lstrip(".") for t in types if t not in ("image", "text")}
+    if "image" in types:
+        conds.append(or_(Document.mime.like("image/%"), Document.ext.in_(sorted(IMAGE_EXTS))))
+    if "text" in types:
+        conds.append(
+            or_(Document.mime.like("text/%"), Document.ext.in_(sorted(TEXT_EXTS)))
+        )
+    if exts:
+        conds.append(Document.ext.in_(sorted(exts)))
+    return conds or [Document.id.is_(None)]  # empty → match nothing (shouldn't happen)
 
 
 def _apply(
@@ -267,12 +293,8 @@ def _apply(
         )
     if f.status is not None:
         stmt = stmt.where(Document.status == f.status)
-    if f.image_only:
-        from app.services.thumbs import IMAGE_EXTS
-
-        stmt = stmt.where(
-            or_(Document.mime.like("image/%"), Document.ext.in_(sorted(IMAGE_EXTS)))
-        )
+    if f.types:
+        stmt = stmt.where(or_(*_type_conditions(f.types)))
     elif f.ext:
         stmt = stmt.where(Document.ext == f.ext.lower().lstrip("."))
     if f.mime:

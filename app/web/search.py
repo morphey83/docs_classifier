@@ -65,18 +65,52 @@ def _status(value: str | None) -> DocStatus | None:
         return None
 
 
+def _typelist(params: Mapping[str, str]) -> list[str]:
+    """Selected type toggles: multiple ``type=`` params, or one comma-joined."""
+    raw: list[str] = []
+    getall = getattr(params, "getlist", None)
+    if getall is not None:
+        raw = list(getall("type"))
+    elif params.get("type"):
+        raw = [params["type"]]
+    out: list[str] = []
+    for v in raw:
+        for part in str(v).split(","):
+            p = part.strip().lower().lstrip(".")
+            if p and p not in out:
+                out.append(p)
+    return out
+
+
 def _filters_from_params(params: Mapping[str, str]) -> search_svc.SearchFilters:
     """The narrowing part of a /search query as a SearchFilters (no page/sort)."""
-    kind = params.get("type") or ""
     return search_svc.SearchFilters(
         q=(params.get("q") or "") or None,
         tags_all=_csv(params.get("tags")),
-        image_only=kind == "image",
-        ext=None if kind in ("", "image") else kind,
+        types=_typelist(params),
         status=_status(params.get("status")),
         has_ocr=_tri(params.get("has_ocr")),
         has_index=_tri(params.get("has_index")),
     )
+
+
+_EXT_ICON = {
+    "pdf": "file-text", "doc": "file-text", "docx": "file-text", "odt": "file-text",
+    "rtf": "file-text", "txt": "file-text", "md": "file-text", "log": "file-text",
+    "csv": "file-text", "png": "photo", "jpg": "photo", "jpeg": "photo",
+    "gif": "photo", "webp": "photo", "bmp": "photo", "tif": "photo", "tiff": "photo",
+}
+
+
+def _type_options(exts: list[str]) -> list[tuple[str, str, str]]:
+    """(value, tooltip, icon) for each type toggle — categories then extensions."""
+    out = [
+        ("", "Любое", "filter"),
+        ("image", "Изображения", "photo"),
+        ("text", "Текстовые документы", "file-text"),
+    ]
+    out += [(e, e.upper(), _EXT_ICON.get(e, "file")) for e in exts]
+    return out
 
 
 async def _distinct_exts(db: AsyncSession, domain_ids: list[uuid.UUID]) -> list[str]:
@@ -151,7 +185,8 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
     fd = {
         "q": params.get("q") or "",
         "tags": params.get("tags") or "",
-        "type": params.get("type") or "",
+        "types": f.types,
+        "type": ",".join(f.types),  # for qs() / filter_sig
         "status": status_enum.value if status_enum else "",
         "has_ocr": params.get("has_ocr") or "",
         "has_index": params.get("has_index") or "",
@@ -170,7 +205,7 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
         "total": total,
         "page": f.page,
         "pages": max(1, -(-total // PAGE_SIZE)),
-        "ext_options": await _distinct_exts(db, list(dom_by_id)),
+        "type_options": _type_options(await _distinct_exts(db, list(dom_by_id))),
         "sorts": SORTS,
         "view": view,
         "preset": preset,

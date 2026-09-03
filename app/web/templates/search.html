@@ -116,19 +116,18 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Тип</label>
-          <div class="input-icon">
-            <span class="input-icon-addon">{{ ic.icon('file') }}</span>
-            <select class="form-select" name="type">
-              <option value="" {{ 'selected' if not f.type }}>любой</option>
-              <option value="image" {{ 'selected' if f.type == 'image' }}>изображения</option>
-              {% if f.type and f.type != 'image' and f.type not in ext_options %}
-              <option value="{{ f.type }}" selected>{{ f.type }}</option>
-              {% endif %}
-              {% for ext in ext_options %}
-              <option value="{{ ext }}" {{ 'selected' if f.type == ext }}>{{ ext }}</option>
-              {% endfor %}
-            </select>
+          <label class="form-label">Тип <span class="form-hint d-inline">можно несколько</span></label>
+          <div class="form-selectgroup form-selectgroup-pills flex-wrap" id="type-group">
+            {% for value, label, icon in type_options %}
+            <label class="form-selectgroup-item">
+              <input type="checkbox" name="type" value="{{ value }}" class="form-selectgroup-input"
+                     data-type-any="{{ '1' if not value }}"
+                     {{ 'checked' if (value and value in f.types) or (not value and not f.types) }}>
+              <span class="form-selectgroup-label" data-bs-toggle="tooltip" title="{{ label }}">
+                {{ ic.icon(icon) }}{% if value and value not in ('image', 'text') %} {{ label }}{% endif %}
+              </span>
+            </label>
+            {% endfor %}
           </div>
         </div>
 
@@ -210,6 +209,23 @@
         { target: '#results', swap: 'innerHTML' });
     }
   });
+
+  // "Тип" toggles: "Любое" is exclusive with the specific types
+  (function () {
+    var grp = document.getElementById('type-group');
+    if (!grp) return;
+    var boxes = Array.prototype.slice.call(grp.querySelectorAll('input[name=type]'));
+    var anyBox = grp.querySelector('[data-type-any="1"]');
+    grp.addEventListener('change', function (e) {
+      if (e.target === anyBox) {
+        if (anyBox.checked) boxes.forEach(function (b) { if (b !== anyBox) b.checked = false; });
+      } else if (e.target.checked && anyBox) {
+        anyBox.checked = false;
+      }
+      var noneSpecific = boxes.every(function (b) { return b === anyBox || !b.checked; });
+      if (anyBox) anyBox.checked = noneSpecific;
+    });
+  })();
 </script>
 
 {% include "_tagcard_modal.html" %}
