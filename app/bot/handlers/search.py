@@ -130,15 +130,16 @@ async def send_file(
         )
     except BotAccessError as err:
         return await cb.answer(str(err), show_alert=True)
-    path = storage.blob_path(doc.sha256)
-    if not path.is_file():
-        return await cb.answer("Файл отсутствует в хранилище.", show_alert=True)
     if doc.size_bytes > _SEND_MAX:
         return await cb.answer("Файл слишком большой — откройте в веб.", show_alert=True)
-    await cb.answer("Отправляю…")
-    await bot.send_document(
-        cb.message.chat.id, FSInputFile(path, filename=doc.original_name)
-    )
+    try:
+        with storage.blobs_store().open_local(storage.blob_key(doc.sha256)) as path:
+            await cb.answer("Отправляю…")
+            await bot.send_document(
+                cb.message.chat.id, FSInputFile(path, filename=doc.original_name)
+            )
+    except storage.ObjectNotFound:
+        return await cb.answer("Файл отсутствует в хранилище.", show_alert=True)
 
 
 @router.callback_query(DocCb.filter(F.verb == "ocr"))

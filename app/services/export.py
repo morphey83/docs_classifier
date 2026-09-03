@@ -126,13 +126,16 @@ def write_document_zip(path, docs: list[Document], tag_map: dict) -> tuple[str, 
     """
     used: set[str] = set()
     manifest: list[dict] = []
+    blobs = storage.blobs_store()
 
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
         for doc in docs:
             name = _dedup_name(doc.original_name, used)
-            blob = storage.blob_path(doc.sha256)
-            if blob.is_file():
-                zf.write(blob, arcname=f"files/{name}")
+            try:
+                with blobs.open_local(storage.blob_key(doc.sha256)) as blob:
+                    zf.write(blob, arcname=f"files/{name}")
+            except storage.ObjectNotFound:
+                pass  # blob gone — still list it in the manifest
             entry = {
                 "id": str(doc.id),
                 "file": f"files/{name}",

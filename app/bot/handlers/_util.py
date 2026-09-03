@@ -43,8 +43,17 @@ async def send_doc_card(
     from app.services import thumbs
 
     if thumbs.can_thumb(doc.mime, doc.ext):
-        preview = await thumbs.ensure_thumb(doc.sha256) or storage.blob_path(doc.sha256)
-        if preview.is_file() and preview.stat().st_size <= _PREVIEW_MAX:
-            await target.answer_photo(FSInputFile(preview), caption=text, reply_markup=reply_markup)
+        thumb = await thumbs.ensure_thumb(doc.sha256)
+        if thumb is not None:
+            await target.answer_photo(FSInputFile(thumb), caption=text, reply_markup=reply_markup)
             return
+        if doc.size_bytes <= _PREVIEW_MAX:
+            try:
+                with storage.blobs_store().open_local(storage.blob_key(doc.sha256)) as original:
+                    await target.answer_photo(
+                        FSInputFile(original), caption=text, reply_markup=reply_markup
+                    )
+                    return
+            except storage.ObjectNotFound:
+                pass
     await target.answer(text, reply_markup=reply_markup)

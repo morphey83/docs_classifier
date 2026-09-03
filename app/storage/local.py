@@ -6,6 +6,7 @@ import os
 import shutil
 import tempfile
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO
 
@@ -48,6 +49,13 @@ class LocalObjectStore(ObjectStore):
 
     def local_path(self, key: str) -> Path:
         return self._full(key)
+
+    @contextmanager
+    def open_local(self, key: str) -> Iterator[Path]:
+        path = self._full(key)
+        if not path.is_file():
+            raise ObjectNotFound(key)
+        yield path  # the stored file itself — no copy
 
     def iter_keys(self, prefix: str = "") -> Iterator[str]:
         base = self._full(prefix) if prefix else self._root

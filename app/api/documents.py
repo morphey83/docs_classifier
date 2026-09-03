@@ -15,14 +15,13 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import storage
 from app.api._common import document_out
 from app.db import get_session
 from app.deps import DocCtx, DomainCtx, require, require_doc
+from app.downloads import blob_download
 from app.ingest import archive
 from app.jobs import dispatch
 from app.models import (
@@ -318,11 +317,8 @@ async def update_document(
 @router.get("/documents/{document_id}/content")
 async def download_document(
     ctx: DocCtx = Depends(require_doc(Cap.download)),
-) -> FileResponse:
-    path = storage.blob_path(ctx.document.sha256)
-    if not path.is_file():
-        raise HTTPException(status.HTTP_410_GONE, "blob missing from storage")
-    return FileResponse(path, media_type=ctx.document.mime, filename=ctx.document.original_name)
+) -> Response:
+    return blob_download(ctx.document)
 
 
 @router.post("/documents/{document_id}/index", response_model=DocumentOut)

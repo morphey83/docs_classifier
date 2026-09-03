@@ -18,9 +18,15 @@ from __future__ import annotations
 
 import abc
 import io
+import os
+import shutil
+import tempfile
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO
+
+_CHUNK = 1 << 20
 
 
 class ObjectNotFound(KeyError):
@@ -55,6 +61,35 @@ class ObjectStore(abc.ABC):
     @abc.abstractmethod
     def iter_keys(self, prefix: str = "") -> Iterator[str]:
         """Every key at or below ``prefix``. Used by the GC sweep."""
+
+    def stream(self, key: str, chunk: int = _CHUNK) -> Iterator[bytes]:
+        """Yield ``key``'s bytes in chunks — for a streaming HTTP response."""
+        with self.open(key) as src:
+            while block := src.read(chunk):
+                yield block
+
+    @contextmanager
+    def open_local(self, key: str) -> Iterator[Path]:
+        """Yield a real local path to ``key``'s content.
+
+        The local backend hands back the stored file itself (no copy). Remote
+        backends materialise a temp copy and delete it on exit. Either way the
+        path is only valid inside the ``with`` block. Raises
+        :class:`ObjectNotFound` if the key is absent.
+
+        Subprocess-bound callers (OCR, thumbnails, zip writers, archive
+        extraction) use this so they never need to know which backend is live.
+        """
+        if not self.exists(key):
+            raise ObjectNotFound(key)
+        fd, tmp_name = tempfile.mkstemp(prefix="dc-obj-")
+        tmp = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "wb") as out, self.open(key) as src:
+                shutil.copyfileobj(src, out, _CHUNK)
+            yield tmp
+        finally:
+            tmp.unlink(missing_ok=True)
 
     # --- writes --------------------------------------------------------
     @abc.abstractmethod

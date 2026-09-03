@@ -53,11 +53,11 @@ async def process_archive(
         if batch is None or domain is None or uploader is None:  # pragma: no cover
             return
 
-        arc_path = storage.blob_path(archive_sha256)
         try:
-            entries: list[tuple[str, Path]] = await run_in_threadpool(
-                lambda: list(iter_archive(arc_path, archive_kind, _limits()))
-            )
+            with storage.blobs_store().open_local(storage.blob_key(archive_sha256)) as arc_path:
+                entries: list[tuple[str, Path]] = await run_in_threadpool(
+                    lambda: list(iter_archive(arc_path, archive_kind, _limits()))
+                )
         except ArchiveError as err:
             batch.status = "failed"
             batch.error = str(err)[:2000]

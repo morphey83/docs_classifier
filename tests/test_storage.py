@@ -55,6 +55,24 @@ def test_iter_keys_skips_incoming_and_returns_posix(store):
     assert list(store.iter_keys("a/b")) == ["a/b/one"]
 
 
+def test_open_local_yields_the_stored_file(store):
+    store.put_bytes("k/v", b"data")
+    with store.open_local("k/v") as path:
+        assert path.read_bytes() == b"data"
+        assert path == store.local_path("k/v")  # local backend: no copy
+
+
+def test_open_local_missing_raises(store):
+    cm = store.open_local("gone")
+    with pytest.raises(ObjectNotFound):
+        cm.__enter__()
+
+
+def test_stream_chunks(store):
+    store.put_bytes("big", b"abcdef")
+    assert b"".join(store.stream("big", chunk=2)) == b"abcdef"
+
+
 def test_key_traversal_is_rejected(store):
     with pytest.raises(ValueError):
         store.open("../escape")

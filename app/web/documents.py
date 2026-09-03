@@ -10,8 +10,8 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import storage
 from app.db import get_session
+from app.downloads import blob_download
 from app.ingest import archive
 from app.jobs import dispatch
 from app.models import (
@@ -355,13 +355,10 @@ async def document_download(
     document_id: uuid.UUID,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
-) -> FileResponse:
+) -> Response:
     doc, view = await load_document(db, user, document_id)
     require_cap(view, Cap.download)
-    path = storage.blob_path(doc.sha256)
-    if not path.is_file():
-        raise HTTPException(status.HTTP_410_GONE, "файл отсутствует в хранилище")
-    return FileResponse(path, media_type=doc.mime, filename=doc.original_name)
+    return blob_download(doc)
 
 
 @router.get("/documents/{document_id}/thumb")
