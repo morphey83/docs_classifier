@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +18,8 @@ from app.security import (
     username_or_email_taken,
     verify_password,
 )
-from app.util.time import utcnow
+from app.services.email import new_verify_code
+from app.util.time import as_aware, utcnow
 
 
 class RegistrationError(ValueError):
@@ -44,8 +47,34 @@ async def register_user(db: AsyncSession, *, username: str, email: str, password
 
 
 def email_unverified(user: User) -> bool:
-    """True when this account still has to click its confirmation link."""
+    """True when this account still has to confirm its address with a code."""
     return settings.email_verification_enabled and user.email_verified_at is None
+
+
+async def issue_verify_code(db: AsyncSession, user: User) -> str:
+    """Mint (and store) a fresh confirmation code; return it so the caller can
+    e-mail it. Any previous code is replaced."""
+    code = new_verify_code()
+    user.email_verify_code = code
+    user.email_verify_expires_at = utcnow() + timedelta(hours=settings.email_verify_ttl_hours)
+    await db.flush()
+    return code
+
+
+async def confirm_email_code(db: AsyncSession, user: User, code: str) -> bool:
+    """Check a typed code against the stored one; on success mark the address
+    confirmed and clear the code."""
+    stored = user.email_verify_code
+    expires = user.email_verify_expires_at
+    if not stored or expires is None or as_aware(expires) <= utcnow():
+        return False
+    if code.strip() != stored:
+        return False
+    user.email_verified_at = utcnow()
+    user.email_verify_code = None
+    user.email_verify_expires_at = None
+    await db.flush()
+    return True
 
 
 async def get_user_by_login(db: AsyncSession, login: str) -> User | None:

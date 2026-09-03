@@ -27,11 +27,12 @@ async def test_register_then_dashboard(client):
             "username": "webby",
             "email": "webby@example.com",
             "password": "hunter2hunter",
+            "password2": "hunter2hunter",
             "csrf_token": web_csrf(page),
         },
         follow_redirects=False,
     )
-    assert r.status_code == 303
+    assert r.status_code == 303 and r.headers["location"] == "/upload"
     home = await client.get("/")
     assert home.status_code == 200 and "webby" in home.text
 

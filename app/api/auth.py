@@ -12,13 +12,14 @@ from app.schemas.auth import LoginIn, RegisterIn, UserOut
 from app.schemas.tglink import TgLinkCreateOut
 from app.security import get_current_user
 from app.services import tglink as tglink_svc
-from app.services.email import make_verify_token, send_verification_email
+from app.services.email import send_verification_email
 from app.services.users import (
     RegistrationError,
     authenticate,
     create_session,
     delete_session,
     email_unverified,
+    issue_verify_code,
     register_user,
 )
 from app.util.urls import bot_deep_link
@@ -60,11 +61,11 @@ async def register(
     except RegistrationError as err:
         raise HTTPException(status.HTTP_409_CONFLICT, str(err)) from err
     if email_unverified(user):
+        code = await issue_verify_code(db, user)
+        email, username = user.email, user.username
         await db.commit()
-        background.add_task(
-            send_verification_email, user.email, user.username, make_verify_token(user.id)
-        )
-        return user  # no session — the account is dormant until the link is clicked
+        background.add_task(send_verification_email, email, username, code)
+        return user  # no session — dormant until the code is confirmed
     session = await create_session(
         db, user, user_agent=request.headers.get("user-agent"), ip=_client_ip(request)
     )

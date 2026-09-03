@@ -21,6 +21,8 @@ ignore = ["B008"]  # FastAPI Depends() in defaults
 "app/bot/**" = ["RUF001", "RUF002", "RUF003", "E501"]
 # user-facing Russian: set-size limit messages + default names (§15)
 "app/services/docsets.py" = ["RUF001", "RUF002", "RUF003"]
+# user-facing Russian: the registration / confirmation email bodies
+"app/services/email.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

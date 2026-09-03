@@ -1,11 +1,18 @@
-"""Registration email confirmation (only active when SMTP is configured)."""
+"""Registration email confirmation (only active when SMTP is configured).
+
+The address is confirmed with a short numeric code the user types back on the
+site — not a link.
+"""
 
 from __future__ import annotations
 
+import re
+
 import pytest
+from sqlalchemy import select
 
 from app.config import settings
-from app.services.email import make_verify_token
+from app.models import User
 
 REG = {"username": "Verner", "email": "verner@example.com", "password": "correct horse!"}
 
@@ -23,6 +30,28 @@ def smtp_on(monkeypatch):
     yield
 
 
+async def _sessions():
+    from app.db import get_sessionmaker
+
+    async with get_sessionmaker()() as s:
+        yield s
+
+
+async def _code_for(username: str) -> str:
+    row = None
+    async for db in _sessions():
+        row = (
+            await db.execute(
+                select(User.email_verify_code).where(User.username == username)
+            )
+        ).scalar_one()
+    return row
+
+
+def _csrf(page: str) -> str:
+    return re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
+
+
 async def test_api_register_gives_no_session_and_login_is_blocked(client, smtp_on):
     r = await client.post("/api/auth/register", json=REG)
     assert r.status_code == 201
@@ -35,21 +64,17 @@ async def test_api_register_gives_no_session_and_login_is_blocked(client, smtp_o
     assert bad.status_code == 403
 
 
-async def test_web_verify_link_activates_the_account(client, smtp_on):
-    page = (await client.get("/register")).text
-    import re
-
-    csrf = re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
+async def test_web_verify_code_activates_the_account_and_lands_on_upload(client, smtp_on):
+    csrf = _csrf((await client.get("/register")).text)
     r = await client.post(
         "/register",
-        data={**REG, "csrf_token": csrf},
+        data={**REG, "password2": REG["password"], "csrf_token": csrf},
         follow_redirects=False,
     )
     assert r.status_code == 200 and "Проверьте почту" in r.text
 
-    # login still blocked
-    lp = (await client.get("/login")).text
-    lcsrf = re.search(r'name="csrf_token" value="([^"]+)"', lp).group(1)
+    # login still blocked — it re-sends a code rather than letting us in
+    lcsrf = _csrf((await client.get("/login")).text)
     blocked = await client.post(
         "/login",
         data={"login": "verner", "password": REG["password"], "csrf_token": lcsrf},
@@ -57,26 +82,28 @@ async def test_web_verify_link_activates_the_account(client, smtp_on):
     )
     assert blocked.status_code == 403 and "не подтверждён" in blocked.text
 
-    # find the user, mint its token, hit the verify route
-    from sqlalchemy import select
+    code = await _code_for("verner")
+    assert re.fullmatch(r"\d{6}", code)
 
-    from app.models import User
-
-    async for db in _sessions():
-        uid = (await db.execute(select(User.id).where(User.username == "verner"))).scalar_one()
-    v = await client.get(f"/verify/{make_verify_token(uid)}", follow_redirects=False)
-    assert v.status_code == 303 and v.headers["location"] == "/login?verified=1"
-
-    ok = await client.post(
-        "/login",
-        data={"login": "verner", "password": REG["password"], "csrf_token": lcsrf},
+    v = await client.post(
+        "/verify",
+        data={"email": REG["email"], "code": code, "csrf_token": lcsrf},
         follow_redirects=False,
     )
-    assert ok.status_code == 303 and ok.headers["location"] == "/"
+    assert v.status_code == 303 and v.headers["location"] == "/upload"
+    assert client.cookies.get("dcsid")  # auto-signed-in
 
 
-async def _sessions():
-    from app.db import get_sessionmaker
-
-    async with get_sessionmaker()() as s:
-        yield s
+async def test_wrong_code_is_rejected(client, smtp_on):
+    csrf = _csrf((await client.get("/register")).text)
+    await client.post(
+        "/register",
+        data={**REG, "password2": REG["password"], "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    v = await client.post(
+        "/verify",
+        data={"email": REG["email"], "code": "000000", "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    assert v.status_code == 400 and "устарел" in v.text

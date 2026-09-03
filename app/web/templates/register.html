@@ -28,37 +28,72 @@
       <div class="card-body">
         <h2 class="h2 text-center mb-4">Регистрация</h2>
         {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
-        <form method="post" action="/register" autocomplete="off">
+        {% set fe = field_errors or {} %}
+        <form method="post" action="/register" autocomplete="off" id="reg-form">
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
           <input type="hidden" name="next" value="{{ next or '' }}">
           <div class="mb-3">
             <label class="form-label">Логин</label>
             <div class="input-icon">
               <span class="input-icon-addon">{{ ic.icon('user') }}</span>
-              <input class="form-control" name="username" required autofocus value="{{ username or '' }}"
-                     pattern="[a-zA-Z0-9_.\-]+" minlength="3" maxlength="64" placeholder="латиница, цифры, 3+">
+              <input class="form-control{{ ' is-invalid' if fe.get('username') }}" name="username" required
+                     autofocus value="{{ username or '' }}"
+                     pattern="[a-zA-Z0-9_.\-]{3,64}" minlength="3" maxlength="64"
+                     placeholder="латиница, цифры, 3+">
+            </div>
+            <div class="invalid-feedback{{ ' d-block' if fe.get('username') }}">
+              {{ fe.get('username') or 'Только латинские буквы, цифры, точка, дефис и подчёркивание; от 3 до 64 символов.' }}
             </div>
           </div>
           <div class="mb-3">
             <label class="form-label">Email</label>
             <div class="input-icon">
               <span class="input-icon-addon">{{ ic.icon('mail') }}</span>
-              <input class="form-control" name="email" type="email" required value="{{ email or '' }}"
-                     placeholder="you@example.com">
+              <input class="form-control{{ ' is-invalid' if fe.get('email') }}" name="email" type="email"
+                     required value="{{ email or '' }}" placeholder="you@example.com">
+            </div>
+            <div class="invalid-feedback{{ ' d-block' if fe.get('email') }}">
+              {{ fe.get('email') or 'Введите корректный адрес, например you@example.com.' }}
             </div>
           </div>
           <div class="mb-3">
             <label class="form-label">Пароль</label>
             <div class="input-icon">
               <span class="input-icon-addon">{{ ic.icon('lock') }}</span>
-              <input class="form-control" name="password" type="password" required minlength="8"
-                     placeholder="минимум 8 символов">
+              <input class="form-control{{ ' is-invalid' if fe.get('password') }}" name="password"
+                     id="reg-pw" type="password" required minlength="8" maxlength="256"
+                     placeholder="от 8 до 256 символов">
+            </div>
+            <div class="invalid-feedback{{ ' d-block' if fe.get('password') }}">
+              {{ fe.get('password') or 'От 8 до 256 символов.' }}
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Повторите пароль</label>
+            <div class="input-icon">
+              <span class="input-icon-addon">{{ ic.icon('lock') }}</span>
+              <input class="form-control{{ ' is-invalid' if fe.get('password2') }}" name="password2"
+                     id="reg-pw2" type="password" required placeholder="ещё раз тот же пароль">
+            </div>
+            <div class="invalid-feedback{{ ' d-block' if fe.get('password2') }}">
+              {{ fe.get('password2') or 'Пароли не совпадают.' }}
             </div>
           </div>
           <div class="form-footer">
             <button type="submit" class="btn btn-primary w-100">Создать аккаунт</button>
           </div>
         </form>
+        <script>
+          (function () {
+            var pw = document.getElementById('reg-pw');
+            var pw2 = document.getElementById('reg-pw2');
+            function checkMatch() {
+              pw2.setCustomValidity(pw2.value && pw2.value !== pw.value ? 'Пароли не совпадают.' : '');
+            }
+            pw.addEventListener('input', checkMatch);
+            pw2.addEventListener('input', checkMatch);
+          })();
+        </script>
       </div>
     </div>
     <div class="text-center text-secondary mt-3">

@@ -24,6 +24,12 @@ class User(Base, TimestampMixin):
     email_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # the pending confirmation code the user types back in (not a link), and when
+    # it stops being valid; both cleared once the address is confirmed
+    email_verify_code: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    email_verify_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     sessions: Mapped[list[Session]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

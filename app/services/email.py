@@ -8,28 +8,16 @@ same reason.
 from __future__ import annotations
 
 import logging
-import uuid
-
-from itsdangerous import BadSignature, URLSafeTimedSerializer
+import secrets
 
 from app.config import settings
-from app.util.urls import absolute_url
 
 log = logging.getLogger("app.email")
 
-_signer = URLSafeTimedSerializer(settings.secret_key, salt="dc-email-verify")
 
-
-def make_verify_token(user_id: uuid.UUID) -> str:
-    return _signer.dumps(str(user_id))
-
-
-def read_verify_token(token: str) -> uuid.UUID | None:
-    try:
-        raw = _signer.loads(token, max_age=settings.email_verify_ttl_hours * 3600)
-        return uuid.UUID(raw)
-    except (BadSignature, ValueError):
-        return None
+def new_verify_code() -> str:
+    """A six-digit confirmation code the user types back on the site."""
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 
 async def send_email(to: str, subject: str, body: str) -> None:
@@ -58,13 +46,12 @@ async def send_email(to: str, subject: str, body: str) -> None:
         log.exception("failed to send email to %s", to)
 
 
-async def send_verification_email(email: str, username: str, token: str) -> None:
-    link = absolute_url(f"/verify/{token}")
+async def send_verification_email(email: str, username: str, code: str) -> None:
     body = (
         f"Здравствуйте, {username}!\n\n"
-        f"Чтобы завершить регистрацию в DocsClassifier, подтвердите адрес — "
-        f"перейдите по ссылке:\n\n{link}\n\n"
-        f"Ссылка действует {settings.email_verify_ttl_hours} ч. "
+        f"Код для подтверждения адреса в DocsClassifier:\n\n    {code}\n\n"
+        f"Введите его на странице подтверждения. Код действует "
+        f"{settings.email_verify_ttl_hours} ч. "
         f"Если вы не регистрировались, просто проигнорируйте это письмо."
     )
-    await send_email(email, "DocsClassifier — подтверждение адреса", body)
+    await send_email(email, "DocsClassifier — код подтверждения", body)
