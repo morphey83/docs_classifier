@@ -315,17 +315,41 @@
         window.tabler.Modal.getOrCreateInstance(document.getElementById('bulktagdlg')).hide();
         if (inp && inp.value.trim()) fire('tags', '', inp.value.trim());
       };
-      Array.prototype.slice.call(document.querySelectorAll('[data-bulk-set]')).forEach(function (b) {
-        b.onclick = function (e) {
-          e.preventDefault();
-          var v = b.dataset.bulkSet, save = b.dataset.bulkSave === '1';
-          var act = save ? 'save_filter' : 'set';
-          if (v === '__new__') {
-            var name = window.prompt('Название нового набора');
-            if (name && name.trim()) fire(act, '__new__', name.trim(), save);
-          } else { fire(act, v, '', save); }
+      // "В набор" → pick target (selection / whole filter) → set-picker modal
+      function setpickModal() {
+        return window.tabler.Modal.getOrCreateInstance(document.getElementById('setpickdlg'));
+      }
+      Array.prototype.slice.call(document.querySelectorAll('[data-set-target]')).forEach(function (b) {
+        b.onclick = function () {
+          if (b.dataset.setTarget === 'items' && !sel.size) return;
+          window._setTarget = b.dataset.setTarget;  // "items" | "filter"
+          document.getElementById('setpick-title').textContent =
+            b.dataset.setTarget === 'filter' ? 'Фильтр в набор' : 'Документы в набор';
+          var srch = document.getElementById('setpick-search');
+          if (srch) { srch.value = ''; }
+          Array.prototype.slice.call(document.querySelectorAll('#setpick-list .setpick-row'))
+            .forEach(function (r) { r.hidden = false; });
+          setpickModal().show();
         };
       });
+      var setSearch = document.getElementById('setpick-search');
+      if (setSearch) setSearch.oninput = function () {
+        var q = setSearch.value.trim().toLowerCase();
+        Array.prototype.slice.call(document.querySelectorAll('#setpick-list .setpick-row'))
+          .forEach(function (r) { r.hidden = q && r.textContent.toLowerCase().indexOf(q) === -1; });
+      };
+      function setpickFire(setId, newName) {
+        var filter = window._setTarget === 'filter';
+        setpickModal().hide();
+        fire(filter ? 'save_filter' : 'set', setId, newName || '', filter);
+      }
+      Array.prototype.slice.call(document.querySelectorAll('#setpick-list .setpick-row'))
+        .forEach(function (r) { r.onclick = function () { setpickFire(r.dataset.setId); }; });
+      var setNew = document.getElementById('setpick-new');
+      if (setNew) setNew.onclick = function () {
+        var name = window.prompt('Название нового набора');
+        if (name && name.trim()) setpickFire('__new__', name.trim());
+      };
       refresh();
     }
 

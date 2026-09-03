@@ -4,19 +4,15 @@
 <div data-filter-sig="{{ filter_sig }}">
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-  <span class="text-secondary text-nowrap">
-    Найдено: {{ total }}{% if pages > 1 %} · стр. {{ page }}/{{ pages }}{% endif %}
-  </span>
+  <span class="text-secondary text-nowrap">Найдено: {{ total }}</span>
 
   {% if total > 0 and view != 'table' %}
+  <div class="vr d-none d-sm-block"></div>
   {{ m.sortbar() }}
   {% endif %}
 
-  {% if pages > 1 %}
-  {{ m.pager(page, pages) }}
-  {% endif %}
-
-  <div class="btn-group btn-group-sm ms-auto" role="group">
+  <div class="vr d-none d-sm-block"></div>
+  <div class="btn-group btn-group-sm" role="group">
     <a class="btn {{ 'active' if view != 'table' }}"
        hx-get="{{ m.qs(view='cards') }}" hx-target="#results" hx-push-url="true"
        title="Карточки">{{ ic.icon('grid') }}</a>
@@ -24,6 +20,13 @@
        hx-get="{{ m.qs(view='table') }}" hx-target="#results" hx-push-url="true"
        title="Таблица">{{ ic.icon('list') }}</a>
   </div>
+
+  {% if pages > 1 %}
+  <div class="ms-auto d-flex align-items-center gap-2">
+    <span class="text-secondary small text-nowrap">стр. {{ page }}/{{ pages }}</span>
+    {{ m.pager(page, pages) }}
+  </div>
+  {% endif %}
 </div>
 
 {% if total == 0 %}

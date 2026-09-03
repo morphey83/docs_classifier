@@ -4,59 +4,44 @@
 {% block page_title %}Поиск{% endblock %}
 
 {% block page_actions %}
-<div id="search-toolbar" class="btn-list justify-content-end" data-preset="{{ preset }}">
+<div id="search-toolbar" class="btn-list justify-content-end" data-preset="{{ preset }}"
+     data-bs-tooltip-placement="bottom">
   <span class="badge bg-blue-lt align-self-center" id="tb-count" hidden></span>
 
   <button type="button" class="btn btn-sm" id="tb-selall"
-          data-bs-toggle="tooltip" title="Выбрать все элементы на странице">
+          data-bs-toggle="tooltip" data-bs-placement="bottom" title="Выбрать все элементы на странице">
     {{ ic.icon('check') }} Все
   </button>
 
   <button type="button" class="btn btn-sm btn-primary tb-inbox"
           hx-get="/inbox/card" hx-target="#tagcard"
           hx-include="#filters [name=domain_id]"
-          data-bs-toggle="tooltip" title="Разметить документы по очереди">
+          data-bs-toggle="tooltip" data-bs-placement="bottom" title="Разметить документы по очереди">
     {{ ic.icon('check') }} Разметить
   </button>
 
   <div class="btn-group btn-group-sm tb-normal">
     <button type="button" class="btn tb-needsel" data-bulk="index"
-            data-bs-toggle="tooltip" title="Индексировать">{{ ic.icon('search') }}</button>
+            data-bs-toggle="tooltip" data-bs-placement="bottom" title="Индексировать">{{ ic.icon('search') }}</button>
     <button type="button" class="btn tb-needsel" data-bulk="ocr"
-            data-bs-toggle="tooltip" title="Распознать (OCR)">{{ ic.icon('scan') }}</button>
+            data-bs-toggle="tooltip" data-bs-placement="bottom" title="Распознать (OCR)">{{ ic.icon('scan') }}</button>
     <button type="button" class="btn tb-needsel" data-bulk-tagdlg="1"
-            data-bs-toggle="tooltip" title="Проставить теги">{{ ic.icon('hash') }}</button>
+            data-bs-toggle="tooltip" data-bs-placement="bottom" title="Проставить теги">{{ ic.icon('hash') }}</button>
     {% if can_publish_any %}
     <button type="button" class="btn tb-needsel" data-bulk="public"
-            data-bs-toggle="tooltip" title="Сделать публичными">{{ ic.icon('check') }}</button>
+            data-bs-toggle="tooltip" data-bs-placement="bottom" title="Сделать публичными">{{ ic.icon('check') }}</button>
     <button type="button" class="btn tb-needsel" data-bulk="private"
-            data-bs-toggle="tooltip" title="Сделать приватными">{{ ic.icon('lock') }}</button>
+            data-bs-toggle="tooltip" data-bs-placement="bottom" title="Сделать приватными">{{ ic.icon('lock') }}</button>
     {% endif %}
   </div>
 
   <div class="dropdown tb-normal">
-    <button type="button" class="btn btn-sm dropdown-toggle tb-needsel" data-bs-toggle="dropdown">
+    <button type="button" class="btn btn-sm dropdown-toggle" data-bs-toggle="dropdown">
       {{ ic.icon('folder') }} В набор
     </button>
     <div class="dropdown-menu dropdown-menu-end">
-      {% for s in user_sets %}
-      <a class="dropdown-item" href="#" data-bulk-set="{{ s.id }}">{{ s.name }}</a>
-      {% endfor %}
-      {% if user_sets %}<div class="dropdown-divider"></div>{% endif %}
-      <a class="dropdown-item" href="#" data-bulk-set="__new__">➕ Новый набор…</a>
-    </div>
-  </div>
-
-  <div class="dropdown tb-normal">
-    <button type="button" class="btn btn-sm btn-ghost-secondary dropdown-toggle" data-bs-toggle="dropdown">
-      {{ ic.icon('clipboard') }} Фильтр в набор
-    </button>
-    <div class="dropdown-menu dropdown-menu-end">
-      {% for s in user_sets %}
-      <a class="dropdown-item" href="#" data-bulk-set="{{ s.id }}" data-bulk-save="1">{{ s.name }}</a>
-      {% endfor %}
-      {% if user_sets %}<div class="dropdown-divider"></div>{% endif %}
-      <a class="dropdown-item" href="#" data-bulk-set="__new__" data-bulk-save="1">➕ Новый набор…</a>
+      <button type="button" class="dropdown-item tb-needsel" data-set-target="items">выделенные документы</button>
+      <button type="button" class="dropdown-item" data-set-target="filter">весь фильтр</button>
     </div>
   </div>
 
@@ -193,6 +178,29 @@
       <button type="button" class="btn btn-primary" id="bulktag-apply">Применить</button>
     </div>
   </div></div>
+</div>
+
+<div class="modal modal-blur fade" id="setpickdlg" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="setpick-title">В набор</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+      </div>
+      <div class="modal-body">
+        <input class="form-control mb-2" id="setpick-search" placeholder="поиск набора…" autocomplete="off">
+        <div class="list-group list-group-flush" id="setpick-list">
+          {% for s in user_sets %}
+          <button type="button" class="list-group-item list-group-item-action setpick-row"
+                  data-set-id="{{ s.id }}">{{ s.name }}</button>
+          {% endfor %}
+          <button type="button" class="list-group-item list-group-item-action text-primary" id="setpick-new">
+            ➕ Новый набор…
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
