@@ -150,7 +150,7 @@ async def _tag_names(db: AsyncSession, doc_id: uuid.UUID) -> list[str]:
 
 
 async def _doc_ctx(db: AsyncSession, user: User, doc, view) -> dict:
-    freq = [t.name for t, _ in (await tags_svc.list_tags(db, doc.domain_id))[:14]]
+    freq = [n for n, _ in await tags_svc.suggest_tags(db, [doc.domain_id])]
     return {
         "view": view,
         "doc": doc,
@@ -219,10 +219,7 @@ async def document_tags(
     doc, view = await load_document(db, user, document_id)
     require_cap(view, Cap.write)
     names = [p.strip() for p in tags.split(",") if p.strip()]
-    tag_ids = []
-    for name in names:
-        tag = await tags_svc.get_or_create_tag(db, doc.domain_id, name, actor=user)
-        tag_ids.append(tag.id)
+    tag_ids = await tags_svc.resolve_names(db, names, actor=user)
     await tags_svc.set_document_tags(db, doc, tag_ids, actor=user)
     return await _doc_fragment(request, db, user, document_id, toast="Теги сохранены")
 

@@ -104,7 +104,7 @@ async def _card_ctx(db: AsyncSession, user, doc: Document | None, raw_domain: st
     freq: list[str] = []
     tags: list[str] = []
     if doc is not None:
-        freq = [t.name for t, _ in (await tags_svc.list_tags(db, doc.domain_id))[:14]]
+        freq = [n for n, _ in await tags_svc.suggest_tags(db, [doc.domain_id])]
         tags = (await _tags_by_doc(db, [doc.id])).get(doc.id, [])
     return {
         "doc": doc,
@@ -178,10 +178,7 @@ async def inbox_done(
     if title.strip():
         await docs_svc.update_document(db, doc, title=title)
     names = [p.strip() for p in tags.split(",") if p.strip()]
-    tag_ids = []
-    for name in names:
-        tag = await tags_svc.get_or_create_tag(db, domain.id, name, actor=user)
-        tag_ids.append(tag.id)
+    tag_ids = await tags_svc.resolve_names(db, names, actor=user)
     await tags_svc.set_document_tags(db, doc, tag_ids, actor=user)
     await docs_svc.complete_document(db, doc)
     await db.flush()

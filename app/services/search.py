@@ -26,6 +26,7 @@ from app.models import (
     Tag,
     TextSource,
 )
+from app.util.slug import slugify
 from app.util.time import utcnow
 
 FTS_CONFIG = "russian"
@@ -172,22 +173,13 @@ class Facets:
 TagIndex = dict[str, list[uuid.UUID]]
 
 
-async def _tag_name_index(db: AsyncSession, domain_ids: Sequence[uuid.UUID]) -> TagIndex:
-    """``{lowercased tag name: [tag ids across domain_ids]}`` — built once per search.
-
-    Tags match by *name*, case-insensitively, not by slug: a document's tags
-    always come from its own domain's vocabulary, so this composes correctly
-    across domains without needing shared ids — and it's what a caller
-    actually has on hand (nobody types a slug). Slugs stay an internal detail
-    of tag CRUD / uniqueness (docs/architecture.md §7). Folded in Python, not
-    SQL — SQLite's (and a `C`-locale Postgres's) ``lower()`` only folds ASCII.
-    """
-    if not domain_ids:
-        return {}
+async def _tag_slug_index(db: AsyncSession) -> TagIndex:
+    """``{tag slug: [tag id]}`` — tags are global and slug-unique (§7), so a
+    caller's free-text name resolves through :func:`slugify` to at most one id.
+    Built once per search."""
     idx: TagIndex = {}
-    rows = await db.execute(select(Tag.id, Tag.name).where(Tag.domain_id.in_(domain_ids)))
-    for tid, name in rows:
-        idx.setdefault(name.strip().lower(), []).append(tid)
+    for tid, slug in await db.execute(select(Tag.id, Tag.slug)):
+        idx.setdefault(slug, []).append(tid)
     return idx
 
 
@@ -281,7 +273,7 @@ def _apply(
         stmt = stmt.where(Document.text_source == f.text_source)
 
     def _ids(name: str) -> list[uuid.UUID]:
-        return tag_index.get(name.strip().lower(), [])
+        return tag_index.get(slugify(name), [])
 
     for name in f.tags_all:
         stmt = stmt.where(Document.id.in_(_tag_doc_subquery(_ids(name))))
@@ -332,7 +324,7 @@ async def search_documents(
 
     pg = _is_pg(db)
     needs_tags = bool(f.tags_all or f.tags_any or f.tags_none)
-    tag_index = await _tag_name_index(db, domain_ids) if needs_tags else {}
+    tag_index = await _tag_slug_index(db) if needs_tags else {}
     base = _apply(select(Document), domain_ids, f, pg=pg, tag_index=tag_index)
 
     total = int(await db.scalar(select(func.count()).select_from(base.subquery())) or 0)

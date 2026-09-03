@@ -253,9 +253,7 @@ async def set_tags(
     current_ids = set(
         await db.scalars(select(DocumentTag.tag_id).where(DocumentTag.document_id == doc.id))
     )
-    for name in names:
-        tag = await tags_svc.get_or_create_tag(db, doc.domain_id, name, actor=user)
-        current_ids.add(tag.id)
+    current_ids.update(await tags_svc.resolve_names(db, names, actor=user))
     await tags_svc.set_document_tags(db, doc, list(current_ids), actor=user)
     applied = await _tags_for(db, [doc.id])
     await message.answer("🔖 " + (", ".join(sorted(applied.get(doc.id, []))) or "—"))

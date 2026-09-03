@@ -63,8 +63,8 @@ async def test_tagging_and_complete_flow(alice, domain):
     names = sorted(t["name"] for t in tagged.json()["tags"])
     assert names == ["2024", "Контракт"]
 
-    # created in the domain vocabulary
-    vocab = await alice.get(f"/api/domains/{d}/tags")
+    # created in the global tag pool
+    vocab = await alice.get("/api/tags/all")
     assert {t["name"] for t in vocab.json()} == {"Контракт", "2024"}
     assert all(t["usage_count"] == 1 for t in vocab.json())
 

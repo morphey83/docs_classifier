@@ -8,16 +8,9 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class TagCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
-    color: str | None = Field(default=None, max_length=16)
-    description: str | None = Field(default=None, max_length=500)
-
-
 class TagUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     color: str | None = Field(default=None, max_length=16)
-    description: str | None = Field(default=None, max_length=500)
 
 
 class TagMerge(BaseModel):

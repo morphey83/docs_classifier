@@ -15,7 +15,6 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
     false,
     func,
     text,
@@ -199,21 +198,20 @@ class Document(Base):
 
 
 class Tag(Base, TimestampMixin):
+    """A global tag. Not owned by a domain — one shared pool (§7 rev 2). A tag
+    lives while at least one document carries it; the nightly cleanup sweeps
+    tags that drop to zero references."""
+
     __tablename__ = "tag"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    domain_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("domain.id", ondelete="CASCADE"), index=True
-    )
     name: Mapped[str] = mapped_column(String(120))
-    slug: Mapped[str] = mapped_column(String(64))
+    slug: Mapped[str] = mapped_column(String(64), unique=True)
     color: Mapped[str | None] = mapped_column(String(16), nullable=True)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
-
-    __table_args__ = (UniqueConstraint("domain_id", "slug", name="uq_tag_domain_id_slug"),)
 
 
 class DocumentTag(Base):

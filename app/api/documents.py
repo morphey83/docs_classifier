@@ -369,9 +369,7 @@ async def set_tags(
     db: AsyncSession = Depends(get_session),
 ) -> DocumentOut:
     tag_ids: list[uuid.UUID] = list(body.tag_ids or [])
-    for name in body.tag_names or []:
-        tag = await tags_svc.get_or_create_tag(db, ctx.document.domain_id, name, actor=ctx.user)
-        tag_ids.append(tag.id)
+    tag_ids += await tags_svc.resolve_names(db, body.tag_names or [], actor=ctx.user)
     try:
         await tags_svc.set_document_tags(db, ctx.document, tag_ids, actor=ctx.user)
     except tags_svc.TagError as err:

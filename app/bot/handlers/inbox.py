@@ -77,10 +77,7 @@ async def tag_and_advance(
         return await _next(message, state, db, domain, user)
 
     names = [p.strip() for p in message.text.split(",") if p.strip()]
-    tag_ids = []
-    for name in names:
-        tag = await tags_svc.get_or_create_tag(db, domain.id, name, actor=user)
-        tag_ids.append(tag.id)
+    tag_ids = await tags_svc.resolve_names(db, names, actor=user)
     await tags_svc.set_document_tags(db, doc, tag_ids, actor=user)
     await docs_svc.complete_document(db, doc)
     await message.answer(f"✅ «{doc.title}» — {', '.join(names) or 'без тегов'}")

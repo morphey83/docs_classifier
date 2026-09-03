@@ -1,4 +1,8 @@
-"""Per-domain tag vocabulary and document tagging."""
+"""The global tag pool and document tagging (§7 rev 2).
+
+Tags are not owned by a domain. A tag exists while ≥1 document carries it;
+:func:`sweep_orphan_tags` (nightly cleanup) removes ones that drop to zero.
+"""
 
 from __future__ import annotations
 
@@ -16,122 +20,99 @@ class TagError(ValueError):
     pass
 
 
-async def list_tags(db: AsyncSession, domain_id: uuid.UUID) -> list[tuple[Tag, int]]:
+# --- reads ---------------------------------------------------------------
+async def list_tags(db: AsyncSession) -> list[tuple[Tag, int]]:
+    """Every tag with its live document count, most-used first."""
     rows = await db.execute(
         select(Tag, func.count(DocumentTag.document_id))
         .outerjoin(DocumentTag, DocumentTag.tag_id == Tag.id)
-        .where(Tag.domain_id == domain_id)
         .group_by(Tag.id)
-        .order_by(Tag.name)
+        .order_by(func.count(DocumentTag.document_id).desc(), Tag.name)
     )
     return list(rows.all())
 
 
-async def list_tags_across(
-    db: AsyncSession, domain_ids: Sequence[uuid.UUID]
+async def suggest_tags(
+    db: AsyncSession, domain_ids: Sequence[uuid.UUID], *, limit: int | None = 14
 ) -> list[tuple[str, int]]:
-    """Tag-name options for a filter picker, merged across ``domain_ids`` (§7).
-
-    Same-named tags in different domains' vocabularies are one option, with
-    usage summed; the displayed casing is whichever sorts first. Merged in
-    Python, not via SQL ``lower()`` — SQLite (and a `C`-locale Postgres) only
-    folds ASCII case, which would split e.g. "Договор" from "договор".
-    """
+    """``(name, document count)`` for the tags on non-deleted documents in
+    ``domain_ids``, most-used first. Feeds the 'частые теги' chips and the
+    ``GET /api/tags`` filter-picker options."""
     if not domain_ids:
         return []
-    rows = await db.execute(
-        select(Tag.id, Tag.name, func.count(func.distinct(DocumentTag.document_id)))
-        .select_from(Tag)
-        .outerjoin(DocumentTag, DocumentTag.tag_id == Tag.id)
-        .where(Tag.domain_id.in_(domain_ids))
+    cnt = func.count(func.distinct(DocumentTag.document_id))
+    stmt = (
+        select(Tag.name, cnt)
+        .join(DocumentTag, DocumentTag.tag_id == Tag.id)
+        .join(Document, Document.id == DocumentTag.document_id)
+        .where(Document.domain_id.in_(domain_ids), Document.deleted_at.is_(None))
         .group_by(Tag.id, Tag.name)
+        .order_by(cnt.desc(), Tag.name)
     )
-    merged: dict[str, list] = {}  # lowercased name -> [display name, usage count]
-    for _tag_id, name, count in rows:
-        key = name.strip().lower()
-        entry = merged.setdefault(key, [name, 0])
-        entry[0] = min(entry[0], name)
-        entry[1] += count
-    return sorted(((name, count) for name, count in merged.values()), key=lambda x: (-x[1], x[0]))
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    return [tuple(row) for row in await db.execute(stmt)]
 
 
-async def get_or_create_tag(
-    db: AsyncSession, domain_id: uuid.UUID, name: str, *, actor: User
-) -> Tag:
+async def tag_names(db: AsyncSession, doc_id: uuid.UUID) -> list[str]:
+    rows = await db.scalars(
+        select(Tag.name)
+        .join(DocumentTag, DocumentTag.tag_id == Tag.id)
+        .where(DocumentTag.document_id == doc_id)
+        .order_by(Tag.name)
+    )
+    return list(rows)
+
+
+# --- create / normalise ----------------------------------------------
+async def get_or_create_tag(db: AsyncSession, name: str, *, actor: User) -> Tag:
     name = name.strip()
     if not name:
         raise TagError("tag name is empty")
     slug = slugify(name)
-    tag = await db.scalar(select(Tag).where(Tag.domain_id == domain_id, Tag.slug == slug))
+    tag = await db.scalar(select(Tag).where(Tag.slug == slug))
     if tag is None:
-        tag = Tag(domain_id=domain_id, name=name, slug=slug, created_by=actor.id)
+        tag = Tag(name=name, slug=slug, created_by=actor.id)
         db.add(tag)
         await db.flush()
     return tag
 
 
-async def create_tag(
-    db: AsyncSession,
-    domain_id: uuid.UUID,
-    *,
-    name: str,
-    color: str | None,
-    description: str | None,
-    actor: User,
-) -> Tag:
-    slug = slugify(name.strip())
-    if await db.scalar(select(Tag.id).where(Tag.domain_id == domain_id, Tag.slug == slug)):
-        raise TagError(f"tag '{name}' already exists")
-    tag = Tag(
-        domain_id=domain_id,
-        name=name.strip(),
-        slug=slug,
-        color=color,
-        description=description,
-        created_by=actor.id,
-    )
-    db.add(tag)
+async def resolve_names(db: AsyncSession, names: Sequence[str], *, actor: User) -> list[uuid.UUID]:
+    out: list[uuid.UUID] = []
+    for raw in names:
+        if raw.strip():
+            out.append((await get_or_create_tag(db, raw, actor=actor)).id)
+    return out
+
+
+# --- edit ---------------------------------------------------------------
+async def rename_tag(db: AsyncSession, tag: Tag, name: str) -> Tag:
+    name = name.strip()
+    if not name:
+        raise TagError("tag name is empty")
+    new_slug = slugify(name)
+    if new_slug != tag.slug and await db.scalar(select(Tag.id).where(Tag.slug == new_slug)):
+        raise TagError("another tag already uses that name")
+    tag.name, tag.slug = name, new_slug
     await db.flush()
     return tag
 
 
-async def update_tag(
-    db: AsyncSession, tag: Tag, *, name: str | None, color: str | None, description: str | None
-) -> Tag:
-    if name is not None:
-        new_slug = slugify(name.strip())
-        clash = await db.scalar(
-            select(Tag.id).where(
-                Tag.domain_id == tag.domain_id, Tag.slug == new_slug, Tag.id != tag.id
-            )
-        )
-        if clash:
-            raise TagError("another tag already uses that name")
-        tag.name = name.strip()
-        tag.slug = new_slug
-    if color is not None:
-        tag.color = color or None
-    if description is not None:
-        tag.description = description or None
+async def recolor_tag(db: AsyncSession, tag: Tag, color: str | None) -> Tag:
+    tag.color = color or None
     await db.flush()
     return tag
-
-
-async def delete_tag(db: AsyncSession, tag: Tag) -> None:
-    await db.execute(delete(DocumentTag).where(DocumentTag.tag_id == tag.id))
-    await db.delete(tag)
 
 
 async def merge_tags(db: AsyncSession, *, source: Tag, target: Tag) -> None:
+    """Repoint every link from ``source`` to ``target`` (dedup), drop ``source``."""
     if source.id == target.id:
         raise TagError("cannot merge a tag into itself")
-    if source.domain_id != target.domain_id:
-        raise TagError("tags belong to different domains")
     already = set(
         await db.scalars(select(DocumentTag.document_id).where(DocumentTag.tag_id == target.id))
     )
-    links = await db.scalars(select(DocumentTag).where(DocumentTag.tag_id == source.id))
-    for link in links:
+    for link in await db.scalars(select(DocumentTag).where(DocumentTag.tag_id == source.id)):
         if link.document_id in already:
             await db.delete(link)
         else:
@@ -140,14 +121,11 @@ async def merge_tags(db: AsyncSession, *, source: Tag, target: Tag) -> None:
     await db.delete(source)
 
 
+# --- assignment -----------------------------------------------------
 async def set_document_tags(
     db: AsyncSession, document: Document, tag_ids: list[uuid.UUID], *, actor: User
 ) -> None:
-    valid = set(
-        await db.scalars(
-            select(Tag.id).where(Tag.domain_id == document.domain_id, Tag.id.in_(tag_ids))
-        )
-    )
+    valid = set(await db.scalars(select(Tag.id).where(Tag.id.in_(tag_ids))))
     missing = set(tag_ids) - valid
     if missing:
         raise TagError(f"unknown tag ids: {sorted(map(str, missing))}")
@@ -155,15 +133,51 @@ async def set_document_tags(
     current = set(
         await db.scalars(select(DocumentTag.tag_id).where(DocumentTag.document_id == document.id))
     )
-    to_add = valid - current
     to_remove = current - valid
     if to_remove:
         await db.execute(
             delete(DocumentTag).where(
-                DocumentTag.document_id == document.id,
-                DocumentTag.tag_id.in_(to_remove),
+                DocumentTag.document_id == document.id, DocumentTag.tag_id.in_(to_remove)
             )
         )
-    for tid in to_add:
+    for tid in valid - current:
         db.add(DocumentTag(document_id=document.id, tag_id=tid, assigned_by=actor.id))
     await db.flush()
+
+
+async def add_tags_to_documents(
+    db: AsyncSession, doc_ids: Sequence[uuid.UUID], tag_ids: Sequence[uuid.UUID], *, actor: User
+) -> int:
+    """Additive bulk tagging. A tag a document already has is silently kept."""
+    if not doc_ids or not tag_ids:
+        return 0
+    tag_ids = set(await db.scalars(select(Tag.id).where(Tag.id.in_(list(tag_ids)))))
+    rows = await db.execute(
+        select(DocumentTag.document_id, DocumentTag.tag_id).where(
+            DocumentTag.document_id.in_(list(doc_ids)), DocumentTag.tag_id.in_(list(tag_ids))
+        )
+    )
+    existing = set(rows.all())
+    added = 0
+    for did in doc_ids:
+        for tid in tag_ids:
+            if (did, tid) not in existing:
+                db.add(DocumentTag(document_id=did, tag_id=tid, assigned_by=actor.id))
+                added += 1
+    await db.flush()
+    return added
+
+
+# --- cleanup ------------------------------------------------------
+async def sweep_orphan_tags(db: AsyncSession) -> int:
+    """Delete tags no document references any more. Returns the count."""
+    orphans = list(
+        await db.scalars(
+            select(Tag.id).outerjoin(DocumentTag, DocumentTag.tag_id == Tag.id).where(
+                DocumentTag.tag_id.is_(None)
+            )
+        )
+    )
+    if orphans:
+        await db.execute(delete(Tag).where(Tag.id.in_(orphans)))
+    return len(orphans)

@@ -123,5 +123,5 @@ async def list_tag_options(
     domain_ids = await _caller_domain_ids(db, user, domain_id)
     return [
         TagOption(name=name, usage_count=count)
-        for name, count in await tags_svc.list_tags_across(db, domain_ids)
+        for name, count in await tags_svc.suggest_tags(db, domain_ids, limit=None)
     ]

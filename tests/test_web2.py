@@ -263,23 +263,26 @@ async def test_image_thumbnail(alice, web_domain):
 
 
 # --- tag vocabulary --------------------------------------------
-async def test_tag_vocabulary_crud(alice, web_domain):
-    page = (await alice.get(f"/domains/{web_domain}/tags")).text
-    r = await alice.post(
-        f"/domains/{web_domain}/tags", data={"name": "Контракт", "csrf_token": web_csrf(page)}
+async def test_global_tag_page_rename(alice, web_domain):
+    await _upload(alice, web_domain, "tg.txt")
+    doc_id = await _doc_id(alice, web_domain)
+    dp = (await alice.get(f"/documents/{doc_id}")).text
+    await alice.post(
+        f"/documents/{doc_id}/tags",
+        data={"tags": "Контракт", "csrf_token": web_csrf(dp)},
+        headers={"HX-Request": "true"},
     )
-    assert r.status_code == 303
 
-    listing = await alice.get(f"/domains/{web_domain}/tags")
+    listing = await alice.get("/tags")
     assert "Контракт" in listing.text
-    tag_id = re.search(r"/tags/([0-9a-f-]{36})/delete", listing.text).group(1)
+    tag_id = re.search(r'action="/tags/([0-9a-f-]{36})"', listing.text).group(1)
 
     upd = await alice.post(
-        f"/domains/{web_domain}/tags/{tag_id}",
+        f"/tags/{tag_id}",
         data={"name": "Договор", "color": "", "csrf_token": web_csrf(listing.text)},
     )
     assert upd.status_code == 303
-    assert "Договор" in (await alice.get(f"/domains/{web_domain}/tags")).text
+    assert "Договор" in (await alice.get("/tags")).text
 
 
 # --- members ---------------------------------------------------

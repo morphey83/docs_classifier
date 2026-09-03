@@ -22,6 +22,7 @@ from app.models import (
     DocumentVersion,
     Domain,
 )
+from app.services import tags as tags_svc
 from app.services import trash
 from app.util.time import as_aware, utcnow
 
@@ -38,6 +39,7 @@ async def run_cleanup() -> dict[str, int]:
         "deleted_exports": 0,
         "cleared_set_archives": 0,
         "orphan_blobs": 0,
+        "orphan_tags": 0,
     }
     sm = get_sessionmaker()
     async with sm() as db:
@@ -96,6 +98,9 @@ async def run_cleanup() -> dict[str, int]:
                 art.size_bytes = 0
                 art.status = ArtifactStatus.building
                 stats["cleared_set_archives"] += 1
+
+        # 3b. tags no document references any more (§7 rev 2)
+        stats["orphan_tags"] = await tags_svc.sweep_orphan_tags(db)
 
         await db.commit()
 
