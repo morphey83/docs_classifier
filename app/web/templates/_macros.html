@@ -36,14 +36,14 @@
 {%- endmacro %}
 
 {% macro sortbar() -%}
-<div class="d-flex flex-wrap align-items-center gap-1 mb-2">
-  <span class="text-secondary small me-1">сортировка:</span>
+<span class="d-inline-flex flex-wrap align-items-center gap-1">
+  <span class="text-secondary small">сортировка:</span>
   {% for key, label in sorts.items() %}
-  <a class="btn btn-sm btn-ghost-secondary {{ 'active' if f.sort == key }}"
+  <a class="btn btn-sm btn-ghost-secondary py-0 {{ 'active' if f.sort == key }}"
      hx-get="{{ qs(sort=key, dir=('asc' if f.sort == key and f.dir == 'desc' else 'desc'), page=1) }}"
      hx-target="#results" hx-push-url="true">
     {{ label }}{% if f.sort == key %} {{ '↑' if f.dir == 'asc' else '↓' }}{% endif %}
   </a>
   {% endfor %}
-</div>
+</span>
 {%- endmacro %}

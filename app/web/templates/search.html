@@ -1,8 +1,82 @@
 {% extends "base.html" %}
 {% import "_icons.html" as ic %}
 {% block title %}Поиск документов{% endblock %}
-{% block page_title %}Поиск документов{% endblock %}
+{% block page_title %}Поиск{% endblock %}
+
+{% block page_actions %}
+<div id="search-toolbar" class="btn-list justify-content-end" data-preset="{{ preset }}">
+  <span class="badge bg-blue-lt align-self-center" id="tb-count" hidden></span>
+
+  <button type="button" class="btn btn-sm" id="tb-selall"
+          data-bs-toggle="tooltip" title="Выбрать все элементы на странице">
+    {{ ic.icon('check') }} Все
+  </button>
+
+  <button type="button" class="btn btn-sm btn-primary tb-inbox"
+          hx-get="/inbox/card" hx-target="#tagcard"
+          hx-include="#filters [name=domain_id]"
+          data-bs-toggle="tooltip" title="Разметить документы по очереди">
+    {{ ic.icon('check') }} Разметить
+  </button>
+
+  <div class="btn-group btn-group-sm tb-normal">
+    <button type="button" class="btn tb-needsel" data-bulk="index"
+            data-bs-toggle="tooltip" title="Индексировать">{{ ic.icon('search') }}</button>
+    <button type="button" class="btn tb-needsel" data-bulk="ocr"
+            data-bs-toggle="tooltip" title="Распознать (OCR)">{{ ic.icon('scan') }}</button>
+    <button type="button" class="btn tb-needsel" data-bulk-tagdlg="1"
+            data-bs-toggle="tooltip" title="Проставить теги">{{ ic.icon('hash') }}</button>
+    {% if can_publish_any %}
+    <button type="button" class="btn tb-needsel" data-bulk="public"
+            data-bs-toggle="tooltip" title="Сделать публичными">{{ ic.icon('check') }}</button>
+    <button type="button" class="btn tb-needsel" data-bulk="private"
+            data-bs-toggle="tooltip" title="Сделать приватными">{{ ic.icon('lock') }}</button>
+    {% endif %}
+  </div>
+
+  <div class="dropdown tb-normal">
+    <button type="button" class="btn btn-sm dropdown-toggle tb-needsel" data-bs-toggle="dropdown">
+      {{ ic.icon('folder') }} В набор
+    </button>
+    <div class="dropdown-menu dropdown-menu-end">
+      {% for s in user_sets %}
+      <a class="dropdown-item" href="#" data-bulk-set="{{ s.id }}">{{ s.name }}</a>
+      {% endfor %}
+      {% if user_sets %}<div class="dropdown-divider"></div>{% endif %}
+      <a class="dropdown-item" href="#" data-bulk-set="__new__">➕ Новый набор…</a>
+    </div>
+  </div>
+
+  <div class="dropdown tb-normal">
+    <button type="button" class="btn btn-sm btn-ghost-secondary dropdown-toggle" data-bs-toggle="dropdown">
+      {{ ic.icon('clipboard') }} Фильтр в набор
+    </button>
+    <div class="dropdown-menu dropdown-menu-end">
+      {% for s in user_sets %}
+      <a class="dropdown-item" href="#" data-bulk-set="{{ s.id }}" data-bulk-save="1">{{ s.name }}</a>
+      {% endfor %}
+      {% if user_sets %}<div class="dropdown-divider"></div>{% endif %}
+      <a class="dropdown-item" href="#" data-bulk-set="__new__" data-bulk-save="1">➕ Новый набор…</a>
+    </div>
+  </div>
+
+  <div class="btn-group btn-group-sm tb-trash">
+    <button type="button" class="btn tb-needsel" data-bulk="restore">Восстановить</button>
+    <button type="button" class="btn btn-ghost-danger tb-needsel" data-bulk="purge"
+            onclick="return confirm('Удалить выбранное навсегда?')">Удалить навсегда</button>
+  </div>
+</div>
+{% endblock %}
+
 {% block content %}
+
+<style>
+  #search-toolbar .tb-needsel:disabled { opacity:.45; }
+  #search-toolbar[data-preset="trash"] .tb-normal,
+  #search-toolbar[data-preset="trash"] .tb-inbox { display:none; }
+  #search-toolbar:not([data-preset="trash"]) .tb-trash { display:none; }
+  #search-toolbar:not([data-preset="inbox"]) .tb-inbox { display:none; }
+</style>
 
 <div class="row row-cards">
   <div class="col-12 col-lg-3">
@@ -73,18 +147,6 @@
           </div>
         </div>
 
-        <div class="mb-3">
-          <label class="form-label">Статус</label>
-          <div class="input-icon">
-            <span class="input-icon-addon">{{ ic.icon('check') }}</span>
-            <select class="form-select" name="status">
-              <option value="" {{ 'selected' if not f.status }}>любой</option>
-              <option value="inbox" {{ 'selected' if f.status == 'inbox' }}>в очереди</option>
-              <option value="tagged" {{ 'selected' if f.status == 'tagged' }}>размечен</option>
-            </select>
-          </div>
-        </div>
-
         <label class="form-check">
           <input class="form-check-input" type="checkbox" name="has_ocr" value="yes"
                  {{ 'checked' if f.has_ocr == 'yes' }}>
@@ -95,7 +157,6 @@
                  {{ 'checked' if f.has_index == 'yes' }}>
           <span class="form-check-label">проиндексирован</span>
         </label>
-        {# результаты обновляются на лету при изменении любого фильтра #}
       </div>
     </form>
   </div>
@@ -107,10 +168,34 @@
   </div>
 </div>
 
+{# hidden form that the toolbar bulk actions submit #}
+<form id="bulk-form" hx-post="/search/bulk" hx-target="#results" hx-swap="innerHTML"
+      hx-include="#filters" class="d-none">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <input type="hidden" name="doc_ids" id="bulk-ids">
+  <input type="hidden" name="action" id="bulk-action">
+  <input type="hidden" name="set_id" id="bulk-set-id">
+  <input type="hidden" name="new_name" id="bulk-new-name">
+  <input type="hidden" name="tag_names" id="bulk-tag-names">
+</form>
+
+<div class="modal modal-blur fade" id="bulktagdlg" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Проставить теги</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+    </div>
+    <div class="modal-body">
+      <input class="form-control" id="bulktag-input" placeholder="договор, 2024" autocomplete="off">
+      <div class="form-hint mt-1">через запятую. уже проставленные теги не трогаем.</div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-primary" id="bulktag-apply">Применить</button>
+    </div>
+  </div></div>
+</div>
+
 <script>
-  // the tagging modal fires `inbox-refresh` after Готово/Отложить — reload the
-  // current search into #results (kept out of hx-* on the div itself so it
-  // doesn't clash with the in-panel view / pager / bulk swaps)
   document.body.addEventListener('inbox-refresh', function () {
     if (document.getElementById('results')) {
       window.htmx.ajax('GET', '/search' + window.location.search,

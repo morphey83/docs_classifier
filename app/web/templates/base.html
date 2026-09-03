@@ -160,7 +160,12 @@
     {% if _pt %}
     <div class="page-header d-print-none">
       <div class="container-xl">
-        <h2 class="page-title">{% block page_title %}{% endblock %}</h2>
+        <div class="row g-2 align-items-center">
+          <div class="col-12 col-lg-auto">
+            <h2 class="page-title m-0">{% block page_title %}{% endblock %}</h2>
+          </div>
+          <div class="col-12 col-lg d-flex justify-content-lg-end">{% block page_actions %}{% endblock %}</div>
+        </div>
       </div>
     </div>
     {% endif %}
@@ -242,27 +247,31 @@
     }
     function dcInitSelection() {
       var wrap = document.querySelector('#results [data-filter-sig]');
-      if (!wrap) return;
+      var toolbar = document.getElementById('search-toolbar');
+      if (!wrap || !toolbar) return;
+      var sig = wrap.dataset.filterSig || '';
+      toolbar.dataset.preset = sig.split('|')[0] || 'active';
       try {
-        if (localStorage.getItem(SIG) !== wrap.dataset.filterSig) {
-          localStorage.setItem(SIG, wrap.dataset.filterSig);
+        if (localStorage.getItem(SIG) !== sig) {
+          localStorage.setItem(SIG, sig);
           localStorage.setItem(SEL, '[]');
         }
       } catch (e) {}
 
       var sel = selRead();
       var checks = Array.prototype.slice.call(wrap.querySelectorAll('.doc-sel'));
-      var bar = document.getElementById('bulk-bar');
-      var count = document.getElementById('bulk-count');
+      var count = document.getElementById('tb-count');
       var idsField = document.getElementById('bulk-ids');
       var form = document.getElementById('bulk-form');
-      var allBox = document.getElementById('sel-all');
+      var allBtn = document.getElementById('tb-selall');
+      var needsel = Array.prototype.slice.call(toolbar.querySelectorAll('.tb-needsel'));
 
       function refresh() {
-        if (count) count.textContent = sel.size;
-        if (bar) { bar.classList[sel.size ? 'remove' : 'add']('d-none'); }
+        if (count) { count.textContent = sel.size ? (sel.size + ' выбрано') : ''; count.hidden = !sel.size; }
         if (idsField) idsField.value = Array.from(sel).join(',');
-        if (allBox) allBox.checked = checks.length > 0 && checks.every(function (c) { return c.checked; });
+        needsel.forEach(function (b) { b.disabled = !sel.size; });
+        var allOn = checks.length > 0 && checks.every(function (c) { return c.checked; });
+        if (allBtn) allBtn.classList.toggle('active', allOn);
       }
 
       checks.forEach(function (c) {
@@ -272,19 +281,13 @@
           selWrite(sel); refresh();
         };
       });
-      if (allBox) allBox.onchange = function () {
+      if (allBtn) allBtn.onclick = function () {
+        var allOn = checks.length > 0 && checks.every(function (c) { return c.checked; });
         checks.forEach(function (c) {
-          c.checked = allBox.checked;
-          if (allBox.checked) sel.add(c.value); else sel.delete(c.value);
+          c.checked = !allOn;
+          if (!allOn) sel.add(c.value); else sel.delete(c.value);
         });
         selWrite(sel); refresh();
-      };
-      var clr = document.getElementById('bulk-clear');
-      if (clr) clr.onclick = function (e) {
-        e.preventDefault();
-        sel.clear(); selWrite(sel);
-        checks.forEach(function (c) { c.checked = false; });
-        refresh();
       };
 
       function fire(action, setId, newName, noSel) {

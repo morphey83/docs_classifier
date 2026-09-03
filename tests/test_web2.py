@@ -219,7 +219,7 @@ async def test_inbox_preset_and_modal_tagging(alice, web_domain):
 
     page = await alice.get("/search?preset=inbox")
     assert "Найдено: 2" in page.text
-    assert "Разметить по очереди" in page.text and 'id="tagdlg"' in page.text
+    assert 'class="btn btn-sm btn-primary tb-inbox"' in page.text and 'id="tagdlg"' in page.text
 
     card = await alice.get("/inbox/card", headers={"HX-Request": "true"})
     doc_id = re.search(r'data-doc="([0-9a-f-]{36})"', card.text).group(1)

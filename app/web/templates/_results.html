@@ -3,119 +3,28 @@
 
 <div data-filter-sig="{{ filter_sig }}">
 
-<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
-  <span class="text-secondary">
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+  <span class="text-secondary text-nowrap">
     Найдено: {{ total }}{% if pages > 1 %} · стр. {{ page }}/{{ pages }}{% endif %}
   </span>
-  {% if total > 0 %}
-  <label class="form-check m-0 text-secondary small">
-    <input class="form-check-input" type="checkbox" id="sel-all">
-    <span class="form-check-label">выбрать все элементы на странице</span>
-  </label>
+
+  {% if total > 0 and view != 'table' %}
+  {{ m.sortbar() }}
   {% endif %}
-  {% if preset == 'inbox' %}
-  <button type="button" class="btn btn-sm btn-primary"
-          hx-get="/inbox/card?domain_id={{ f.domain_id }}" hx-target="#tagcard">
-    {{ ic.icon('check') }} Разметить по очереди
-  </button>
+
+  {% if pages > 1 %}
+  {{ m.pager(page, pages) }}
   {% endif %}
-  <div class="btn-group ms-auto" role="group">
-    <a class="btn btn-sm {{ 'active' if view != 'table' }}"
+
+  <div class="btn-group btn-group-sm ms-auto" role="group">
+    <a class="btn {{ 'active' if view != 'table' }}"
        hx-get="{{ m.qs(view='cards') }}" hx-target="#results" hx-push-url="true"
        title="Карточки">{{ ic.icon('grid') }}</a>
-    <a class="btn btn-sm {{ 'active' if view == 'table' }}"
+    <a class="btn {{ 'active' if view == 'table' }}"
        hx-get="{{ m.qs(view='table') }}" hx-target="#results" hx-push-url="true"
        title="Таблица">{{ ic.icon('list') }}</a>
   </div>
 </div>
-
-{% if pages > 1 %}
-<div class="d-flex mb-2"><div class="ms-auto">{{ m.pager(page, pages) }}</div></div>
-{% endif %}
-
-{# --- bulk actions on the selection ------------------------------------ #}
-<form id="bulk-form" hx-post="/search/bulk" hx-target="#results" hx-swap="innerHTML"
-      hx-include="#filters" class="d-none">
-  <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <input type="hidden" name="page" value="{{ page }}">
-  <input type="hidden" name="doc_ids" id="bulk-ids">
-  <input type="hidden" name="action" id="bulk-action">
-  <input type="hidden" name="set_id" id="bulk-set-id">
-  <input type="hidden" name="new_name" id="bulk-new-name">
-  <input type="hidden" name="tag_names" id="bulk-tag-names">
-</form>
-
-<div class="modal modal-blur fade" id="bulktagdlg" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">
-    <div class="modal-header">
-      <h5 class="modal-title">Проставить теги</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
-    </div>
-    <div class="modal-body">
-      <input class="form-control" id="bulktag-input" placeholder="договор, 2024" autocomplete="off">
-      <div class="form-hint mt-1">через запятую. уже проставленные теги не трогаем.</div>
-    </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-primary" id="bulktag-apply">Применить</button>
-    </div>
-  </div></div>
-</div>
-
-<div id="bulk-bar" class="card mb-2 d-none">
-  <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
-    <span><strong id="bulk-count">0</strong>&nbsp;выбрано</span>
-    <div class="btn-list ms-auto">
-      {% if preset == 'trash' %}
-      <button type="button" class="btn btn-sm" data-bulk="restore">Восстановить</button>
-      <button type="button" class="btn btn-sm btn-ghost-danger" data-bulk="purge"
-              onclick="return confirm('Удалить выбранное навсегда?')">Удалить навсегда</button>
-      {% else %}
-      <button type="button" class="btn btn-sm" data-bulk="index">
-        {{ ic.icon('search') }} Индексировать
-      </button>
-      <button type="button" class="btn btn-sm" data-bulk="ocr">
-        {{ ic.icon('scan') }} OCR
-      </button>
-      <button type="button" class="btn btn-sm" data-bulk-tagdlg="1">{{ ic.icon('hash') }} Теги</button>
-      {% if can_publish_any %}
-      <button type="button" class="btn btn-sm" data-bulk="public">Сделать публичными</button>
-      <button type="button" class="btn btn-sm" data-bulk="private">Сделать приватными</button>
-      {% endif %}
-      <div class="dropdown">
-        <button type="button" class="btn btn-sm dropdown-toggle" data-bs-toggle="dropdown">
-          {{ ic.icon('folder') }} В набор
-        </button>
-        <div class="dropdown-menu dropdown-menu-end">
-          {% for s in user_sets %}
-          <a class="dropdown-item" href="#" data-bulk-set="{{ s.id }}">{{ s.name }}</a>
-          {% endfor %}
-          {% if user_sets %}<div class="dropdown-divider"></div>{% endif %}
-          <a class="dropdown-item" href="#" data-bulk-set="__new__">➕ Новый набор…</a>
-        </div>
-      </div>
-      {% endif %}
-      <button type="button" class="btn btn-sm btn-ghost-secondary" id="bulk-clear">Снять</button>
-    </div>
-  </div>
-</div>
-
-{# save the current search as a set filter (no selection needed) #}
-{% if preset != 'trash' %}
-<div class="mb-2">
-  <div class="dropdown">
-    <button type="button" class="btn btn-sm btn-ghost-secondary dropdown-toggle" data-bs-toggle="dropdown">
-      {{ ic.icon('clipboard') }} Добавить фильтр в набор
-    </button>
-    <div class="dropdown-menu">
-      {% for s in user_sets %}
-      <a class="dropdown-item" href="#" data-bulk-set="{{ s.id }}" data-bulk-save="1">{{ s.name }}</a>
-      {% endfor %}
-      {% if user_sets %}<div class="dropdown-divider"></div>{% endif %}
-      <a class="dropdown-item" href="#" data-bulk-set="__new__" data-bulk-save="1">➕ Новый набор…</a>
-    </div>
-  </div>
-</div>
-{% endif %}
 
 {% if total == 0 %}
 <div class="card"><div class="card-body text-secondary">Ничего не найдено.</div></div>
@@ -123,17 +32,14 @@
 <div class="card">
   {% include "_res_table.html" %}
   {% if pages > 1 %}
-  <div class="card-footer d-flex">
-    <div class="ms-auto">{{ m.pager(page, pages) }}</div>
-  </div>
+  <div class="card-footer d-flex"><div class="ms-auto">{{ m.pager(page, pages) }}</div></div>
   {% endif %}
 </div>
 {% else %}
-{{ m.sortbar() }}
 {% include "_res_cards.html" %}
 {% if pages > 1 %}<div class="d-flex mt-3"><div class="ms-auto">{{ m.pager(page, pages) }}</div></div>{% endif %}
 {% endif %}
 
 </div>
-{# selection wiring lives in base.html (dcInitSelection) — it re-runs on every
-   htmx:afterSettle, so it never races with the swap. #}
+{# selection + the toolbar wiring live in base.html (dcInitSelection); it re-runs
+   on every htmx:afterSettle, so it never races the swap. #}
