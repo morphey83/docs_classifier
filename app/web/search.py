@@ -349,5 +349,7 @@ async def _save_filter(db, user, form) -> str:
             s = None
         if s is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "набор не найден")
-    await docsets_svc.add_filter(db, s, f, description=desc)
-    return f"Фильтр сохранён в «{s.name}»"
+    row = await docsets_svc.add_filter(db, s, f, description=desc)
+    if row is None:
+        return f"Такой фильтр уже есть в «{s.name}»"
+    return f"Фильтр добавлен в «{s.name}»"

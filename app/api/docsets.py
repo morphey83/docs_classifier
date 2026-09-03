@@ -325,7 +325,7 @@ async def public_download(
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "slow down")
 
     link = await db.scalar(select(DownloadLink).where(DownloadLink.token == token))
-    if link is None or link.revoked_at is not None:
+    if link is None or link.revoked_at is not None or link.mode != "archive":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "link not found")
     if link.expires_at is not None and as_aware(link.expires_at) <= utcnow():
         raise HTTPException(status.HTTP_410_GONE, "this link has expired")

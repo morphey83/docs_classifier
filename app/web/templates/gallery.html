@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ set.name }}</title>
+  <link rel="alternate" type="application/atom+xml" href="/g/{{ token }}/feed" title="{{ set.name }}">
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin:0; font:15px/1.5 system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      background:#0b0e14; color:#e6e9ef; }
+    header { padding:1.25rem 1.5rem; display:flex; flex-wrap:wrap; gap:.75rem 1.5rem;
+      align-items:baseline; border-bottom:1px solid #1c2230; }
+    header h1 { font-size:1.15rem; margin:0; }
+    header .muted { color:#8b93a7; font-size:.9rem; }
+    .controls { margin-left:auto; display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+    select, button, a.btn { font:inherit; padding:.4rem .7rem; border-radius:8px;
+      border:1px solid #2a3242; background:#161b26; color:inherit; cursor:pointer;
+      text-decoration:none; }
+    a.play { background:#3b82f6; border-color:#3b82f6; color:#fff; font-weight:600; }
+    .grid { display:grid; gap:6px; padding:1rem 1.5rem 3rem;
+      grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); }
+    .cell { position:relative; aspect-ratio:1; background:#11151f; border-radius:10px;
+      overflow:hidden; display:block; }
+    .cell img { width:100%; height:100%; object-fit:cover; display:block; }
+    .cell .file { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+    .cell .file img { width:52%; height:auto; object-fit:contain; }
+    .cap { position:absolute; left:0; right:0; bottom:0; padding:.4rem .55rem;
+      background:linear-gradient(transparent,rgba(0,0,0,.72)); font-size:.8rem;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>{{ set.name }}</h1>
+      {% if set.description %}<div class="muted">{{ set.description }}</div>{% endif %}
+      <div class="muted">{{ docs|length }} документов · {{ image_count }} изображений</div>
+    </div>
+    <form class="controls" method="get" action="/g/{{ token }}/slideshow">
+      <label>сортировка
+        <select name="order">
+          {% for key, label in orders %}
+          <option value="{{ key }}" {{ 'selected' if order == key }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>задержка
+        <select name="interval">
+          {% for n in [3, 5, 8, 12, 20, 30] %}
+          <option value="{{ n }}" {{ 'selected' if n == 8 }}>{{ n }} с</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% if image_count %}
+      <button class="play" type="submit">▶ Слайд-шоу</button>
+      {% endif %}
+      <a class="btn" href="/g/{{ token }}?order={{ order }}">обновить</a>
+    </form>
+  </header>
+
+  <div class="grid">
+    {% for doc in docs %}
+    <a class="cell" href="/g/{{ token }}/i/{{ doc.id }}" target="_blank" rel="noopener">
+      {% if doc.mime.startswith('image/') %}
+      <img src="/g/{{ token }}/i/{{ doc.id }}/thumb" alt="{{ doc.title }}" loading="lazy">
+      {% else %}
+      <span class="file"><img src="/static/filetypes/file.svg" alt=""></span>
+      {% endif %}
+      <span class="cap">{{ doc.title }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</body>
+</html>

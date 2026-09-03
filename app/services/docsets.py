@@ -101,7 +101,17 @@ async def delete_set(db: AsyncSession, s: DocumentSet) -> None:
 # --- filters -------------------------------------------------------------
 async def add_filter(
     db: AsyncSession, s: DocumentSet, f: SearchFilters, *, description: str
-) -> DocumentSetFilter:
+) -> DocumentSetFilter | None:
+    """Append a saved filter. Returns ``None`` if an equivalent one is already
+    in the set (same :meth:`SearchFilters.canonical_hash`)."""
+    h = f.canonical_hash()
+    dup = await db.scalar(
+        select(DocumentSetFilter.id).where(
+            DocumentSetFilter.set_id == s.id, DocumentSetFilter.filter_hash == h
+        )
+    )
+    if dup is not None:
+        return None
     pos = int(
         await db.scalar(
             select(func.coalesce(func.max(DocumentSetFilter.position), 0)).where(
@@ -111,7 +121,11 @@ async def add_filter(
         or 0
     )
     row = DocumentSetFilter(
-        set_id=s.id, position=pos + 1, filter=f.to_dict(), description=description[:500]
+        set_id=s.id,
+        position=pos + 1,
+        filter=f.to_dict(),
+        filter_hash=h,
+        description=description[:500],
     )
     db.add(row)
     s.updated_at = utcnow()
@@ -446,14 +460,17 @@ async def create_share_link(
     *,
     s: DocumentSet,
     user: User,
-    kind: LinkKind,
+    kind: LinkKind = "one_time",
+    mode: str = "archive",
     expires_at: datetime | None = None,
 ) -> DownloadLink:
     artifact, _ = await ensure_current_archive(db, background, s, requested_by=user.id)
     link = DownloadLink(
         artifact_id=artifact.id,
         token=secrets.token_urlsafe(24),
-        max_downloads=1 if kind == "one_time" else None,
+        mode="gallery" if mode == "gallery" else "archive",
+        # a gallery link is a standing browse URL — never single-use
+        max_downloads=1 if (kind == "one_time" and mode != "gallery") else None,
         expires_at=expires_at,
         created_by=user.id,
     )

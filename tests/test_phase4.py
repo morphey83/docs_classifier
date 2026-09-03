@@ -1,6 +1,7 @@
 """§15 rev 4 — user-owned sets: saved filters + explicit adds, public archive, links."""
 
 import io
+import uuid
 import zipfile
 
 import pytest_asyncio
@@ -187,6 +188,48 @@ async def test_one_time_and_permanent_links(alice, domain):
 
     assert (await alice.request("DELETE", f"/api/links/{perm['id']}")).status_code == 204
     assert (await alice.get(perm["url"])).status_code == 404
+
+
+async def test_gallery_link_serves_only_public_images(alice, domain):
+    d = domain["id"]
+    img = await _upload(alice, d, "pic.png", b"\x89PNG\r\n\x1a\n" + b"0" * 40, public=True)
+    txt = await _upload(alice, d, "note.txt", public=True)
+    priv = await _upload(alice, d, "secret.png", b"\x89PNG\r\n\x1a\n" + b"1" * 40)
+    s = (
+        await alice.post(
+            "/api/sets",
+            json={"name": "gal", "document_ids": [img["id"], txt["id"], priv["id"]]},
+        )
+    ).json()
+
+    from app.db import get_sessionmaker
+    from app.models import DocumentSet, User
+    from app.services import docsets as dsvc
+
+    async with get_sessionmaker()() as db_:
+        me = (await alice.get("/api/auth/me")).json()
+        owner = await db_.get(User, uuid.UUID(me["id"]))
+        set_obj = await db_.get(DocumentSet, uuid.UUID(s["id"]))
+        link = await dsvc.create_share_link(db_, None, s=set_obj, user=owner, mode="gallery")
+        token = link.token
+        await db_.commit()
+
+    j = (await alice.get(f"/g/{token}.json")).json()
+    ids = {doc["id"] for doc in j["documents"]}
+    assert img["id"] in ids and txt["id"] in ids and priv["id"] not in ids
+
+    page = await alice.get(f"/g/{token}")
+    assert page.status_code == 200 and "gal" in page.text
+
+    # per-image serve: allowed for a set member, refused for the private one
+    assert (await alice.get(f"/g/{token}/i/{img['id']}")).status_code == 200
+    assert (await alice.get(f"/g/{token}/i/{priv['id']}")).status_code == 404
+
+    feed = await alice.get(f"/g/{token}/feed")
+    assert feed.status_code == 200 and "atom" in feed.headers["content-type"]
+
+    # the archive link route must not accept a gallery token
+    assert (await alice.get(f"/d/{token}")).status_code == 404
 
 
 async def test_public_link_serves_nothing_once_docs_go_private(alice, domain):

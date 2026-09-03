@@ -7,6 +7,8 @@ PostgreSQL: `to_tsvector('russian', …)` for the body + `pg_trgm`-backed
 from __future__ import annotations
 
 import contextlib
+import hashlib
+import json
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -111,6 +113,19 @@ class SearchFilters:
         "doc_date_from", "doc_date_to", "uploaded_from", "uploaded_to",
         "indexed_from", "indexed_to", "ocr_from", "ocr_to",
     )
+
+    def canonical_hash(self) -> str:
+        """A stable id for this filter's *meaning* — used to reject re-adding the
+        same filter to a set. Order-insensitive for the list fields; the
+        display-only ``sort``/``sort_dir`` are excluded."""
+        d = self.to_dict()
+        d.pop("sort", None)
+        d.pop("sort_dir", None)
+        for k in ("tags_all", "tags_any", "tags_none", "domain_ids"):
+            if k in d:
+                d[k] = sorted(d[k])
+        blob = json.dumps(d, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
     def to_dict(self) -> dict:
         out: dict = {}

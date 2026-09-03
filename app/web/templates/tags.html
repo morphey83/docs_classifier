@@ -18,10 +18,20 @@
       {% for tag, count in tags %}
       <tr>
         <td>
-          <form method="post" action="/tags/{{ tag.id }}" class="d-flex gap-2 align-items-center">
+          {% set swatches = ['', '#206bc4', '#4299e1', '#2fb344', '#f76707', '#d63939', '#ae3ec9', '#868e96'] %}
+          <form method="post" action="/tags/{{ tag.id }}" class="d-flex gap-2 align-items-center flex-wrap">
             <input type="hidden" name="csrf_token" value="{{ csrf }}">
             <input class="form-control form-control-sm" style="max-width:16rem" name="name" value="{{ tag.name }}">
-            <input class="form-control form-control-sm" style="max-width:7rem" name="color" value="{{ tag.color or '' }}" placeholder="#цвет">
+            <span class="d-inline-flex gap-1">
+              {% for c in swatches %}
+              <label class="form-colorinput" title="{{ c or 'без цвета' }}">
+                <input name="color" type="radio" value="{{ c }}" class="form-colorinput-input"
+                       {{ 'checked' if (tag.color or '') == c }}>
+                <span class="form-colorinput-color rounded"
+                      style="{{ 'background:%s' % c if c else 'background:transparent;border:1px dashed var(--tblr-border-color)' }}"></span>
+              </label>
+              {% endfor %}
+            </span>
             <button class="btn btn-sm btn-outline-primary" title="Сохранить">✓</button>
           </form>
         </td>

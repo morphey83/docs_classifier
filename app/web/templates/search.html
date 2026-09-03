@@ -4,15 +4,19 @@
 {% block page_title %}Поиск документов{% endblock %}
 {% block content %}
 
-<div class="btn-list mb-3">
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   {% set presets = [('active', 'Активные'), ('inbox', 'Не размечено'), ('trash', 'Корзина')] %}
-  {% for key, label in presets %}
-  <a class="btn btn-sm {{ 'btn-primary' if preset == key else 'btn-outline-secondary' }}"
-     hx-get="/search?preset={{ key }}{% if f.domain_id %}&domain_id={{ f.domain_id }}{% endif %}&view={{ view }}"
-     hx-target="#results" hx-push-url="true">{{ label }}</a>
-  {% endfor %}
+  <div class="btn-group" role="group" aria-label="Режим поиска">
+    {% for key, label in presets %}
+    <input type="radio" class="btn-check" name="preset-seg" id="seg-{{ key }}"
+           {{ 'checked' if preset == key }} autocomplete="off"
+           hx-get="/search?preset={{ key }}{% if f.domain_id %}&domain_id={{ f.domain_id }}{% endif %}&view={{ view }}"
+           hx-target="#results" hx-push-url="true">
+    <label class="btn btn-sm" for="seg-{{ key }}">{{ label }}</label>
+    {% endfor %}
+  </div>
   {% if preset == 'inbox' %}
-  <button type="button" class="btn btn-sm btn-primary ms-2"
+  <button type="button" class="btn btn-sm btn-primary"
           hx-get="/inbox/card?domain_id={{ f.domain_id }}" hx-target="#tagcard">
     {{ ic.icon('check') }} Разметить по очереди
   </button>

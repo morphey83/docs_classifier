@@ -36,6 +36,8 @@ class DocumentSetFilter(Base):
     )
     position: Mapped[int] = mapped_column(Integer, default=0)
     filter: Mapped[dict] = mapped_column(JSONVariant, default=dict, server_default="{}")
+    # sha256 of the canonicalised filter — dedupes "add the same filter again"
+    filter_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     description: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

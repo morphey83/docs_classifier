@@ -68,6 +68,9 @@ class DownloadLink(Base):
         ForeignKey("artifact.id", ondelete="CASCADE"), index=True
     )
     token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # "archive" → GET /d/{token} streams the zip. "gallery" → GET /g/{token}
+    # is a public browse / slideshow page over the set's public documents (§15).
+    mode: Mapped[str] = mapped_column(String(16), default="archive", server_default="archive")
     max_downloads: Mapped[int | None] = mapped_column(Integer, nullable=True)
     download_count: Mapped[int] = mapped_column(Integer, default=0)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

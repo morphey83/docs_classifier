@@ -71,7 +71,10 @@ async def _detail_ctx(request: Request, db: AsyncSession, user: User, s, *, expo
             select(DocumentSetItem.document_id).where(DocumentSetItem.set_id == s.id)
         )
     )
-    links = [(link, absolute_url(f"/d/{link.token}")) for link in await svc.links_of_set(db, s.id)]
+    links = [
+        (link, absolute_url(f"/{'g' if link.mode == 'gallery' else 'd'}/{link.token}"))
+        for link in await svc.links_of_set(db, s.id)
+    ]
 
     export = None
     aid = export_id or request.query_params.get("export")
@@ -258,14 +261,17 @@ async def set_export_download(
 async def set_link_create(
     request: Request,
     set_id: uuid.UUID,
-    kind: str = Form(...),
+    kind: str = Form(default="one_time"),
+    mode: str = Form(default="archive"),
     _: None = CsrfGuard,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
     s = await _load(db, user, set_id)
     await svc.create_share_link(
-        db, None, s=s, user=user, kind="permanent" if kind == "permanent" else "one_time"
+        db, None, s=s, user=user,
+        kind="permanent" if kind == "permanent" else "one_time",
+        mode="gallery" if mode == "gallery" else "archive",
     )
     return await _set_response(request, db, user, s, toast="Ссылка создана")
 

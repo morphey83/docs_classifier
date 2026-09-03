@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
+from app import gallery as _gallery
 from app.api import api_router
 from app.api import docsets as _docsets
 from app.api import health as _health
@@ -72,6 +73,7 @@ def create_app() -> FastAPI:
     app.include_router(_health.router)  # /health at the root, for ops probes
     app.include_router(_tglink.router)  # /tg/link/* — the linking page + companions
     app.include_router(_docsets.public_router)  # /d/{token} — public share downloads
+    app.include_router(_gallery.router)  # /g/{token} — public set gallery / slideshow
     app.include_router(web_router)  # the HTMX + Jinja UI, at /
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

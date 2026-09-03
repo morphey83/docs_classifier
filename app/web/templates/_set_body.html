@@ -47,6 +47,7 @@
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
           <button name="kind" value="one_time" class="btn btn-sm btn-outline-secondary">{{ ic.icon('link') }} разовая ссылка</button>
           <button name="kind" value="permanent" class="btn btn-sm btn-outline-secondary">{{ ic.icon('link') }} постоянная</button>
+          <button name="mode" value="gallery" class="btn btn-sm btn-outline-secondary">{{ ic.icon('photo') }} галерея</button>
         </form>
       </div>
     </div></div>
@@ -73,8 +74,8 @@
     <tbody>
     {% for link, url in links %}
       <tr>
-        <td><span class="text-secondary">{{ url }}</span></td>
-        <td>{{ 'одноразовая' if link.max_downloads == 1 else 'постоянная' }}</td>
+        <td><a href="{{ url }}" target="_blank" rel="noopener" class="text-secondary">{{ url }}</a></td>
+        <td>{{ 'галерея' if link.mode == 'gallery' else ('одноразовая' if link.max_downloads == 1 else 'постоянная') }}</td>
         <td>{{ link.download_count }}{% if link.max_downloads %}/{{ link.max_downloads }}{% endif %}</td>
         <td>
           <form hx-post="/links/{{ link.id }}/revoke" hx-target="#setbody">
