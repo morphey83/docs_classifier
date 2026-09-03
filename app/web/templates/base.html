@@ -402,16 +402,22 @@
     });
     // an action inside the modal can ask it to close (delete) or the list to refresh
     document.body.addEventListener('dc-detail-close', function () { window.dcCloseDetail(); });
-    // re-run the search behind the modal (a doc left / entered the current filter);
-    // on a page without #results, just go to the search screen
-    document.body.addEventListener('dc-search-refresh', function () {
+    // re-run the search behind the modal, keeping the current filter in the URL
+    function dcRefreshResults() {
       if (document.getElementById('results') && window.htmx) {
         window.htmx.ajax('GET', '/search' + window.location.search,
           { target: '#results', swap: 'innerHTML' });
-      } else {
-        window.location.href = '/search';
+        return true;
       }
+      return false;
+    }
+    // a doc left / entered the current filter — refresh, or leave for the search screen
+    document.body.addEventListener('dc-search-refresh', function () {
+      if (!dcRefreshResults()) window.location.href = '/search';
     });
+    // a lighter edit inside the modal (tags, title, index…) — refresh if we're on
+    // a results page, otherwise do nothing (e.g. the standalone document page)
+    document.body.addEventListener('dc-results-refresh', function () { dcRefreshResults(); });
 
     // --- shared confirm modal: replaces window.confirm() / hx-confirm ---
     var _confirm, _confirmCb = null;

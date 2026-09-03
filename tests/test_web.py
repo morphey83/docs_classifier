@@ -224,6 +224,9 @@ async def test_document_page_and_tag_edit(alice, web_domain):
     assert r.status_code == 200
     assert "договор" in r.text and "срочно" in r.text
     assert "<html" not in r.text  # fragment only
+    # the search behind the modal is asked to re-run its filter
+    import json
+    assert json.loads(r.headers["HX-Trigger"])["dc-results-refresh"] is True
 
 
 async def test_document_index_button(alice, web_domain):

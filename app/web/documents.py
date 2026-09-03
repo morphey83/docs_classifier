@@ -413,4 +413,15 @@ async def _doc_fragment(
     await db.commit()
     doc, view = await load_document(db, user, document_id)
     await db.refresh(doc)
-    return render(request, "_doc_body.html", await _doc_ctx(db, user, doc, view), toast=toast)
+    resp = render(request, "_doc_body.html", await _doc_ctx(db, user, doc, view), toast=toast)
+    # a tag / title / index edit here can change what the search behind the modal
+    # shows (matches, chips, status icon) — ask that list to re-run its filter
+    trig = {}
+    if resp.headers.get("HX-Trigger"):
+        try:
+            trig = json.loads(resp.headers["HX-Trigger"])
+        except ValueError:
+            trig = {}
+    trig["dc-results-refresh"] = True
+    resp.headers["HX-Trigger"] = json.dumps(trig)
+    return resp
