@@ -397,7 +397,7 @@
       if (!exact && q.length >= 2) {
         sug.insertAdjacentHTML('beforeend',
           '<button type="button" data-name="' + q.replace(/"/g, '&quot;') +
-          '"><span>' + (exc ? 'исключить «' : 'создать «') + q.replace(/</g, '&lt;') + '»</span></button>');
+          '"><span>' + (exc ? 'исключить «' : 'добавить «') + q.replace(/</g, '&lt;') + '»</span></button>');
       }
       sug.hidden = sug.children.length === 0;
       Array.prototype.slice.call(sug.querySelectorAll('button')).forEach(function (b) {
