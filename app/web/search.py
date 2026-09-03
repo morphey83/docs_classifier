@@ -67,10 +67,12 @@ def _status(value: str | None) -> DocStatus | None:
 
 def _filters_from_params(params: Mapping[str, str]) -> search_svc.SearchFilters:
     """The narrowing part of a /search query as a SearchFilters (no page/sort)."""
+    kind = params.get("type") or ""
     return search_svc.SearchFilters(
         q=(params.get("q") or "") or None,
         tags_all=_csv(params.get("tags")),
-        ext=(params.get("type") or "") or None,
+        image_only=kind == "image",
+        ext=None if kind in ("", "image") else kind,
         status=_status(params.get("status")),
         has_ocr=_tri(params.get("has_ocr")),
         has_index=_tri(params.get("has_index")),

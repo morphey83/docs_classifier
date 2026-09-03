@@ -1,5 +1,17 @@
+{# build a /search URL from the current filter state (`f`, `view`, `page`),
+   overridden by any kwargs. Path-independent — works when rendered from the
+   /search GET *and* from the /search/bulk POST partial. #}
 {% macro qs() -%}
-{{ request.url.include_query_params(**kwargs) }}
+{%- set p = {
+     'preset': f.preset, 'domain_id': f.domain_id, 'q': f.q, 'tags': f.tags,
+     'type': f.type, 'status': f.status, 'has_ocr': f.has_ocr,
+     'has_index': f.has_index, 'sort': f.sort, 'dir': f.dir, 'view': view,
+     'page': page,
+   } -%}
+{%- set _ = p.update(kwargs) -%}
+{%- if p.preset == 'active' %}{% set _ = p.pop('preset') %}{% endif -%}
+{%- if p.page == 1 %}{% set _ = p.pop('page') %}{% endif -%}
+/search?{% for k, v in p.items() if v not in (none, '') %}{{ k }}={{ v|string|urlencode }}&{% endfor -%}
 {%- endmacro %}
 
 {% macro pager(page, pages) -%}

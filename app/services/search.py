@@ -78,6 +78,7 @@ class SearchFilters:
     tags_none: list[str] = field(default_factory=list)
     ext: str | None = None
     mime: str | None = None
+    image_only: bool = False  # "type = изображения" — any image mime/ext
     size_min: int | None = None
     size_max: int | None = None
     doc_date_from: datetime | None = None
@@ -106,7 +107,7 @@ class SearchFilters:
 
     # --- serialization for document_set_filter.filter (JSON) --------------
     _SCALARS = (
-        "q", "ext", "mime", "size_min", "size_max", "uploaded_by",
+        "q", "ext", "mime", "image_only", "size_min", "size_max", "uploaded_by",
         "has_index", "has_ocr", "include_trash", "sort", "sort_dir",
     )
     _DATES = (
@@ -220,7 +221,9 @@ def describe_filters(f: SearchFilters, domain_names: Mapping[uuid.UUID, str] | N
     parts += [f"#{t}" for t in f.tags_all]
     parts += [f"~{t}" for t in f.tags_any]
     parts += [f"-{t}" for t in f.tags_none]
-    if f.ext:
+    if f.image_only:
+        parts.append("изображения")
+    elif f.ext:
         parts.append(f.ext.lower().lstrip("."))
     if f.status is not None:
         parts.append(_STATUS_RU.get(f.status, str(f.status)))
@@ -264,7 +267,13 @@ def _apply(
         )
     if f.status is not None:
         stmt = stmt.where(Document.status == f.status)
-    if f.ext:
+    if f.image_only:
+        from app.services.thumbs import IMAGE_EXTS
+
+        stmt = stmt.where(
+            or_(Document.mime.like("image/%"), Document.ext.in_(sorted(IMAGE_EXTS)))
+        )
+    elif f.ext:
         stmt = stmt.where(Document.ext == f.ext.lower().lstrip("."))
     if f.mime:
         stmt = stmt.where(Document.mime == f.mime)

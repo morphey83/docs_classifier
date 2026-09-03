@@ -4,25 +4,6 @@
 {% block page_title %}Поиск документов{% endblock %}
 {% block content %}
 
-<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-  {% set presets = [('active', 'Активные'), ('inbox', 'Не размечено'), ('trash', 'Корзина')] %}
-  <div class="btn-group" role="group" aria-label="Режим поиска">
-    {% for key, label in presets %}
-    <input type="radio" class="btn-check" name="preset-seg" id="seg-{{ key }}"
-           {{ 'checked' if preset == key }} autocomplete="off"
-           hx-get="/search?preset={{ key }}{% if f.domain_id %}&domain_id={{ f.domain_id }}{% endif %}&view={{ view }}"
-           hx-target="#results" hx-push-url="true">
-    <label class="btn btn-sm" for="seg-{{ key }}">{{ label }}</label>
-    {% endfor %}
-  </div>
-  {% if preset == 'inbox' %}
-  <button type="button" class="btn btn-sm btn-primary"
-          hx-get="/inbox/card?domain_id={{ f.domain_id }}" hx-target="#tagcard">
-    {{ ic.icon('check') }} Разметить по очереди
-  </button>
-  {% endif %}
-</div>
-
 <div class="row row-cards">
   <div class="col-12 col-lg-3">
     <form id="filters" method="get" action="/search"
@@ -34,9 +15,16 @@
       </div>
       <div class="card-body">
         <input type="hidden" name="view" value="{{ view }}">
-        <input type="hidden" name="preset" value="{{ preset }}">
         <input type="hidden" name="sort" value="{{ f.sort }}">
         <input type="hidden" name="dir" value="{{ f.dir }}">
+
+        <div class="btn-group w-100 mb-3" role="group" aria-label="Режим поиска">
+          {% for key, label in [('active', 'Активные'), ('inbox', 'Не размечено'), ('trash', 'Корзина')] %}
+          <input type="radio" class="btn-check" name="preset" id="seg-{{ key }}"
+                 value="{{ key }}" {{ 'checked' if preset == key }} autocomplete="off">
+          <label class="btn btn-sm" for="seg-{{ key }}">{{ label }}</label>
+          {% endfor %}
+        </div>
 
         <div class="mb-3">
           <label class="form-label">Домен</label>
@@ -69,12 +57,13 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Тип (расширение)</label>
+          <label class="form-label">Тип</label>
           <div class="input-icon">
             <span class="input-icon-addon">{{ ic.icon('file') }}</span>
             <select class="form-select" name="type">
               <option value="" {{ 'selected' if not f.type }}>любой</option>
-              {% if f.type and f.type not in ext_options %}
+              <option value="image" {{ 'selected' if f.type == 'image' }}>изображения</option>
+              {% if f.type and f.type != 'image' and f.type not in ext_options %}
               <option value="{{ f.type }}" selected>{{ f.type }}</option>
               {% endif %}
               {% for ext in ext_options %}
@@ -112,13 +101,23 @@
   </div>
 
   <div class="col-12 col-lg-9">
-    <div id="results"
-         hx-get="/search" hx-include="#filters" hx-trigger="inbox-refresh from:body"
-         hx-target="this" hx-swap="innerHTML">
+    <div id="results">
       {% include "_results.html" %}
     </div>
   </div>
 </div>
+
+<script>
+  // the tagging modal fires `inbox-refresh` after Готово/Отложить — reload the
+  // current search into #results (kept out of hx-* on the div itself so it
+  // doesn't clash with the in-panel view / pager / bulk swaps)
+  document.body.addEventListener('inbox-refresh', function () {
+    if (document.getElementById('results')) {
+      window.htmx.ajax('GET', '/search' + window.location.search,
+        { target: '#results', swap: 'innerHTML' });
+    }
+  });
+</script>
 
 {% include "_tagcard_modal.html" %}
 {% endblock %}

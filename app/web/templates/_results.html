@@ -3,15 +3,21 @@
 
 <div data-filter-sig="{{ filter_sig }}">
 
-<div class="d-flex align-items-center gap-3 mb-2">
+<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
   <span class="text-secondary">
     Найдено: {{ total }}{% if pages > 1 %} · стр. {{ page }}/{{ pages }}{% endif %}
   </span>
   {% if total > 0 %}
   <label class="form-check m-0 text-secondary small">
     <input class="form-check-input" type="checkbox" id="sel-all">
-    <span class="form-check-label">выбрать на странице</span>
+    <span class="form-check-label">выбрать все элементы на странице</span>
   </label>
+  {% endif %}
+  {% if preset == 'inbox' %}
+  <button type="button" class="btn btn-sm btn-primary"
+          hx-get="/inbox/card?domain_id={{ f.domain_id }}" hx-target="#tagcard">
+    {{ ic.icon('check') }} Разметить по очереди
+  </button>
   {% endif %}
   <div class="btn-group ms-auto" role="group">
     <a class="btn btn-sm {{ 'active' if view != 'table' }}"
@@ -22,6 +28,10 @@
        title="Таблица">{{ ic.icon('list') }}</a>
   </div>
 </div>
+
+{% if pages > 1 %}
+<div class="d-flex mb-2"><div class="ms-auto">{{ m.pager(page, pages) }}</div></div>
+{% endif %}
 
 {# --- bulk actions on the selection ------------------------------------ #}
 <form id="bulk-form" hx-post="/search/bulk" hx-target="#results" hx-swap="innerHTML"
