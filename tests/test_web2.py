@@ -318,6 +318,32 @@ async def test_inbox_preset_and_modal_tagging(alice, web_domain):
     assert "Переименованный документ" in doc_page.text
 
 
+async def test_inbox_is_derived_from_tags_not_a_flag(alice, web_domain):
+    await _upload(alice, web_domain, "t1.txt")
+    doc_id = await _doc_id(alice, web_domain)
+
+    assert "Найдено: 1" in (await alice.get("/search?preset=inbox")).text
+
+    # tagging from the document card takes it out of «не размечено»
+    dp = (await alice.get(f"/documents/{doc_id}")).text
+    await alice.post(
+        f"/documents/{doc_id}/tags",
+        data={"tags": "договор", "csrf_token": web_csrf(dp)},
+        headers={"HX-Request": "true"},
+    )
+    assert "Найдено: 0" in (await alice.get("/search?preset=inbox")).text
+    assert (await alice.get("/api/documents/" + doc_id)).json()["status"] == "tagged"
+
+    # clearing every tag puts it back
+    await alice.post(
+        f"/documents/{doc_id}/tags",
+        data={"tags": "", "csrf_token": web_csrf(dp)},
+        headers={"HX-Request": "true"},
+    )
+    assert "Найдено: 1" in (await alice.get("/search?preset=inbox")).text
+    assert (await alice.get("/api/documents/" + doc_id)).json()["status"] == "inbox"
+
+
 async def test_inbox_defer_drops_out_of_the_preset(alice, web_domain):
     await _upload(alice, web_domain, "d1.txt")
     await _upload(alice, web_domain, "d2.txt")

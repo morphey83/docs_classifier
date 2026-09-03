@@ -353,7 +353,8 @@ async def next_inbox_document(
 
 
 async def complete_document(db: AsyncSession, doc: Document) -> None:
-    doc.status = DocStatus.tagged
+    # a document leaves the inbox by gaining a tag (set_document_tags keeps
+    # Document.status in step) — here we only clear this user's "defer".
     await db.execute(delete(InboxDefer).where(InboxDefer.document_id == doc.id))
     await db.flush()
 

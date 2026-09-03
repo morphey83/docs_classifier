@@ -9,10 +9,10 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Document, DocumentTag, Domain, Tag, User
+from app.models import DocStatus, Document, DocumentTag, Domain, Tag, User
 from app.util.slug import slugify
 
 
@@ -147,6 +147,9 @@ async def merge_tags(
 
 
 # --- assignment -----------------------------------------------------
+# «не размечено» is a fact, not a flag — a document is in the inbox exactly while
+# it carries no tags. Document.status is kept in step here after any tag change
+# (see also migration 0014 for the backfill). ``archived`` is left alone.
 async def set_document_tags(
     db: AsyncSession, document: Document, tag_ids: list[uuid.UUID], *, actor: User
 ) -> None:
@@ -169,6 +172,12 @@ async def set_document_tags(
         db.add(DocumentTag(document_id=document.id, tag_id=tid, assigned_by=actor.id))
     await db.flush()
 
+    if document.status != DocStatus.archived:
+        want = DocStatus.tagged if valid else DocStatus.inbox
+        if document.status != want:
+            document.status = want
+            await db.flush()
+
 
 async def add_tags_to_documents(
     db: AsyncSession, doc_ids: Sequence[uuid.UUID], tag_ids: Sequence[uuid.UUID], *, actor: User
@@ -190,6 +199,18 @@ async def add_tags_to_documents(
                 db.add(DocumentTag(document_id=did, tag_id=tid, assigned_by=actor.id))
                 added += 1
     await db.flush()
+    if added:  # every touched inbox document now carries a tag → it leaves the inbox
+        await db.execute(
+            update(Document)
+            .where(
+                Document.id.in_(list(doc_ids)),
+                Document.status == DocStatus.inbox,
+                exists().where(DocumentTag.document_id == Document.id),
+            )
+            .values(status=DocStatus.tagged)
+            .execution_options(synchronize_session=False)
+        )
+        await db.flush()
     return added
 
 

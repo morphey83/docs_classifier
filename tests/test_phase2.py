@@ -133,7 +133,9 @@ async def test_search_filters_and_facets(alice, domain):
     assert tagged.json()["total"] == 1
 
     facets = (await alice.get(f"/api/domains/{d}/documents")).json()["facets"]
-    assert facets["status"]["inbox"] == 3
+    # tagging b.txt took it out of the inbox — «не размечено» = «нет тегов»
+    assert facets["status"]["inbox"] == 2
+    assert facets["status"]["tagged"] == 1
     mimes = {t["mime"]: t["count"] for t in facets["types"]}
     assert mimes == {"application/pdf": 1, "text/plain": 2}
     assert {t["name"] for t in facets["tags"]} == {"invoice"}
