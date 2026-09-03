@@ -91,6 +91,32 @@ async def test_index_and_fulltext_search(alice, domain):
     assert (await alice.get(f"/api/domains/{d}/documents?has_index=false")).json()["total"] == 0
 
 
+async def test_search_is_case_insensitive_for_cyrillic(alice, domain):
+    d = domain["id"]
+    doc = (
+        await alice.post(
+            f"/api/domains/{d}/uploads",
+            files={
+                "file": (
+                    "Выписка из Реестра повесток.txt",
+                    "Текст про РЕЕСТР и повестки".encode(),
+                    "text/plain",
+                )
+            },
+        )
+    ).json()["document"]
+    await alice.post(f"/api/documents/{doc['id']}/index")
+
+    # title match, different case from the stored «Реестра»
+    for q in ("реестр", "ВЫПИСКА", "Повесток"):
+        hit = await alice.get(f"/api/domains/{d}/documents?q={q}")
+        assert [x["id"] for x in hit.json()["items"]] == [doc["id"]], q
+
+    # body-text match, also case-folded
+    body = await alice.get(f"/api/domains/{d}/documents?q=реестр")
+    assert body.json()["total"] == 1
+
+
 async def test_search_filters_and_facets(alice, domain):
     d = domain["id"]
     uploads = [("a.pdf", "application/pdf"), ("b.txt", "text/plain"), ("c.txt", "text/plain")]

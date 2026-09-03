@@ -200,6 +200,25 @@
 </div>
 {% endif %}
 
+{# shared confirmation modal — replaces window.confirm() and htmx hx-confirm #}
+<div class="modal modal-blur fade" id="confirmdlg" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-status bg-danger"></div>
+      <div class="modal-body text-center py-4">
+        <h3 class="mb-1">Подтвердите действие</h3>
+        <div class="text-secondary" id="confirmdlg-text"></div>
+      </div>
+      <div class="modal-footer">
+        <div class="w-100"><div class="row">
+          <div class="col"><button type="button" class="btn w-100" data-bs-dismiss="modal">Отмена</button></div>
+          <div class="col"><button type="button" class="btn btn-danger w-100" id="confirmdlg-ok">Да</button></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   (function () {
     function showToast(msg) {
@@ -300,7 +319,11 @@
         form.requestSubmit();
       }
       Array.prototype.slice.call(document.querySelectorAll('[data-bulk]')).forEach(function (b) {
-        b.onclick = function () { fire(b.dataset.bulk); };
+        b.onclick = function () {
+          var msg = b.getAttribute('data-confirm');
+          if (msg) window.dcConfirm(msg, function () { fire(b.dataset.bulk); });
+          else fire(b.dataset.bulk);
+        };
       });
       var tagBtn = document.querySelector('[data-bulk-tagdlg]');
       if (tagBtn) tagBtn.onclick = function () {
@@ -386,6 +409,57 @@
     });
     // an action inside the modal can ask it to close (delete) or the list to refresh
     document.body.addEventListener('dc-detail-close', function () { window.dcCloseDetail(); });
+
+    // --- shared confirm modal: replaces window.confirm() / hx-confirm ---
+    var _confirm, _confirmCb = null;
+    function confirmModal() {
+      if (!_confirm) _confirm = window.tabler.Modal.getOrCreateInstance(document.getElementById('confirmdlg'));
+      return _confirm;
+    }
+    window.dcConfirm = function (message, onOk, opts) {
+      opts = opts || {};
+      var dlg = document.getElementById('confirmdlg');
+      if (!dlg || !window.tabler) {                       // hard fallback
+        if (window.confirm(message || 'Продолжить?')) onOk();
+        return;
+      }
+      document.getElementById('confirmdlg-text').textContent = message || '';
+      var ok = document.getElementById('confirmdlg-ok');
+      ok.textContent = opts.okLabel || 'Да';
+      _confirmCb = typeof onOk === 'function' ? onOk : null;
+      confirmModal().show();
+    };
+    (function () {
+      var ok = document.getElementById('confirmdlg-ok');
+      if (ok) ok.addEventListener('click', function () {
+        var cb = _confirmCb; _confirmCb = null;
+        confirmModal().hide();
+        if (cb) cb();
+      });
+      var dlg = document.getElementById('confirmdlg');
+      if (dlg) dlg.addEventListener('hidden.bs.modal', function () { _confirmCb = null; });
+    })();
+
+    // htmx: route every hx-confirm through the modal
+    document.body.addEventListener('htmx:confirm', function (e) {
+      if (!e.detail || !e.detail.question) return;   // element has no hx-confirm
+      e.preventDefault();
+      window.dcConfirm(e.detail.question, function () { e.detail.issueRequest(true); });
+    });
+
+    // native forms: <form data-confirm="…">
+    document.body.addEventListener('submit', function (e) {
+      var form = e.target;
+      if (!form.matches || !form.matches('form[data-confirm]')) return;
+      if (form.dataset.confirmed === '1') { form.dataset.confirmed = ''; return; }
+      e.preventDefault();
+      var submitter = e.submitter || undefined;
+      window.dcConfirm(form.getAttribute('data-confirm'), function () {
+        form.dataset.confirmed = '1';
+        if (form.requestSubmit) form.requestSubmit(submitter);
+        else form.submit();
+      });
+    });
 
     var toggle = document.getElementById('theme-toggle');
     if (toggle) {

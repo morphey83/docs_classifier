@@ -107,7 +107,7 @@
         <h3 class="card-title text-danger">Опасная зона</h3>
         <p class="text-secondary">Удаление домена необратимо и уносит все документы.</p>
         <form method="post" action="/domains/{{ d.slug }}/delete"
-              onsubmit="return confirm('Удалить домен «{{ d.name }}» со всеми документами? Это необратимо.')">
+              data-confirm="Удалить домен «{{ d.name }}» со всеми документами? Это необратимо.">
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
           <button class="btn btn-danger">Удалить домен</button>
         </form>

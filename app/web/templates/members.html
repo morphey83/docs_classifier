@@ -30,7 +30,7 @@
         <td>
           {% if u.id != owner_id %}
           <form method="post" action="/domains/{{ d.slug }}/members/{{ u.id }}/remove"
-                onsubmit="return confirm('Убрать участника?')">
+                data-confirm="Убрать участника из домена?">
             <input type="hidden" name="csrf_token" value="{{ csrf }}">
             <button class="btn btn-sm btn-ghost-danger">убрать</button>
           </form>

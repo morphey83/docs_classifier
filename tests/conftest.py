@@ -47,6 +47,7 @@ async def engine():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    db_module.install_sqlite_unicode(eng)
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

@@ -57,7 +57,7 @@
                   {% endif %}
                   {% if 'own' in d.caps %}
                   <form method="post" action="/domains/{{ d.domain.slug }}/delete"
-                        onsubmit="return confirm('Удалить домен «{{ d.domain.name }}» со всеми документами? Это необратимо.')">
+                        data-confirm="Удалить домен «{{ d.domain.name }}» со всеми документами? Это необратимо.">
                     <input type="hidden" name="csrf_token" value="{{ csrf }}">
                     <button type="submit" class="btn btn-icon btn-ghost-danger" title="Удалить домен">{{ ic.icon('trash') }}</button>
                   </form>
