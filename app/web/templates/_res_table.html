@@ -34,11 +34,9 @@
                aria-label="Выбрать документ">
       </td>
       <td class="cell-thumb">
-        {% if doc.mime.startswith('image/') %}
         <a href="/documents/{{ doc.id }}">
-          <img src="/documents/{{ doc.id }}/thumb" alt="" loading="lazy">
+          <img src="{{ dm.thumb_src(doc)|trim }}" alt="" loading="lazy">
         </a>
-        {% endif %}
       </td>
       <td><a href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a></td>
       <td class="text-secondary">{{ domain_names.get(doc.domain_id, '?') }}</td>

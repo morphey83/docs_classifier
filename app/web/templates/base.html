@@ -33,6 +33,7 @@
     td.cell-thumb a { display:block; width:44px; }
     td.cell-thumb img { width:44px; height:44px; object-fit:cover; border-radius:4px;
       background:var(--tblr-bg-surface-secondary); max-width:none; display:block; }
+    td.cell-thumb img[src$=".svg"] { object-fit:contain; background:none; }
 
     /* theme toggle: show the icon for the theme you'd switch TO */
     [data-bs-theme="dark"]  #theme-toggle .to-dark  { display:none; }
@@ -54,12 +55,11 @@
 
     /* result-card media area */
     .card-media { display:block; height:132px; background-size:cover; background-position:center;
+      background-repeat:no-repeat;
       border-top-left-radius:inherit; border-top-right-radius:inherit;
       background-color:var(--tblr-bg-surface-secondary); }
-    .card-media-file { display:flex; flex-direction:column; align-items:center; justify-content:center;
-      gap:.35rem; text-decoration:none; }
-    .card-media-file .icon { width:2.25rem; height:2.25rem; opacity:.85; }
-    .card-media-ext { font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+    /* the type-placeholder SVGs are contained, not cropped */
+    .card-media[style*="/static/filetypes/"] { background-size:auto 78%; }
 
     .state-icons { display:inline-flex; align-items:center; gap:.3rem; }
     .state-icons .icon { width:1.1rem; height:1.1rem; }
@@ -277,11 +277,26 @@
         document.getElementById('bulk-action').value = action;
         document.getElementById('bulk-set-id').value = setId || '';
         document.getElementById('bulk-new-name').value = newName || '';
+        var tn = document.getElementById('bulk-tag-names');
+        if (tn) tn.value = (action === 'tags') ? (newName || '') : '';
         form.requestSubmit();
       }
       Array.prototype.slice.call(document.querySelectorAll('[data-bulk]')).forEach(function (b) {
         b.onclick = function () { fire(b.dataset.bulk); };
       });
+      var tagBtn = document.querySelector('[data-bulk-tagdlg]');
+      if (tagBtn) tagBtn.onclick = function () {
+        if (!sel.size) return;
+        var inp = document.getElementById('bulktag-input');
+        if (inp) inp.value = '';
+        window.tabler.Modal.getOrCreateInstance(document.getElementById('bulktagdlg')).show();
+      };
+      var tagApply = document.getElementById('bulktag-apply');
+      if (tagApply) tagApply.onclick = function () {
+        var inp = document.getElementById('bulktag-input');
+        window.tabler.Modal.getOrCreateInstance(document.getElementById('bulktagdlg')).hide();
+        if (inp && inp.value.trim()) fire('tags', '', inp.value.trim());
+      };
       Array.prototype.slice.call(document.querySelectorAll('[data-bulk-set]')).forEach(function (b) {
         b.onclick = function (e) {
           e.preventDefault();

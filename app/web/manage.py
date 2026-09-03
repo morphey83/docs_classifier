@@ -40,6 +40,7 @@ async def settings_page(
                 "upload": cfg.max_upload_mb,
                 "trash": cfg.default_trash_retention_days,
             },
+            "master_types": sorted(cfg.allowed_types_master_set or []),
             "is_owner": view.has(Cap.own),
         },
     )

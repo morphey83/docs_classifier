@@ -62,6 +62,12 @@
             <span class="input-icon-addon">{{ ic.icon('file') }}</span>
             <input class="form-control" name="allowed_types" value="{{ (s.get('allowed_types') or [])|join(', ') }}" placeholder="pdf, docx, png">
           </div>
+          {% if master_types %}
+          <div class="form-hint mt-1">
+            Инстанс разрешает только: <strong>{{ master_types|join(', ') }}</strong>.
+            Всё, что вне этого списка, будет проигнорировано.
+          </div>
+          {% endif %}
         </div>
         <div class="mb-3">
           <label class="form-label">При конфликте имён в архиве</label>

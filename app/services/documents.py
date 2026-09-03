@@ -53,11 +53,20 @@ class DisallowedType(Exception):
 
 
 def effective_allowed_types(domain: Domain) -> set[str] | None:
-    """The domain's file-type allowlist (extensions, lowercased) or ``None`` = unrestricted."""
+    """The domain's file-type allowlist (extensions, lowercased) or ``None`` = unrestricted.
+
+    An instance-wide master list (``ALLOWED_TYPES_MASTER``), if set, is the hard
+    ceiling — a domain can only narrow it, never add types outside it.
+    """
+    master = settings.allowed_types_master_set
     val = (domain.settings or {}).get("allowed_types")
     if val is None:
-        return settings.default_allowed_types_set
-    return {str(v).strip().lower().lstrip(".") for v in val if str(v).strip()}
+        chosen = settings.default_allowed_types_set
+    else:
+        chosen = {str(v).strip().lower().lstrip(".") for v in val if str(v).strip()}
+    if master is None:
+        return chosen
+    return master if chosen is None else (chosen & master)
 
 
 @dataclass

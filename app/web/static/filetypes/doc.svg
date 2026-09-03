@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 120" role="img" aria-label="DOC">
+  <path d="M12 4h52l20 20v92a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z" fill="#fff" stroke="#1971c2" stroke-width="3"/>
+  <path d="M64 4l20 20H68a4 4 0 0 1-4-4z" fill="#1971c2" opacity="0.25"/>
+  <rect x="8" y="60" width="80" height="30" rx="4" fill="#1971c2"/>
+  <text x="48" y="81" font-family="system-ui,Segoe UI,Arial,sans-serif" font-size="20" font-weight="700"
+        text-anchor="middle" fill="#fff">DOC</text>
+</svg>

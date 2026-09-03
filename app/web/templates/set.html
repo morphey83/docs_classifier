@@ -38,25 +38,40 @@
 </div>
 {% endif %}
 
-<div class="btn-list mb-3">
-  <a href="/sets/{{ set.id }}/archive" class="btn btn-outline-primary">
-    {{ ic.icon('download') }} Скачать архив
-  </a>
-  <form method="post" action="/sets/{{ set.id }}/links" class="btn-list">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <button name="kind" value="one_time" class="btn btn-outline-secondary">{{ ic.icon('link') }} разовая ссылка</button>
-    <button name="kind" value="permanent" class="btn btn-outline-secondary">{{ ic.icon('link') }} постоянная</button>
-  </form>
-  <form method="post" action="/sets/{{ set.id }}/export">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <button class="btn btn-outline-secondary">{{ ic.icon('download') }} Полная выгрузка</button>
-  </form>
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="card card-sm h-100"><div class="card-body">
+      <div class="fw-bold mb-1">Для отправки</div>
+      <div class="text-secondary small mb-2">
+        Только публичные документы — {{ public_count }} из {{ resolved_count }}.
+        Этим можно делиться.
+      </div>
+      <div class="btn-list">
+        <a href="/sets/{{ set.id }}/archive" class="btn btn-sm btn-outline-primary">
+          {{ ic.icon('download') }} Скачать
+        </a>
+        <form method="post" action="/sets/{{ set.id }}/links" class="btn-list">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <button name="kind" value="one_time" class="btn btn-sm btn-outline-secondary">{{ ic.icon('link') }} разовая ссылка</button>
+          <button name="kind" value="permanent" class="btn btn-sm btn-outline-secondary">{{ ic.icon('link') }} постоянная</button>
+        </form>
+      </div>
+    </div></div>
+  </div>
+  <div class="col-md-6">
+    <div class="card card-sm h-100"><div class="card-body">
+      <div class="fw-bold mb-1">Полная выгрузка</div>
+      <div class="text-secondary small mb-2">
+        Все документы ваших доменов и все доступные вам из чужих. Только для вас —
+        поделиться по ссылке нельзя.
+      </div>
+      <form method="post" action="/sets/{{ set.id }}/export">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <button class="btn btn-sm btn-outline-secondary">{{ ic.icon('download') }} Скачать всё</button>
+      </form>
+    </div></div>
+  </div>
 </div>
-<p class="text-secondary small mb-3">
-  «Скачать архив» и ссылки отдают только <strong>публичные</strong> документы
-  ({{ public_count }} из {{ resolved_count }}). «Полная выгрузка» — все документы ваших
-  доменов и все доступные вам из чужих; поделиться ей по ссылке нельзя.
-</p>
 
 {% if links %}
 <div class="card mb-3">

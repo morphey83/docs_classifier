@@ -1,32 +1,31 @@
 {% import "_icons.html" as ic %}
 
-{#- category (colour, icon) by mime/ext — drives the card media tint -#}
-{% macro _kind(doc) %}
+{#- placeholder-image name by mime/ext — one SVG per type, scales to any size -#}
+{% macro filetype(doc) -%}
 {%- set e = (doc.ext or '')|lower -%}
-{%- if doc.mime.startswith('image/') -%}image photo
-{%- elif e == 'pdf' or doc.mime == 'application/pdf' -%}red file-text
-{%- elif e in ['doc','docx','odt','rtf'] -%}blue file-text
-{%- elif e in ['xls','xlsx','ods','csv','tsv'] -%}green file-text
-{%- elif e in ['ppt','pptx','odp'] -%}orange file-text
-{%- elif e in ['zip','7z','rar','tar','gz','tgz'] -%}yellow file
-{%- elif e in ['txt','md','markdown','log'] -%}secondary file-text
-{%- else -%}secondary file
+{%- if doc.mime.startswith('image/') -%}image
+{%- elif e == 'pdf' or doc.mime == 'application/pdf' -%}pdf
+{%- elif e in ['doc','docx','odt','rtf'] -%}doc
+{%- elif e in ['xls','xlsx','ods','csv','tsv'] -%}xls
+{%- elif e in ['ppt','pptx','odp'] -%}ppt
+{%- elif e in ['zip','7z','rar','tar','gz','tgz'] -%}archive
+{%- elif e in ['txt','md','markdown','log'] -%}txt
+{%- else -%}file
 {%- endif -%}
-{% endmacro %}
+{%- endmacro %}
+
+{#- a document's preview: the thumbnail for an image, else the type placeholder -#}
+{% macro thumb_src(doc) -%}
+{%- if doc.mime.startswith('image/') -%}/documents/{{ doc.id }}/thumb
+{%- else -%}/static/filetypes/{{ filetype(doc)|trim }}.svg
+{%- endif -%}
+{%- endmacro %}
 
 {#- big media area at the top of a result card -#}
 {% macro card_media(doc) -%}
-{%- set parts = _kind(doc).split() -%}
-{%- if parts[0] == 'image' -%}
   <a href="/documents/{{ doc.id }}" class="card-media"
-     style="background-image:url(/documents/{{ doc.id }}/thumb)"
+     style="background-image:url({{ thumb_src(doc)|trim }})"
      aria-label="{{ doc.title }}"></a>
-{%- else -%}
-  <a href="/documents/{{ doc.id }}" class="card-media card-media-file bg-{{ parts[0] }}-lt text-{{ parts[0] }}">
-    {{ ic.icon(parts[1]) }}
-    <span class="card-media-ext">{{ doc.ext or (doc.mime.split('/')|last) }}</span>
-  </a>
-{%- endif -%}
 {%- endmacro %}
 
 {#- status / index / OCR as pictograms with tooltips -#}

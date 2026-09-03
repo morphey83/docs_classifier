@@ -137,6 +137,35 @@ async def test_bulk_add_to_set_spans_domains(alice, web_domain):
     assert "Общий" in detail
 
 
+async def test_bulk_tag_is_additive_and_ignores_existing(alice, web_domain):
+    await _upload(alice, web_domain, "bt1.txt")
+    await _upload(alice, web_domain, "bt2.txt")
+    ids = sorted(set(re.findall(
+        r"/documents/([0-9a-f-]{36})",
+        (await alice.get("/search", headers={"HX-Request": "true"})).text,
+    )))[:2]
+    # give the first one a tag already
+    dp = (await alice.get(f"/documents/{ids[0]}")).text
+    await alice.post(
+        f"/documents/{ids[0]}/tags",
+        data={"tags": "общий", "csrf_token": web_csrf(dp)},
+        headers={"HX-Request": "true"},
+    )
+    page = (await alice.get("/search")).text
+    r = await alice.post(
+        "/search/bulk",
+        data={
+            "csrf_token": web_csrf(page),
+            "doc_ids": ",".join(ids),
+            "action": "tags",
+            "tag_names": "общий, срочно",
+        },
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200
+    assert "Проставлено тегов: 3" in _toast(r)  # d0:срочно, d1:общий, d1:срочно
+
+
 async def test_save_search_as_a_set_filter(alice, web_domain):
     await _upload(alice, web_domain, "kw1.txt", b"needle in a haystack")
     page = (await alice.get("/search")).text

@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     set_archive_max_bytes: int = 5 * 1024**3  # hard cap on a set archive's total size
     public_download_rate_per_min: int = 60  # per-IP cap on GET /d/{token}
     default_allowed_types: str | None = None  # comma-separated extensions; unset = unrestricted
+    # Instance-wide hard ceiling: a domain's allowed_types can only be a subset
+    # of this. Unset = no ceiling.
+    allowed_types_master: str | None = None
     tg_link_ttl_minutes: int = 15
 
     # --- absolute links & the bot ------------------------------------------
@@ -63,12 +66,19 @@ class Settings(BaseSettings):
     def email_verification_enabled(self) -> bool:
         return bool(self.smtp_host)
 
+    @staticmethod
+    def _ext_set(raw: str | None) -> set[str] | None:
+        if not raw:
+            return None
+        return {p.strip().lower().lstrip(".") for p in raw.split(",") if p.strip()}
+
     @property
     def default_allowed_types_set(self) -> set[str] | None:
-        if not self.default_allowed_types:
-            return None
-        parts = self.default_allowed_types.split(",")
-        return {p.strip().lower().lstrip(".") for p in parts if p.strip()}
+        return self._ext_set(self.default_allowed_types)
+
+    @property
+    def allowed_types_master_set(self) -> set[str] | None:
+        return self._ext_set(self.allowed_types_master)
 
     # --- object storage -------------------------------------------------
     # Where content-addressed blobs (the originals) live:

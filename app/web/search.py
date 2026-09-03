@@ -28,6 +28,7 @@ from app.rbac import ROLE_CAPS, Cap, Role
 from app.services import docsets as docsets_svc
 from app.services import domains as domains_svc
 from app.services import search as search_svc
+from app.services import tags as tags_svc
 from app.services import trash as trash_svc
 from app.services.search import describe_filters, index_document
 from app.web.csrf import CsrfGuard
@@ -262,6 +263,17 @@ async def _apply_bulk(db, user, action, docs, caps, dom_by_id, form) -> str:
             n += 1
         tail = f", пропущено (тип не поддерживается): {skipped}" if skipped else ""
         return f"Отправлено на распознавание: {n}{tail}"
+
+    if action == "tags":
+        names = _csv(form.get("tag_names"))
+        if not names:
+            return "Укажите теги."
+        writable = [d.id for d in docs if Cap.write in caps[d.domain_id]]
+        skipped = len(docs) - len(writable)
+        tag_ids = await tags_svc.resolve_names(db, names, actor=user)
+        n = await tags_svc.add_tags_to_documents(db, writable, tag_ids, actor=user)
+        tail = f", пропущено (нет прав): {skipped}" if skipped else ""
+        return f"Проставлено тегов: {n}{tail}"
 
     if action == "restore":
         n = 0

@@ -32,7 +32,24 @@
   <input type="hidden" name="action" id="bulk-action">
   <input type="hidden" name="set_id" id="bulk-set-id">
   <input type="hidden" name="new_name" id="bulk-new-name">
+  <input type="hidden" name="tag_names" id="bulk-tag-names">
 </form>
+
+<div class="modal modal-blur fade" id="bulktagdlg" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Проставить теги</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+    </div>
+    <div class="modal-body">
+      <input class="form-control" id="bulktag-input" placeholder="договор, 2024" autocomplete="off">
+      <div class="form-hint mt-1">через запятую. уже проставленные теги не трогаем.</div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-primary" id="bulktag-apply">Применить</button>
+    </div>
+  </div></div>
+</div>
 
 <div id="bulk-bar" class="card mb-2 d-none">
   <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
@@ -49,6 +66,7 @@
       <button type="button" class="btn btn-sm" data-bulk="ocr">
         {{ ic.icon('scan') }} OCR
       </button>
+      <button type="button" class="btn btn-sm" data-bulk-tagdlg="1">{{ ic.icon('hash') }} Теги</button>
       {% if can_publish_any %}
       <button type="button" class="btn btn-sm" data-bulk="public">Сделать публичными</button>
       <button type="button" class="btn btn-sm" data-bulk="private">Сделать приватными</button>
