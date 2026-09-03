@@ -1,12 +1,12 @@
-{# build a /search URL from the current filter state (`f`, `view`, `page`),
-   overridden by any kwargs. Path-independent — works when rendered from the
-   /search GET *and* from the /search/bulk POST partial. #}
+{% import "_icons.html" as ic %}
+{# build a /search URL from the current filter state (`f`, `page`), overridden by
+   any kwargs. Path-independent — works when rendered from the /search GET *and*
+   from the /search/bulk POST partial. #}
 {% macro qs() -%}
 {%- set p = {
      'preset': f.preset, 'domain_id': f.domain_id, 'q': f.q, 'tags': f.tags,
      'type': f.type, 'status': f.status, 'has_ocr': f.has_ocr,
-     'has_index': f.has_index, 'sort': f.sort, 'dir': f.dir, 'view': view,
-     'page': page,
+     'has_index': f.has_index, 'sort': f.sort, 'dir': f.dir, 'page': page,
    } -%}
 {%- set _ = p.update(kwargs) -%}
 {%- if p.preset == 'active' %}{% set _ = p.pop('preset') %}{% endif -%}
@@ -35,15 +35,25 @@
 {% endif %}
 {%- endmacro %}
 
+{# sort: one dropdown of options + a direction toggle. Both drive the hidden
+   `sort` / `dir` inputs in #filters (see search.html) so all state flows through
+   the one form. #}
 {% macro sortbar() -%}
-<span class="d-inline-flex flex-wrap align-items-center gap-1">
-  <span class="text-secondary small">сортировка:</span>
-  {% for key, label in sorts.items() %}
-  <a class="btn btn-sm btn-ghost-secondary py-0 {{ 'active' if f.sort == key }}"
-     hx-get="{{ qs(sort=key, dir=('asc' if f.sort == key and f.dir == 'desc' else 'desc'), page=1) }}"
-     hx-target="#results" hx-push-url="true">
-    {{ label }}{% if f.sort == key %} {{ '↑' if f.dir == 'asc' else '↓' }}{% endif %}
-  </a>
-  {% endfor %}
-</span>
+<div class="btn-group btn-group-sm" role="group">
+  <button type="button" class="btn dropdown-toggle d-inline-flex align-items-center gap-1"
+          data-bs-toggle="dropdown" aria-expanded="false" title="Сортировка">
+    {{ ic.icon('sort') }} сортировка: {{ sorts.get(f.sort, f.sort) }}
+  </button>
+  <div class="dropdown-menu">
+    {% for key, label in sorts.items() %}
+    <button type="button" class="dropdown-item {{ 'active' if f.sort == key }}" data-sort="{{ key }}">
+      {{ label }}
+    </button>
+    {% endfor %}
+  </div>
+  <button type="button" class="btn" data-sort-dir
+          title="{{ 'по возрастанию' if f.dir == 'asc' else 'по убыванию' }}">
+    {{ '↑' if f.dir == 'asc' else '↓' }}
+  </button>
+</div>
 {%- endmacro %}

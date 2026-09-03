@@ -6,20 +6,10 @@
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
   <span class="text-secondary text-nowrap">Найдено: {{ total }}</span>
 
-  {% if total > 0 and view != 'table' %}
+  {% if total > 0 %}
   <div class="vr d-none d-sm-block"></div>
   {{ m.sortbar() }}
   {% endif %}
-
-  <div class="vr d-none d-sm-block"></div>
-  <div class="btn-group btn-group-sm" role="group">
-    <a class="btn {{ 'active' if view != 'table' }}"
-       hx-get="{{ m.qs(view='cards') }}" hx-target="#results" hx-push-url="true"
-       title="Карточки">{{ ic.icon('grid') }}</a>
-    <a class="btn {{ 'active' if view == 'table' }}"
-       hx-get="{{ m.qs(view='table') }}" hx-target="#results" hx-push-url="true"
-       title="Таблица">{{ ic.icon('list') }}</a>
-  </div>
 
   {% if pages > 1 %}
   <div class="ms-auto d-flex align-items-center gap-2">
@@ -31,13 +21,6 @@
 
 {% if total == 0 %}
 <div class="card"><div class="card-body text-secondary">Ничего не найдено.</div></div>
-{% elif view == 'table' %}
-<div class="card">
-  {% include "_res_table.html" %}
-  {% if pages > 1 %}
-  <div class="card-footer d-flex"><div class="ms-auto">{{ m.pager(page, pages) }}</div></div>
-  {% endif %}
-</div>
 {% else %}
 {% include "_res_cards.html" %}
 {% if pages > 1 %}<div class="d-flex mt-3"><div class="ms-auto">{{ m.pager(page, pages) }}</div></div>{% endif %}

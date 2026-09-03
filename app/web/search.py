@@ -144,6 +144,24 @@ async def _tags_by_doc(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID
     return out
 
 
+async def _tag_chips_by_doc(
+    db: AsyncSession, ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[tuple[str, str | None]]]:
+    """``{doc id: [(name, color), …]}`` — colour drives the result-card chips."""
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(DocumentTag.document_id, Tag.name, Tag.color)
+        .join(Tag, Tag.id == DocumentTag.tag_id)
+        .where(DocumentTag.document_id.in_(ids))
+        .order_by(Tag.name)
+    )
+    out: dict[uuid.UUID, list[tuple[str, str | None]]] = {}
+    for did, name, color in rows:
+        out.setdefault(did, []).append((name, color or None))
+    return out
+
+
 def _scope(params: Mapping[str, str], dom_by_id: dict) -> tuple[uuid.UUID | None, list[uuid.UUID]]:
     raw = params.get("domain_id") or ""
     try:
@@ -167,7 +185,6 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
     preset = params.get("preset") if params.get("preset") in PRESETS else "active"
     sort = params.get("sort") if params.get("sort") in SORTS else "uploaded_at"
     sort_dir = "asc" if params.get("dir") == "asc" else "desc"
-    view = "table" if params.get("view") == "table" else "cards"
 
     f = _filters_from_params(params)
     if preset == "inbox":
@@ -198,7 +215,7 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
     return {
         "partial": "_results.html",
         "docs": docs,
-        "tag_map": await _tags_by_doc(db, [d.id for d in docs]),
+        "tag_map": await _tag_chips_by_doc(db, [d.id for d in docs]),
         "domain_names": {d.id: d.name for d, _ in memberships},
         "domain_slugs": {d.id: d.slug for d, _ in memberships},
         "doc_caps": {d.id: caps.get(d.domain_id, frozenset()) for d in docs},
@@ -207,7 +224,6 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
         "pages": max(1, -(-total // PAGE_SIZE)),
         "type_options": _type_options(await _distinct_exts(db, list(dom_by_id))),
         "sorts": SORTS,
-        "view": view,
         "preset": preset,
         "domains": [d for d, _ in memberships],
         "purge_domains": [
@@ -215,7 +231,7 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
         ],
         "user_sets": await docsets_svc.list_sets(db, user.id),
         "can_publish_any": any(Cap.manage in c for c in caps.values()),
-        # everything that narrows the result set (not page / sort / view) —
+        # everything that narrows the result set (not page / sort) —
         # the client wipes its selection when this string changes.
         "filter_sig": "|".join(
             fd[k]

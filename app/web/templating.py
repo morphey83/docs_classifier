@@ -52,6 +52,19 @@ templates.env.filters["datetimefmt"] = datetimefmt
 templates.env.filters["statusfmt"] = statusfmt
 
 
+def _asset_version() -> str:
+    """mtime of the newest vendored asset — a cache-buster for the icon sprite
+    and other /static files that change in place without a build step."""
+    try:
+        newest = max(p.stat().st_mtime for p in STATIC_DIR.rglob("*") if p.is_file())
+        return str(int(newest))
+    except ValueError:
+        return "0"
+
+
+templates.env.globals["asset_v"] = _asset_version()
+
+
 def render(
     request: Request,
     name: str,

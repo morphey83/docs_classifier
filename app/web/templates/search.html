@@ -70,6 +70,19 @@
   /* keep the set-picker body from resizing while filtering */
   #setpickdlg .modal-dialog { max-width:22rem; }
   #setpick-list { min-height:14rem; }
+
+  /* clear («×») button that appears once a field has a value */
+  .dc-clearable { position:relative; }
+  .dc-clearable .dc-clear {
+    position:absolute; right:.4rem; top:50%; transform:translateY(-50%);
+    display:none; align-items:center; justify-content:center; line-height:0;
+    border:0; background:transparent; color:var(--tblr-secondary);
+    cursor:pointer; padding:.25rem; border-radius:4px;
+  }
+  .dc-clearable .dc-clear:hover { color:var(--tblr-body-color); background:var(--tblr-bg-surface-secondary); }
+  .dc-clearable .dc-clear .icon { width:1rem; height:1rem; }
+  .dc-clearable.has-value .dc-clear { display:flex; }
+  .dc-clearable.has-value .form-control { padding-right:2rem; }
 </style>
 
 <div class="row row-cards">
@@ -82,7 +95,6 @@
         <h3 class="card-title">{{ ic.icon('filter') }} Фильтры</h3>
       </div>
       <div class="card-body">
-        <input type="hidden" name="view" value="{{ view }}">
         <input type="hidden" name="sort" value="{{ f.sort }}">
         <input type="hidden" name="dir" value="{{ f.dir }}">
 
@@ -109,18 +121,20 @@
 
         <div class="mb-3">
           <label class="form-label">Запрос</label>
-          <div class="input-icon">
+          <div class="input-icon dc-clearable">
             <span class="input-icon-addon">{{ ic.icon('search') }}</span>
             <input type="text" class="form-control" name="q" value="{{ f.q }}"
                    placeholder="слова из названия / текста">
+            <button type="button" class="dc-clear" tabindex="-1" aria-label="Очистить">{{ ic.icon('x') }}</button>
           </div>
         </div>
 
         <div class="mb-3">
           <label class="form-label">Теги <span class="form-hint d-inline">через запятую</span></label>
-          <div class="input-icon">
+          <div class="input-icon dc-clearable">
             <span class="input-icon-addon">{{ ic.icon('hash') }}</span>
             <input class="form-control" name="tags" value="{{ f.tags }}" placeholder="договор, 2024">
+            <button type="button" class="dc-clear" tabindex="-1" aria-label="Очистить">{{ ic.icon('x') }}</button>
           </div>
         </div>
 
@@ -219,6 +233,42 @@
     if (document.getElementById('results')) {
       window.htmx.ajax('GET', '/search' + window.location.search,
         { target: '#results', swap: 'innerHTML' });
+    }
+  });
+
+  // clear («×») button on the query / tags fields
+  (function () {
+    Array.prototype.slice.call(document.querySelectorAll('#filters .dc-clearable')).forEach(function (wrap) {
+      var input = wrap.querySelector('input');
+      var clear = wrap.querySelector('.dc-clear');
+      if (!input || !clear) return;
+      function sync() { wrap.classList.toggle('has-value', input.value.length > 0); }
+      input.addEventListener('input', sync);
+      clear.addEventListener('click', function () {
+        input.value = '';
+        sync();
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+      });
+      sync();
+    });
+  })();
+
+  // sort: dropdown option + direction toggle → the hidden #filters inputs
+  document.body.addEventListener('click', function (e) {
+    var filters = document.getElementById('filters');
+    if (!filters) return;
+    var opt = e.target.closest && e.target.closest('[data-sort]');
+    var dir = e.target.closest && e.target.closest('[data-sort-dir]');
+    var sortField = filters.querySelector('[name=sort]');
+    var dirField = filters.querySelector('[name=dir]');
+    if (opt && sortField) {
+      if (sortField.value === opt.dataset.sort) return;
+      sortField.value = opt.dataset.sort;
+      sortField.dispatchEvent(new Event('change', { bubbles: true }));
+    } else if (dir && dirField) {
+      dirField.value = dirField.value === 'asc' ? 'desc' : 'asc';
+      dirField.dispatchEvent(new Event('change', { bubbles: true }));
     }
   });
 

@@ -330,11 +330,9 @@ async def test_image_thumbnail(alice, web_domain):
     r = await alice.get(f"/documents/{doc_id}/thumb")
     assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
 
-    # image results carry a thumbnail in both search views
+    # image results carry a thumbnail
     cards = await alice.get("/search", headers={"HX-Request": "true"})
     assert f"/documents/{doc_id}/thumb" in cards.text
-    table = await alice.get("/search?view=table", headers={"HX-Request": "true"})
-    assert f"/documents/{doc_id}/thumb" in table.text
 
 
 # --- tag vocabulary --------------------------------------------
@@ -358,6 +356,26 @@ async def test_global_tag_page_rename(alice, web_domain):
     )
     assert upd.status_code == 303
     assert "Договор" in (await alice.get("/tags")).text
+
+
+async def test_search_result_tag_uses_its_colour(alice, web_domain):
+    await _upload(alice, web_domain, "col.txt")
+    doc_id = await _doc_id(alice, web_domain)
+    dp = (await alice.get(f"/documents/{doc_id}")).text
+    await alice.post(
+        f"/documents/{doc_id}/tags",
+        data={"tags": "срочно", "csrf_token": web_csrf(dp)},
+        headers={"HX-Request": "true"},
+    )
+    listing = (await alice.get("/tags")).text
+    tag_id = re.search(r'action="/tags/([0-9a-f-]{36})"', listing).group(1)
+    await alice.post(
+        f"/tags/{tag_id}",
+        data={"name": "срочно", "color": "#d63939", "csrf_token": web_csrf(listing)},
+    )
+
+    results = (await alice.get("/search?q=col", headers={"HX-Request": "true"})).text
+    assert "background:#d63939" in results
 
 
 # --- members ---------------------------------------------------
@@ -512,4 +530,4 @@ async def test_global_search_spans_domains(alice):
     await _upload(alice, b, "gb-doc.txt")
 
     r = await alice.get("/search?q=doc", headers={"HX-Request": "true"})
-    assert ">GA</span>" in r.text and ">GB</span>" in r.text
+    assert "GA</span>" in r.text and "GB</span>" in r.text

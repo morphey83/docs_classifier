@@ -28,6 +28,20 @@
      aria-label="{{ doc.title }}"></a>
 {%- endmacro %}
 
+{#- a tag chip; honours the tag's colour when one is set -#}
+{% macro tag_badge(name, color) -%}
+{%- if color -%}
+<span class="badge me-1 mb-1" style="background:{{ color }};color:#fff;border-color:{{ color }}">{{ name }}</span>
+{%- else -%}
+<span class="badge bg-secondary-lt me-1 mb-1">{{ name }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{#- the document's domain, as a chip -#}
+{% macro domain_badge(name) -%}
+<span class="badge bg-blue-lt d-inline-flex align-items-center gap-1">{{ ic.icon('folder') }} {{ name }}</span>
+{%- endmacro %}
+
 {#- status / index / OCR as pictograms with tooltips -#}
 {% macro state_icons(doc) -%}
 <span class="state-icons">

@@ -122,11 +122,15 @@ async def test_search_page_and_htmx_partial(alice, web_domain):
     assert "Найдено: 1" in partial.text and "alpha" in partial.text
 
 
-async def test_search_table_view_and_sort(alice, web_domain):
-    await _upload(alice, web_domain, "a.txt")
-    await _upload(alice, web_domain, "b.txt")
-    r = await alice.get("/search?view=table&sort=title&dir=asc", headers={"HX-Request": "true"})
-    assert r.status_code == 200 and "<table" in r.text
+async def test_search_sort(alice, web_domain):
+    await _upload(alice, web_domain, "zeta.txt")
+    await _upload(alice, web_domain, "alpha.txt")
+    r = await alice.get("/search?sort=title&dir=asc", headers={"HX-Request": "true"})
+    assert r.status_code == 200
+    # "alpha" before "zeta" with an ascending title sort
+    assert r.text.index("alpha") < r.text.index("zeta")
+    # the sort control reflects the active option
+    assert "сортировка: название" in r.text
 
 
 async def test_search_domain_filter(alice):

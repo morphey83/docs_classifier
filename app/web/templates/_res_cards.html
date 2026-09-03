@@ -11,7 +11,7 @@
       {{ dm.card_media(doc) }}
       <div class="card-body d-flex flex-column">
         <div class="d-flex align-items-center gap-2 mb-1">
-          <span class="badge bg-blue-lt">{{ domain_names.get(doc.domain_id, '?') }}</span>
+          {{ dm.domain_badge(domain_names.get(doc.domain_id, '?')) }}
           <span class="ms-auto">{{ dm.state_icons(doc) }}</span>
         </div>
         <div class="fw-bold mb-1">
@@ -20,10 +20,10 @@
         <div class="text-secondary small">
           {{ doc.ext or (doc.mime.split('/')|last) }} · {{ doc.size_bytes|humansize }}{% if doc.doc_date %} · {{ doc.doc_date|shortdate }}{% endif %}
         </div>
-        {% set names = tag_map.get(doc.id, [])|sort %}
-        {% if names %}
+        {% set chips = tag_map.get(doc.id, []) %}
+        {% if chips %}
         <div class="mt-2">
-          {% for name in names %}<span class="badge bg-secondary-lt me-1 mb-1">{{ name }}</span>{% endfor %}
+          {% for name, color in chips %}{{ dm.tag_badge(name, color) }}{% endfor %}
         </div>
         {% endif %}
       </div>
