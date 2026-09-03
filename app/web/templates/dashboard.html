@@ -38,7 +38,7 @@
           {% for d in domains %}
             <tr>
               <td>
-                <a href="/domains/{{ d.domain.slug }}" class="text-reset fw-bold">{{ d.domain.name }}</a>
+                <a data-detail href="/domains/{{ d.domain.slug }}" class="text-reset fw-bold">{{ d.domain.name }}</a>
                 <div class="text-secondary">роль: {{ d.role }}</div>
               </td>
               <td class="text-center text-secondary">{{ d.members }}</td>

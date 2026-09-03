@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime
 
@@ -325,8 +326,22 @@ async def document_visibility(
     return await _doc_fragment(request, db, user, document_id, toast=msg)
 
 
+def _close_and_refresh(toast: str) -> Response:
+    """Modal action that removes the doc from the current listing: close every
+    open detail modal and re-run the search that's behind it."""
+    return Response(
+        status_code=204,
+        headers={
+            "HX-Trigger": json.dumps(
+                {"dc-detail-close": True, "dc-search-refresh": True, "dc-toast": toast}
+            )
+        },
+    )
+
+
 @router.post("/documents/{document_id}/delete")
 async def document_delete(
+    request: Request,
     document_id: uuid.UUID,
     _: None = CsrfGuard,
     user: User = Depends(current_user),
@@ -335,7 +350,10 @@ async def document_delete(
     doc, view = await load_document(db, user, document_id)
     require_cap(view, Cap.delete)
     await trash_svc.soft_delete(db, doc, user)
-    return RedirectResponse(f"/domains/{view.domain.slug}/search", status_code=303)
+    await db.commit()
+    if request.headers.get("HX-Request"):
+        return _close_and_refresh("Документ перемещён в корзину")
+    return RedirectResponse("/search", status_code=303)
 
 
 @router.post("/documents/{document_id}/restore")
@@ -352,8 +370,9 @@ async def document_restore(
         await trash_svc.restore(db, doc)
     except trash_svc.TrashError as err:
         raise HTTPException(status.HTTP_409_CONFLICT, str(err)) from err
+    await db.commit()
     if request.headers.get("HX-Request"):
-        return await _doc_fragment(request, db, user, document_id, toast="Восстановлено")
+        return _close_and_refresh("Документ восстановлен")
     return RedirectResponse(f"/documents/{document_id}", status_code=303)
 
 

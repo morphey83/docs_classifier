@@ -17,7 +17,7 @@
           hx-get="/inbox/card" hx-target="#tagcard"
           hx-include="#filters [name=domain_id]"
           data-bs-toggle="tooltip" data-bs-placement="bottom" title="Разметить документы по очереди">
-    {{ ic.icon('check') }} Разметить
+    {{ ic.icon('pencil') }} Разметить
   </button>
 
   <div class="btn-group btn-group-sm tb-normal">
@@ -83,6 +83,17 @@
   .dc-clearable .dc-clear .icon { width:1rem; height:1rem; }
   .dc-clearable.has-value .dc-clear { display:flex; }
   .dc-clearable.has-value .form-control { padding-right:2rem; }
+
+  /* tag-filter autocomplete */
+  .dc-suggest { display:flex; flex-wrap:wrap; gap:.25rem; margin-top:.4rem; }
+  .dc-suggest:empty { display:none; }
+  .dc-suggest button {
+    border:1px solid var(--tblr-border-color); background:var(--tblr-bg-surface);
+    color:var(--tblr-body-color); border-radius:4px; padding:.05rem .5rem;
+    font-size:.8rem; line-height:1.6; cursor:pointer;
+  }
+  .dc-suggest button:hover { background:var(--tblr-primary); color:#fff; border-color:var(--tblr-primary); }
+  .dc-suggest button .cnt { opacity:.55; margin-left:.3rem; font-size:.9em; }
 </style>
 
 <div class="row row-cards">
@@ -133,9 +144,11 @@
           <label class="form-label">Теги <span class="form-hint d-inline">через запятую</span></label>
           <div class="input-icon dc-clearable">
             <span class="input-icon-addon">{{ ic.icon('hash') }}</span>
-            <input class="form-control" name="tags" value="{{ f.tags }}" placeholder="договор, 2024">
+            <input class="form-control" name="tags" value="{{ f.tags }}" placeholder="договор, 2024"
+                   autocomplete="off">
             <button type="button" class="dc-clear" tabindex="-1" aria-label="Очистить">{{ ic.icon('x') }}</button>
           </div>
+          <div id="tag-suggest" class="dc-suggest"></div>
         </div>
 
         <div class="mb-3">
@@ -252,6 +265,55 @@
       });
       sync();
     });
+  })();
+
+  // tag-filter autocomplete: suggest existing tags for the segment being typed
+  (function () {
+    var field = document.querySelector('#filters input[name=tags]');
+    var box = document.getElementById('tag-suggest');
+    if (!field || !box) return;
+    var all = null;
+
+    function load() {
+      if (all) return Promise.resolve(all);
+      return fetch('/api/tags', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (list) { all = Array.isArray(list) ? list : []; return all; })
+        .catch(function () { all = []; return all; });
+    }
+    function segs() { return field.value.split(','); }
+    function seg() { return segs().pop().trim().toLowerCase(); }
+    function chosen() {
+      return segs().slice(0, -1).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    }
+    function render() {
+      var q = seg();
+      box.innerHTML = '';
+      if (!q) return;
+      var have = chosen();
+      all.filter(function (t) {
+        var n = t.name.toLowerCase();
+        return n.indexOf(q) !== -1 && n !== q && have.indexOf(n) === -1;
+      }).slice(0, 8).forEach(function (t) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.innerHTML = t.name.replace(/</g, '&lt;') +
+          (t.usage_count ? ' <span class="cnt">' + t.usage_count + '</span>' : '');
+        b.addEventListener('click', function () {
+          var arr = segs();
+          arr[arr.length - 1] = ' ' + t.name;
+          field.value = arr.join(',').replace(/^\s+/, '') + ', ';
+          box.innerHTML = '';
+          field.focus();
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        box.appendChild(b);
+      });
+    }
+    field.addEventListener('focus', function () { load().then(render); });
+    field.addEventListener('input', function () { load().then(render); });
+    field.addEventListener('blur', function () { setTimeout(function () { box.innerHTML = ''; }, 150); });
+    field.addEventListener('keydown', function (e) { if (e.key === 'Escape') box.innerHTML = ''; });
   })();
 
   // sort: dropdown option + direction toggle → the hidden #filters inputs

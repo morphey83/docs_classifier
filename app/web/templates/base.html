@@ -402,6 +402,16 @@
     });
     // an action inside the modal can ask it to close (delete) or the list to refresh
     document.body.addEventListener('dc-detail-close', function () { window.dcCloseDetail(); });
+    // re-run the search behind the modal (a doc left / entered the current filter);
+    // on a page without #results, just go to the search screen
+    document.body.addEventListener('dc-search-refresh', function () {
+      if (document.getElementById('results') && window.htmx) {
+        window.htmx.ajax('GET', '/search' + window.location.search,
+          { target: '#results', swap: 'innerHTML' });
+      } else {
+        window.location.href = '/search';
+      }
+    });
 
     // --- shared confirm modal: replaces window.confirm() / hx-confirm ---
     var _confirm, _confirmCb = null;

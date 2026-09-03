@@ -10,11 +10,6 @@
   <li class="nav-item">
     <a class="nav-link{{ ' active' if active == 'overview' }}" href="/domains/{{ d.slug }}">Обзор</a>
   </li>
-  {% if view.has('delete') %}
-  <li class="nav-item">
-    <a class="nav-link{{ ' active' if active == 'trash' }}" href="/domains/{{ d.slug }}/trash">Корзина</a>
-  </li>
-  {% endif %}
   {% if view.has('manage') %}
   <li class="nav-item">
     <a class="nav-link{{ ' active' if active == 'members' }}" href="/domains/{{ d.slug }}/members">Участники</a>

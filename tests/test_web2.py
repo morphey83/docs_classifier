@@ -495,6 +495,52 @@ async def test_trash_preset_and_bulk_restore(alice, web_domain):
     assert "Найдено: 0" in empty.text
 
 
+async def test_delete_and_restore_from_the_modal_close_and_refresh(alice, web_domain):
+    await _upload(alice, web_domain, "md.txt")
+    doc_id = await _doc_id(alice, web_domain)
+    dp = (await alice.get(f"/documents/{doc_id}")).text
+
+    dele = await alice.post(
+        f"/documents/{doc_id}/delete",
+        data={"csrf_token": web_csrf(dp)},
+        headers={"HX-Request": "true"},
+    )
+    assert dele.status_code == 204
+    trig = json.loads(dele.headers["HX-Trigger"])
+    assert trig["dc-detail-close"] and trig["dc-search-refresh"]
+
+    tp = (await alice.get("/search?preset=trash")).text
+    resto = await alice.post(
+        f"/documents/{doc_id}/restore",
+        data={"csrf_token": web_csrf(tp)},
+        headers={"HX-Request": "true"},
+    )
+    assert resto.status_code == 204
+    assert json.loads(resto.headers["HX-Trigger"])["dc-search-refresh"]
+
+
+# --- domain overview (modal) ---------------------------------------
+async def test_domain_overview_is_a_modal_partial(alice, web_domain):
+    di = await _domain_id(alice, web_domain)
+    r = await alice.get(f"/domains/{web_domain}", headers={"HX-Request": "true"})
+    assert r.status_code == 200
+    assert 'id="domainbody"' in r.text and "<html" not in r.text
+    assert f"/search?domain_id={di}&preset=inbox" in r.text
+    assert f"/search?domain_id={di}&preset=active" in r.text
+    assert "Корзина" not in r.text
+
+
+async def test_domain_rename_from_the_modal(alice, web_domain):
+    page = (await alice.get(f"/domains/{web_domain}")).text
+    r = await alice.post(
+        f"/domains/{web_domain}/rename",
+        data={"name": "Переименован", "csrf_token": web_csrf(page)},
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200 and "Переименован" in r.text
+    assert "Переименован" in (await alice.get("/")).text
+
+
 # --- profile + global search --------------------------------
 async def test_profile_and_tg_link(alice):
     page = await alice.get("/profile")

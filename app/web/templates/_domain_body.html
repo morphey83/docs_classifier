@@ -1,0 +1,58 @@
+{% import "_icons.html" as ic %}
+{% set d = view.domain %}
+<div id="domainbody">
+  <div class="card">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h3 class="m-0 d-inline-flex align-items-center gap-1">{{ ic.icon('folder') }} Домен</h3>
+        <span class="text-secondary small">ваша роль: {{ view.role }}</span>
+      </div>
+
+      {% if view.has('manage') %}
+      <form hx-post="/domains/{{ d.slug }}/rename" hx-target="#domainbody" hx-swap="outerHTML"
+            class="row g-2 align-items-end mb-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <div class="col">
+          <label class="form-label">Название</label>
+          <input class="form-control" name="name" value="{{ d.name }}" required maxlength="200">
+        </div>
+        <div class="col-auto"><button class="btn">Сохранить</button></div>
+      </form>
+      {% else %}
+      <h2 class="mb-4">{{ d.name }}</h2>
+      {% endif %}
+
+      <div class="row g-3 mb-4">
+        <div class="col-6">
+          <div class="h1 m-0">{{ doc_total }}</div>
+          <div class="text-secondary">документов всего</div>
+        </div>
+        <div class="col-6">
+          <div class="h1 m-0">{{ inbox }}</div>
+          <div class="text-secondary">на сортировку</div>
+        </div>
+      </div>
+
+      <div class="btn-list">
+        <a href="/search?domain_id={{ d.id }}&preset=inbox" class="btn btn-primary">
+          {{ ic.icon('pencil') }} Разметить
+        </a>
+        <a href="/search?domain_id={{ d.id }}&preset=active" class="btn btn-outline-primary">
+          {{ ic.icon('search') }} Показать все документы
+        </a>
+      </div>
+
+      {% if view.has('manage') %}
+      <hr class="my-3">
+      <div class="btn-list">
+        <a href="/domains/{{ d.slug }}/members" class="btn btn-ghost-secondary">
+          {{ ic.icon('users') }} Участники
+        </a>
+        <a href="/domains/{{ d.slug }}/settings" class="btn btn-ghost-secondary">
+          {{ ic.icon('settings') }} Настройки
+        </a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
