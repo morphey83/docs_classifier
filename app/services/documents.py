@@ -295,25 +295,34 @@ async def update_document(
 
 
 # --- inbox queue ---------------------------------------------------------
-async def inbox_count(db: AsyncSession, domain_id: uuid.UUID) -> int:
-    return await inbox_count_across(db, [domain_id])
+# The count means "documents still waiting for *this* user to tag them", so it
+# lines up with what the /search inbox preset shows: untagged, not deferred by
+# them. Pass ``user_id=None`` for a plain "untagged" count.
+async def inbox_count(
+    db: AsyncSession, domain_id: uuid.UUID, user_id: uuid.UUID | None = None
+) -> int:
+    return await inbox_count_across(db, [domain_id], user_id)
 
 
-async def inbox_count_across(db: AsyncSession, domain_ids) -> int:
+async def inbox_count_across(db: AsyncSession, domain_ids, user_id: uuid.UUID | None = None) -> int:
     if not domain_ids:
         return 0
-    return int(
-        await db.scalar(
-            select(func.count())
-            .select_from(Document)
-            .where(
-                Document.domain_id.in_(list(domain_ids)),
-                Document.status == DocStatus.inbox,
-                Document.deleted_at.is_(None),
+    stmt = (
+        select(func.count())
+        .select_from(Document)
+        .where(
+            Document.domain_id.in_(list(domain_ids)),
+            Document.status == DocStatus.inbox,
+            Document.deleted_at.is_(None),
+        )
+    )
+    if user_id is not None:
+        stmt = stmt.where(
+            Document.id.not_in(
+                select(InboxDefer.document_id).where(InboxDefer.user_id == user_id)
             )
         )
-        or 0
-    )
+    return int(await db.scalar(stmt) or 0)
 
 
 async def next_inbox_across(

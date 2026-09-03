@@ -246,7 +246,7 @@ async def search_documents(
 async def inbox_status(
     ctx: DomainCtx = Depends(require(Cap.view)), db: AsyncSession = Depends(get_session)
 ) -> InboxStatus:
-    return InboxStatus(count=await svc.inbox_count(db, ctx.domain.id))
+    return InboxStatus(count=await svc.inbox_count(db, ctx.domain.id, ctx.user.id))
 
 
 @router.get("/domains/{domain_id}/inbox/next", response_model=DocumentOut | None)
