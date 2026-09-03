@@ -904,15 +904,24 @@ button: *«В архив войдут все документы ваших до�
    to the set's stable `artifact_id`.
 5. Links: list, copy, download count, **revoke** (owner only).
 
-### Public download — `GET /d/{token}`
+### Share links — `download_link.mode`
 
-No auth cookie, **re-checked every hit**: link not `revoked` / not past
-`expires_at` / `download_count < max_downloads`; the set exists and its owner
-account is active; then *ensure-current* on the share view. `ready` → stream
-(`Content-Disposition: attachment; filename="<set> <date>.zip"`), bump
-`download_count`, set `last_downloaded_at`. Resolved list **empty** (nothing
-public, or owner lost access) → **410 GONE**. IP rate-limited. One-time links
-die after the first completed download.
+- **`archive`** (default) — `GET /d/{token}` streams the set's zip. Re-checked
+  every hit: link not `revoked` / not past `expires_at` /
+  `download_count < max_downloads`; set exists, owner active; *ensure-current*
+  on the share view; `ready` → stream, bump `download_count`. Empty resolve →
+  **410**. IP rate-limited. One-time links die after one completed download.
+- **`gallery`** (`app/gallery.py`, `GET /g/{token}`) — a standing public
+  browse page over the set's **public** documents (never single-use). Same
+  per-hit re-check. `/g/{token}` = thumbnail grid + a form to pick sort
+  (`uploaded|doc_date|title|size|random`+`seed`) and slide `interval`, then
+  `/g/{token}/slideshow` — a standalone fullscreen player, **images only**
+  (←/→ prev-next, space = next, `p` pause, esc = back). `/g/{token}.json` and
+  `/g/{token}/feed` (Atom) expose the same list for external widgets — a
+  dynamic set means new matches show up on their own. `/g/{token}/i/{doc_id}`
+  serves one document only if its id is in the live public resolve (no
+  enumeration). `/d` and `/g` reject each other's tokens. *(Video is a planned
+  future document type — the slideshow will pick it up.)*
 
 ### Permissions
 
