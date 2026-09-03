@@ -49,7 +49,9 @@ async def send_doc_card(
             return
         if doc.size_bytes <= _PREVIEW_MAX:
             try:
-                with storage.blobs_store().open_local(storage.blob_key(doc.sha256)) as original:
+                async with storage.fetch_local(
+                    storage.blobs_store(), storage.blob_key(doc.sha256)
+                ) as original:
                     await target.answer_photo(
                         FSInputFile(original), caption=text, reply_markup=reply_markup
                     )

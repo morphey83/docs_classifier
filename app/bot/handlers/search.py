@@ -133,7 +133,9 @@ async def send_file(
     if doc.size_bytes > _SEND_MAX:
         return await cb.answer("Файл слишком большой — откройте в веб.", show_alert=True)
     try:
-        with storage.blobs_store().open_local(storage.blob_key(doc.sha256)) as path:
+        async with storage.fetch_local(
+            storage.blobs_store(), storage.blob_key(doc.sha256)
+        ) as path:
             await cb.answer("Отправляю…")
             await bot.send_document(
                 cb.message.chat.id, FSInputFile(path, filename=doc.original_name)

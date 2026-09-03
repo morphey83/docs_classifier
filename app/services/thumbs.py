@@ -45,7 +45,7 @@ async def ensure_thumb(sha256: str, *, max_px: int = 512) -> Path | None:
     if dst.is_file():
         return dst
     try:
-        with storage.blobs_store().open_local(storage.blob_key(sha256)) as src:
+        async with storage.fetch_local(storage.blobs_store(), storage.blob_key(sha256)) as src:
             await run_in_threadpool(_render, src, dst, max_px)
     except Exception:  # corrupt / unsupported image, or the blob is gone
         return None

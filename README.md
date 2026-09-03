@@ -106,6 +106,12 @@ Full design: [`docs/architecture.md`](docs/architecture.md).
     JSON; `/api` keeps JSON, htmx errors become a toast.
   - **7n** upload progress bar (htmx `xhr:progress`) + disabled submit
     while a file is uploading; `_upload_result.html` HX partial.
+  - **7o** pluggable blob storage (`app/storage/`, `ObjectStore` ABC):
+    `STORAGE_BLOBS=local` (default) or `s3` — any S3-compatible
+    endpoint (local MinIO via `docker compose --profile s3 up -d`, a
+    remote Garage/MinIO host later — only `S3_ENDPOINT` changes).
+    Derived/artifact caches stay local. `python -m app.storage.migrate`
+    moves existing blobs between backends.
 - **8 email confirmation** (opt-in) — set `SMTP_HOST` to require a
   verified address before a new account can log in (migration 0009,
   `app/services/email.py`, `GET /verify/{token}`); unset keeps sign-up

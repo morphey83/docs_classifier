@@ -318,7 +318,7 @@ async def update_document(
 async def download_document(
     ctx: DocCtx = Depends(require_doc(Cap.download)),
 ) -> Response:
-    return blob_download(ctx.document)
+    return await blob_download(ctx.document)
 
 
 @router.post("/documents/{document_id}/index", response_model=DocumentOut)

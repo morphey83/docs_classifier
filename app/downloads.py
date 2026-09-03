@@ -11,6 +11,7 @@ from urllib.parse import quote
 
 from fastapi import HTTPException, status
 from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from app import storage
 from app.models import Document
@@ -18,7 +19,7 @@ from app.models import Document
 _MISSING = "файл отсутствует в хранилище"
 
 
-def blob_download(doc: Document) -> Response:
+async def blob_download(doc: Document) -> Response:
     store = storage.blobs_store()
     key = storage.blob_key(doc.sha256)
 
@@ -28,13 +29,11 @@ def blob_download(doc: Document) -> Response:
             raise HTTPException(status.HTTP_410_GONE, _MISSING)
         return FileResponse(local, media_type=doc.mime, filename=doc.original_name)
 
-    presigned = getattr(store, "presigned_url", None)
-    if presigned is not None:
-        url = presigned(key, filename=doc.original_name)
-        if url:
-            return RedirectResponse(url)
+    url = await run_in_threadpool(store.presigned_url, key, filename=doc.original_name)
+    if url:
+        return RedirectResponse(url)
 
-    if not store.exists(key):
+    if not await run_in_threadpool(store.exists, key):
         raise HTTPException(status.HTTP_410_GONE, _MISSING)
     disposition = f"attachment; filename*=UTF-8''{quote(doc.original_name)}"
     return StreamingResponse(

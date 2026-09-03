@@ -37,7 +37,9 @@ def _is_pg(db: AsyncSession) -> bool:
 async def index_document(db: AsyncSession, doc: Document, *, reparse: bool = False) -> Document:
     if doc.text_source == TextSource.none or reparse:
         try:
-            with storage.blobs_store().open_local(storage.blob_key(doc.sha256)) as blob:
+            async with storage.fetch_local(
+                storage.blobs_store(), storage.blob_key(doc.sha256)
+            ) as blob:
                 body = await run_in_threadpool(
                     text_extract.extract_text, blob, doc.mime, doc.ext
                 )

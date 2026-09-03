@@ -54,7 +54,9 @@ async def process_archive(
             return
 
         try:
-            with storage.blobs_store().open_local(storage.blob_key(archive_sha256)) as arc_path:
+            async with storage.fetch_local(
+                storage.blobs_store(), storage.blob_key(archive_sha256)
+            ) as arc_path:
                 entries: list[tuple[str, Path]] = await run_in_threadpool(
                     lambda: list(iter_archive(arc_path, archive_kind, _limits()))
                 )

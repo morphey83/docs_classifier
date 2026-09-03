@@ -6,3 +6,4 @@ httpx==0.28.1
 aiosqlite==0.20.0
 ruff==0.8.4
 mypy==1.14.0
+moto[s3]==5.2.3        # in-process S3 fake for the S3 backend tests

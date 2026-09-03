@@ -346,8 +346,33 @@ Uniqueness: partial unique index `document (domain_id, sha256)` where
 re-uploading content that is sitting in the trash under a different name still
 ingests as a new document. (migration 0006)
 
-Blob storage: `DATA_DIR/blobs/<h[0:2]>/<h[2:4]>/<h>` (content-addressed,
-dedup). Derived files: `DATA_DIR/derived/<h>/…`.
+Blob storage goes through a pluggable backend (`app/storage/`, `ObjectStore`
+ABC — a flat `key -> bytes` store; content-addressing / dedup / the
+`<h[0:2]>/<h[2:4]>/<h>` layout live in `blobs.py` above it):
+
+| class | keys | backend | why |
+|---|---|---|---|
+| **blobs** (originals) | `ab/cd/<sha256>` | `LocalObjectStore` (`DATA_DIR/blobs`) or `S3ObjectStore` — `STORAGE_BLOBS` | durable; can live on a separate cheap-disk / S3 host |
+| **derived** (thumbnails, OCR sidecars) | `ab/cd/<sha>/thumb.webp` | always local (`DATA_DIR/derived`) | regenerable cache; wants low latency |
+| **artifacts** (export / set-archive zips) | `<id>.zip` | always local (`DATA_DIR/artifacts`) | regenerable cache |
+
+`ObjectStore.open_local(key)` (via the async `storage.fetch_local` wrapper)
+hands subprocess-bound consumers — OCR, thumbnails, text extraction, archive
+ingest, the zip writer, the bot's file sender — a real filesystem path: the
+stored file itself for the local backend, a temp copy (fetched in a worker
+thread) for a remote one. Downloads use `app/downloads.py::blob_download`:
+`FileResponse` locally, a presigned-URL redirect from S3 (`S3_PRESIGN`), or a
+streamed proxy as the fallback.
+
+**S3 backend.** `STORAGE_BLOBS=s3` + `S3_ENDPOINT` / `S3_BUCKET` /
+`S3_ACCESS_KEY` / `S3_SECRET_KEY` points blobs at any S3-compatible service.
+Local: `docker compose --profile s3 up -d` (MinIO + bucket setup). Remote
+later: recommended **Garage** (or single-node MinIO) reachable over
+**WireGuard** — only `S3_ENDPOINT` changes (set `S3_PUBLIC_ENDPOINT` too if
+browsers can't reach the private address and you want presigned redirects).
+Switch backends with `python -m app.storage.migrate --to s3 --commit` (copies
+every blob across; idempotent; `--delete-source` after verification), then
+flip `STORAGE_BLOBS`.
 
 ---
 

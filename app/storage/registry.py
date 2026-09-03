@@ -3,13 +3,13 @@
 Three classes, potentially on different backends (see ``docs/architecture.md``):
 
 * **blobs** — content-addressed originals; durable, must never be lost.
+  Backend chosen by ``STORAGE_BLOBS`` (``local`` | ``s3``).
 * **derived** — per-blob generated files (thumbnails, OCR sidecars); a cache.
-* **artifacts** — export / set-archive zips; a cache.
+  Always local.
+* **artifacts** — export / set-archive zips; a cache. Always local.
 
-Phase 1: all three are :class:`LocalObjectStore` trees under ``DATA_DIR``.
-A later phase reads ``settings.storage_*`` to point ``blobs`` at S3 while the
-regenerable caches stay local. Instances are cheap to build and ``settings``
-may change under tests, so nothing is cached here.
+Instances are cheap (the S3 client itself is cached in :mod:`app.storage.s3`),
+and ``settings`` may change under tests, so nothing is cached here.
 """
 
 from __future__ import annotations
@@ -19,17 +19,36 @@ from app.storage.base import ObjectStore
 from app.storage.local import LocalObjectStore
 
 
-def _build(kind: str) -> ObjectStore:
+def _local(kind: str) -> LocalObjectStore:
     return LocalObjectStore(settings.data_dir / kind)
 
 
+def _s3(prefix: str) -> ObjectStore:
+    from app.storage.s3 import S3ObjectStore
+
+    return S3ObjectStore(
+        bucket=settings.s3_bucket,
+        prefix="/".join(p for p in (settings.s3_prefix.strip("/"), prefix) if p),
+        endpoint=settings.s3_endpoint,
+        region=settings.s3_region,
+        access_key=settings.s3_access_key,
+        secret_key=settings.s3_secret_key,
+        addressing=settings.s3_addressing,
+        download_endpoint=settings.s3_download_endpoint,
+        presign=settings.s3_presign,
+        presign_ttl=settings.s3_presign_ttl,
+    )
+
+
 def blobs_store() -> ObjectStore:
-    return _build("blobs")
+    if (settings.storage_blobs or "local").lower() == "s3":
+        return _s3("blobs")
+    return _local("blobs")
 
 
 def derived_store() -> ObjectStore:
-    return _build("derived")
+    return _local("derived")
 
 
 def artifacts_store() -> ObjectStore:
-    return _build("artifacts")
+    return _local("artifacts")

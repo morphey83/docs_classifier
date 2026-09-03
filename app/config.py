@@ -68,6 +68,33 @@ class Settings(BaseSettings):
         parts = self.default_allowed_types.split(",")
         return {p.strip().lower().lstrip(".") for p in parts if p.strip()}
 
+    # --- object storage -------------------------------------------------
+    # Where content-addressed blobs (the originals) live:
+    #   "local" — DATA_DIR/blobs (default; no extra services)
+    #   "s3"    — any S3-compatible endpoint. Point it at a local MinIO now
+    #             (`docker compose --profile s3 up -d`); moving to a remote
+    #             host later is just a change of S3_ENDPOINT.
+    # Derived files (thumbnails, OCR sidecars) and artifact zips are
+    # regenerable caches and always stay on local disk.
+    storage_blobs: str = "local"  # local | s3
+    s3_endpoint: str | None = None  # e.g. http://localhost:9000 ; None -> real AWS
+    # The endpoint a browser can reach, used only to sign download redirects.
+    # Defaults to s3_endpoint. Set this when the app talks to S3 over a private
+    # address (a WireGuard peer, a compose network) that clients cannot resolve.
+    s3_public_endpoint: str | None = None
+    s3_region: str = "us-east-1"
+    s3_bucket: str = "docsclassifier"
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
+    s3_prefix: str = ""  # optional key prefix inside the bucket
+    s3_presign: bool = True  # redirect downloads straight to S3 (skip proxying)
+    s3_presign_ttl: int = 300  # seconds a download URL stays valid
+    s3_addressing: str = "path"  # "path" for MinIO / Garage, "virtual" for AWS
+
+    @property
+    def s3_download_endpoint(self) -> str | None:
+        return self.s3_public_endpoint or self.s3_endpoint
+
     # --- jobs / worker --------------------------------------------------
     # "queue": push to the SAQ (Postgres) queue for a worker to run.
     # "inline": run in a FastAPI BackgroundTask (dev without a worker; tests).

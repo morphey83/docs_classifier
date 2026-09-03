@@ -46,12 +46,49 @@ services:
     env_file: .env
     command: ["python", "-m", "app.bot"]
     volumes:
-      - docdata:/data          # reads blobs directly to send files
+      - docdata:/data          # derived cache + (local backend) blobs
     depends_on:
       db:
         condition: service_healthy
     profiles: ["bot"]           # `docker compose --profile bot up` once BOT_TOKEN is set
 
+  # --- optional local S3 (`docker compose --profile s3 up -d`) --------------
+  # Set in .env:  STORAGE_BLOBS=s3  S3_ENDPOINT=http://minio:9000
+  #               S3_ACCESS_KEY=…  S3_SECRET_KEY=…  S3_BUCKET=docsclassifier
+  # Moving to a remote host later = point S3_ENDPOINT there and drop this.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-docsclassifier}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-change-me-minio}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "127.0.0.1:9000:9000"   # S3 API
+      - "127.0.0.1:9001:9001"   # web console
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    profiles: ["s3"]
+
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: >
+      sh -c "
+      mc alias set local http://minio:9000 $${S3_ACCESS_KEY:-docsclassifier} $${S3_SECRET_KEY:-change-me-minio} &&
+      mc mb --ignore-existing local/$${S3_BUCKET:-docsclassifier} &&
+      mc anonymous set none local/$${S3_BUCKET:-docsclassifier} &&
+      echo 'bucket ready'"
+    profiles: ["s3"]
+
 volumes:
   pgdata:
   docdata:
+  miniodata:

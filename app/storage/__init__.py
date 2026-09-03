@@ -11,6 +11,7 @@ New code should reach for the backend directly —
 
 from __future__ import annotations
 
+from app.storage.aio import fetch_local
 from app.storage.base import ObjectNotFound, ObjectStore
 from app.storage.blobs import (
     BlobInfo,
@@ -47,6 +48,7 @@ __all__ = [
     "delete_blob",
     "derived_dir",
     "derived_store",
+    "fetch_local",
     "list_blob_hashes",
     "open_blob",
     "remove_derived",

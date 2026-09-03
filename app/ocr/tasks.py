@@ -36,7 +36,9 @@ async def ocr_document(
 
         lang = lang or settings.ocr_default_lang
         try:
-            with storage.blobs_store().open_local(storage.blob_key(doc.sha256)) as blob:
+            async with storage.fetch_local(
+                storage.blobs_store(), storage.blob_key(doc.sha256)
+            ) as blob:
                 result = await run_in_threadpool(engine.run_ocr, blob, doc.mime, lang)
         except Exception:
             _LOGGER.exception("OCR failed for document %s", doc_id)

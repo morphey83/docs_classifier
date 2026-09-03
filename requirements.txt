@@ -22,3 +22,4 @@ aiogram==3.31.0
 jinja2==3.1.5
 itsdangerous==2.2.0    # signed CSRF + email-verification tokens for the web UI
 aiosmtplib==3.0.2      # outbound email (account verification); only imported when SMTP_HOST is set
+boto3==1.43.87         # S3-compatible blob storage (STORAGE_BLOBS=s3); only imported when enabled

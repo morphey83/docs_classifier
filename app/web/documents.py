@@ -358,7 +358,7 @@ async def document_download(
 ) -> Response:
     doc, view = await load_document(db, user, document_id)
     require_cap(view, Cap.download)
-    return blob_download(doc)
+    return await blob_download(doc)
 
 
 @router.get("/documents/{document_id}/thumb")

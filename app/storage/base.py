@@ -68,6 +68,12 @@ class ObjectStore(abc.ABC):
             while block := src.read(chunk):
                 yield block
 
+    def presigned_url(self, key: str, *, filename: str | None = None) -> str | None:
+        """A time-limited direct-download URL for ``key``, if the backend can
+        issue one. ``None`` (the default) means the caller must serve the bytes
+        itself via :meth:`open` / :meth:`stream`."""
+        return None
+
     @contextmanager
     def open_local(self, key: str) -> Iterator[Path]:
         """Yield a real local path to ``key``'s content.

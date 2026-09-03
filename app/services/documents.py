@@ -105,7 +105,7 @@ async def store_and_probe(
 ) -> tuple[storage.BlobInfo, metadata.FileMeta]:
     """Persist an uploaded stream to the blob store and read its file metadata."""
     blob = await run_in_threadpool(storage.store_stream, stream)
-    with storage.blobs_store().open_local(blob.storage_key) as path:
+    async with storage.fetch_local(storage.blobs_store(), blob.storage_key) as path:
         meta = await run_in_threadpool(metadata.extract, path, original_name)
     return blob, meta
 
