@@ -221,7 +221,7 @@ async def document_tags(
 ) -> Response:
     doc, view = await load_document(db, user, document_id)
     require_cap(view, Cap.write)
-    names = [p.strip() for p in tags.split(",") if p.strip()]
+    names = [p.strip() for p in tags.replace("\n", ",").split(",") if p.strip()]
     tag_ids = await tags_svc.resolve_names(db, names, actor=user)
     await tags_svc.set_document_tags(db, doc, tag_ids, actor=user)
     return await _doc_fragment(request, db, user, document_id, toast="Теги сохранены")

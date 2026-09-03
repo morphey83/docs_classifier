@@ -156,7 +156,7 @@ async def inbox_done(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "нет прав на этот документ")
     if title.strip():
         await docs_svc.update_document(db, doc, title=title)
-    names = [p.strip() for p in tags.split(",") if p.strip()]
+    names = [p.strip() for p in tags.replace("\n", ",").split(",") if p.strip()]
     tag_ids = await tags_svc.resolve_names(db, names, actor=user)
     await tags_svc.set_document_tags(db, doc, tag_ids, actor=user)
     await docs_svc.complete_document(db, doc)

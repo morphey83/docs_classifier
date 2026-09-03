@@ -43,8 +43,9 @@
         <h3 class="card-title">Теги</h3>
         {% if can_write %}
         <form hx-post="/documents/{{ doc.id }}/tags" hx-target="#doc">
-          <input class="form-control" name="tags" id="doc-tagfield" autocomplete="off"
-                 value="{{ tags|join(', ') }}" placeholder="через запятую; пустое поле снимет все">
+          <textarea class="form-control dc-autogrow" name="tags" id="doc-tagfield" rows="2"
+                    autocomplete="off" style="resize:none; overflow:hidden"
+                    placeholder="через запятую; пустое поле снимет все">{{ tags|join(', ') }}</textarea>
           {% if freq %}
           <div class="freq-tags mt-2">
             <span class="freq-label">частые:</span>
@@ -56,10 +57,10 @@
           <button type="submit" class="btn btn-primary mt-2">Сохранить теги</button>
         </form>
         {% else %}
-        <p class="m-0">
-          {% for name in tags %}<span class="badge bg-secondary-lt me-1">{{ name }}</span>
+        <div class="d-flex flex-wrap gap-1">
+          {% for name in tags %}<span class="badge bg-secondary-lt">{{ name }}</span>
           {% else %}<span class="text-secondary">нет тегов</span>{% endfor %}
-        </p>
+        </div>
         {% endif %}
       </div>
     </div>
@@ -245,14 +246,21 @@
 </div>
 {% endif %}
 
-{% if can_write and freq %}
+{% if can_write %}
 <script>
 (function () {
   var field = document.getElementById('doc-tagfield');
   if (!field) return;
+  function grow() {
+    if (field.clientWidth < 60) return;   // modal still fading in — skip, retry later
+    field.style.height = 'auto';
+    field.style.height = Math.min(field.scrollHeight + 2, 400) + 'px';
+  }
+  field.addEventListener('input', grow);
+
   var chips = Array.prototype.slice.call(document.querySelectorAll('#doc .freq-tags .freq'));
   function cur() {
-    return field.value.split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    return field.value.split(/[,\n]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
   }
   function sync() {
     var have = cur();
@@ -264,12 +272,13 @@
         var v = field.value.trim().replace(/,\s*$/, '');
         field.value = (v ? v + ', ' : '') + c.dataset.tag;
       }
-      sync();
-      field.focus();
+      sync(); grow(); field.focus();
     });
   });
   field.addEventListener('input', sync);
   sync();
+  grow();
+  setTimeout(grow, 300);   // once the detail modal has finished opening
 })();
 </script>
 {% endif %}

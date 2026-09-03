@@ -137,7 +137,8 @@
 
   /* result-card badges that drive the filter */
   .dc-fbtn { border:0; cursor:pointer; font:inherit; font-size:.6875rem; font-weight:500;
-    line-height:1.4; transition:filter .1s ease, box-shadow .1s ease; }
+    line-height:1.4; white-space:normal; text-align:left; max-width:100%;
+    transition:filter .1s ease, box-shadow .1s ease; }
   .dc-fbtn:hover { filter:brightness(.93); }
   .dc-fbtn:focus-visible { outline:0; box-shadow:0 0 0 .15rem rgba(var(--tblr-primary-rgb, 4 111 209), .4); }
 
@@ -220,7 +221,7 @@
           </div>
           <div class="dc-tags" id="dc-tags">
             <input class="dc-tags-entry" id="dc-tags-entry" type="text" autocomplete="off"
-                   placeholder="договор, 2024" aria-label="Теги">
+                   placeholder="море, 2026" aria-label="Теги">
             <div class="dc-suggest" id="tag-suggest" hidden role="listbox"></div>
           </div>
           <input type="hidden" name="tags" id="dc-tags-value" value="{{ f.tags }}">
@@ -385,8 +386,10 @@
       if (cur) { if (cur.exc) { cur.exc = false; renderChips(); commit(); } }
       else { chips.push({ name: String(name), exc: false }); renderChips(); commit(); }
     };
+    var basePlaceholder = entry.getAttribute('placeholder') || '';
     function renderChips() {
       Array.prototype.slice.call(box.querySelectorAll('.chip')).forEach(function (n) { n.remove(); });
+      entry.placeholder = chips.length ? '' : basePlaceholder;
       chips.forEach(function (c, i) {
         var chip = document.createElement('span');
         chip.className = 'chip' + (c.exc ? ' exc' : '');

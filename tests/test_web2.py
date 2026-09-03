@@ -344,6 +344,20 @@ async def test_inbox_is_derived_from_tags_not_a_flag(alice, web_domain):
     assert (await alice.get("/api/documents/" + doc_id)).json()["status"] == "inbox"
 
 
+async def test_doc_tag_editor_accepts_newlines_from_the_textarea(alice, web_domain):
+    await _upload(alice, web_domain, "nl.txt")
+    doc_id = await _doc_id(alice, web_domain)
+    dp = (await alice.get(f"/documents/{doc_id}")).text
+    # the tag field is a growing textarea now — a pasted list may carry newlines
+    await alice.post(
+        f"/documents/{doc_id}/tags",
+        data={"tags": "договор,\nсрочно\nважно", "csrf_token": web_csrf(dp)},
+        headers={"HX-Request": "true"},
+    )
+    got = {t["name"] for t in (await alice.get(f"/api/documents/{doc_id}")).json()["tags"]}
+    assert got == {"договор", "срочно", "важно"}
+
+
 async def test_inbox_defer_drops_out_of_the_preset(alice, web_domain):
     await _upload(alice, web_domain, "d1.txt")
     await _upload(alice, web_domain, "d2.txt")
