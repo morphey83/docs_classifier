@@ -80,7 +80,10 @@ async def _card_ctx(db: AsyncSession, user, doc: Document | None, raw_domain: st
     freq: list[str] = []
     tags: list[str] = []
     if doc is not None:
-        freq = [n for n, _ in await tags_svc.suggest_tags(db, [doc.domain_id])]
+        # frequent tags are drawn from every domain the user can see, not just
+        # this document's domain — one shared tag pool (§7 rev 2)
+        seen_domains = [d.id for d, _ in await domains_svc.list_memberships(db, user)]
+        freq = [n for n, _ in await tags_svc.suggest_tags(db, seen_domains)]
         tags = (await _tags_by_doc(db, [doc.id])).get(doc.id, [])
     return {
         "doc": doc,

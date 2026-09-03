@@ -212,6 +212,58 @@ async def test_set_share_link_and_revoke(alice, web_domain):
     assert rv.status_code == 303
 
 
+async def test_sets_list_table_and_name_filter(alice, web_domain):
+    page = (await alice.get("/sets")).text
+    for name in ("Договоры", "Отчёты"):
+        await alice.post("/sets", data={"name": name, "csrf_token": web_csrf(page)})
+
+    listing = (await alice.get("/sets")).text
+    # table columns present
+    assert "Явные док-ты" in listing and "Публичных" in listing and "Доступно" in listing
+    assert "Договоры" in listing and "Отчёты" in listing
+
+    filtered = (await alice.get("/sets?q=Догов", headers={"HX-Request": "true"})).text
+    assert "Договоры" in filtered and "Отчёты" not in filtered
+
+
+async def test_set_detail_shows_filter_counts_and_explicit_docs(alice, web_domain):
+    await _upload(alice, web_domain, "fc1.txt", b"needle one")
+    await _upload(alice, web_domain, "fc2.txt", b"hay two")
+    doc_id = await _doc_id(alice, web_domain)
+    await alice.post(f"/api/documents/{doc_id}/visibility?is_public=true")
+
+    page = (await alice.get("/sets")).text
+    set_id = (
+        await alice.post("/sets", data={"name": "Счёт", "csrf_token": web_csrf(page)})
+    ).headers["location"].rsplit("/", 1)[-1]
+
+    detail = (await alice.get(f"/sets/{set_id}")).text
+    # description is a large free-text field now
+    assert 'name="description"' in detail and "<textarea" in detail
+
+    # attach the visible doc explicitly + save a filter
+    dp = (await alice.get(f"/documents/{doc_id}")).text
+    await alice.post(
+        f"/documents/{doc_id}/add-to-set",
+        data={"set_id": set_id, "csrf_token": web_csrf(dp)},
+    )
+    await alice.post(
+        "/search/bulk",
+        data={
+            "csrf_token": web_csrf(page),
+            "q": "needle",
+            "action": "save_filter",
+            "set_id": set_id,
+        },
+        headers={"HX-Request": "true"},
+    )
+
+    detail2 = (await alice.get(f"/sets/{set_id}")).text
+    assert "Явно привязанные документы" in detail2
+    assert "fc2" in detail2  # the explicitly-attached doc (newest upload)
+    assert "Всего доступно" in detail2  # per-filter count column
+
+
 # --- inbox (table + modal tagging) --------------------------------
 async def test_inbox_preset_and_modal_tagging(alice, web_domain):
     await _upload(alice, web_domain, "i1.txt")

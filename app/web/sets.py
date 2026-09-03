@@ -6,12 +6,11 @@ import uuid
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import FileResponse, RedirectResponse, Response
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import storage
 from app.db import get_session
-from app.models import Artifact, ArtifactStatus, DocumentSetItem, User
+from app.models import Artifact, ArtifactStatus, User
 from app.services import docsets as svc
 from app.services.search import describe_filters
 from app.util.time import as_aware, utcnow
@@ -22,7 +21,9 @@ from app.web.templating import render
 
 router = APIRouter()
 
-_PREVIEW = 30
+_SETS_PER_PAGE = 15
+_FILTERS_PER_PAGE = 10
+_DOCS_PER_PAGE = 15
 
 
 async def _load(db: AsyncSession, user: User, set_id: uuid.UUID):
@@ -32,22 +33,50 @@ async def _load(db: AsyncSession, user: User, set_id: uuid.UUID):
     return s
 
 
+def _int(raw: str | None, default: int = 1) -> int:
+    try:
+        return max(1, int(raw or default))
+    except (TypeError, ValueError):
+        return default
+
+
 @router.get("/sets")
 async def sets_list(
     request: Request,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
-    sets = await svc.list_sets(db, user.id)
-    counts = {}
-    for s in sets:
-        counts[s.id] = int(
-            await db.scalar(
-                select(func.count()).where(DocumentSetItem.set_id == s.id)
-            )
-            or 0
+    q = (request.query_params.get("q") or "").strip()
+    all_sets = await svc.list_sets(db, user.id, q=q)
+    total = len(all_sets)
+    pages = max(1, -(-total // _SETS_PER_PAGE))
+    page = min(_int(request.query_params.get("page")), pages)
+    window = all_sets[(page - 1) * _SETS_PER_PAGE : page * _SETS_PER_PAGE]
+
+    rows = []
+    for s in window:
+        public, accessible = await svc.set_doc_counts(db, s)
+        rows.append(
+            {
+                "set": s,
+                "n_filters": await svc.count_filters(db, s.id),
+                "n_explicit": await svc.count_items(db, s.id),
+                "public": public,
+                "accessible": accessible,
+            }
         )
-    return render(request, "sets.html", {"sets": sets, "item_counts": counts})
+    return render(
+        request,
+        "sets.html",
+        {
+            "partial": "_sets_table.html",
+            "rows": rows,
+            "q": q,
+            "page": page,
+            "pages": pages,
+            "total": total,
+        },
+    )
 
 
 @router.post("/sets")
@@ -64,13 +93,24 @@ async def sets_create(
 
 
 async def _detail_ctx(request: Request, db: AsyncSession, user: User, s, *, export_id=None) -> dict:
-    filters = await svc.list_filters(db, s.id)
-    resolved = await svc.resolve_set(db, s, view="full")
-    explicit_ids = set(
-        await db.scalars(
-            select(DocumentSetItem.document_id).where(DocumentSetItem.set_id == s.id)
+    all_filters = await svc.list_filters(db, s.id)
+    fpages = max(1, -(-len(all_filters) // _FILTERS_PER_PAGE))
+    fpage = min(_int(request.query_params.get("fpage")), fpages)
+    filter_rows = []
+    for fr in all_filters[(fpage - 1) * _FILTERS_PER_PAGE : fpage * _FILTERS_PER_PAGE]:
+        public, total = await svc.filter_doc_counts(db, s, fr)
+        filter_rows.append(
+            {"f": fr, "link": _filter_link(fr), "public": public, "total": total}
         )
+
+    item_total = await svc.count_items(db, s.id)
+    dpages = max(1, -(-item_total // _DOCS_PER_PAGE))
+    dpage = min(_int(request.query_params.get("dpage")), dpages)
+    items = await svc.list_items(
+        db, s.id, offset=(dpage - 1) * _DOCS_PER_PAGE, limit=_DOCS_PER_PAGE
     )
+
+    resolved = await svc.resolve_set(db, s, view="full")
     links = [
         (link, absolute_url(f"/{'g' if link.mode == 'gallery' else 'd'}/{link.token}"))
         for link in await svc.links_of_set(db, s.id)
@@ -86,11 +126,16 @@ async def _detail_ctx(request: Request, db: AsyncSession, user: User, s, *, expo
     return {
         "partial": "_set_body.html",
         "set": s,
-        "filters": [(f, _filter_link(f)) for f in filters],
-        "preview": resolved[:_PREVIEW],
+        "filter_rows": filter_rows,
+        "fpage": fpage,
+        "fpages": fpages,
+        "filter_total": len(all_filters),
+        "items": items,
+        "dpage": dpage,
+        "dpages": dpages,
+        "item_total": item_total,
         "resolved_count": len(resolved),
         "public_count": sum(1 for d in resolved if d.is_public),
-        "explicit_ids": explicit_ids,
         "links": links,
         "export": export,
         "building": request.query_params.get("building"),

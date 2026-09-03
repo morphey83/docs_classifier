@@ -3,17 +3,18 @@
 
 <h3 class="mb-3">{{ set.name }}</h3>
 
-<form hx-post="/sets/{{ set.id }}" hx-target="#setbody" class="row g-2 align-items-end mb-3">
+<form hx-post="/sets/{{ set.id }}" hx-target="#setbody" hx-swap="outerHTML" class="mb-3">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <div class="col-sm">
+  <div class="mb-2">
     <label class="form-label">Название</label>
     <input class="form-control" name="name" value="{{ set.name }}" required maxlength="200">
   </div>
-  <div class="col-sm">
+  <div class="mb-2">
     <label class="form-label">Описание</label>
-    <input class="form-control" name="description" value="{{ set.description or '' }}" maxlength="2000">
+    <textarea class="form-control" name="description" rows="4"
+              placeholder="Свободный текст">{{ set.description or '' }}</textarea>
   </div>
-  <div class="col-auto"><button class="btn">Сохранить</button></div>
+  <button class="btn">Сохранить</button>
 </form>
 
 {% if building %}
@@ -43,7 +44,7 @@
         <a href="/sets/{{ set.id }}/archive" class="btn btn-sm btn-outline-primary">
           {{ ic.icon('download') }} Скачать
         </a>
-        <form hx-post="/sets/{{ set.id }}/links" hx-target="#setbody" class="btn-list">
+        <form hx-post="/sets/{{ set.id }}/links" hx-target="#setbody" hx-swap="outerHTML" class="btn-list">
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
           <button name="kind" value="one_time" class="btn btn-sm btn-outline-secondary">{{ ic.icon('link') }} разовая ссылка</button>
           <button name="kind" value="permanent" class="btn btn-sm btn-outline-secondary">{{ ic.icon('link') }} постоянная</button>
@@ -58,7 +59,7 @@
       <div class="text-secondary small mb-2">
         Все документы ваших доменов и все доступные вам из чужих. Только для вас.
       </div>
-      <form hx-post="/sets/{{ set.id }}/export" hx-target="#setbody">
+      <form hx-post="/sets/{{ set.id }}/export" hx-target="#setbody" hx-swap="outerHTML">
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
         <button class="btn btn-sm btn-outline-secondary">{{ ic.icon('download') }} Скачать всё</button>
       </form>
@@ -78,7 +79,8 @@
         <td>{{ 'галерея' if link.mode == 'gallery' else ('одноразовая' if link.max_downloads == 1 else 'постоянная') }}</td>
         <td>{{ link.download_count }}{% if link.max_downloads %}/{{ link.max_downloads }}{% endif %}</td>
         <td>
-          <form hx-post="/links/{{ link.id }}/revoke" hx-target="#setbody">
+          <form hx-post="/links/{{ link.id }}/revoke" hx-target="#setbody" hx-swap="outerHTML"
+                hx-confirm="Отозвать эту ссылку? Действующие копии перестанут работать.">
             <input type="hidden" name="csrf_token" value="{{ csrf }}">
             <button class="btn btn-sm btn-ghost-danger">отозвать</button>
           </form>
@@ -91,50 +93,98 @@
 {% endif %}
 
 <div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Фильтры</h3></div>
-  <div class="list-group list-group-flush">
-    {% for f, link in filters %}
-    <div class="list-group-item d-flex align-items-center">
-      <div class="flex-fill">{{ f.description or 'все документы' }}</div>
-      <a href="{{ link }}" class="btn btn-sm btn-ghost-secondary me-2">открыть в поиске</a>
-      <form hx-post="/sets/{{ set.id }}/filters/{{ f.id }}/remove" hx-target="#setbody">
-        <input type="hidden" name="csrf_token" value="{{ csrf }}">
-        <button class="btn btn-sm btn-ghost-danger">убрать</button>
-      </form>
-    </div>
-    {% else %}
-    <div class="list-group-item text-secondary">
-      Фильтров нет. Сохраните поисковый запрос в набор со страницы «Поиск».
-    </div>
-    {% endfor %}
+  <div class="card-header">
+    <h3 class="card-title">Фильтры</h3>
+    {% if filter_total %}<span class="badge bg-secondary-lt ms-2">{{ filter_total }}</span>{% endif %}
   </div>
+  <div class="table-responsive"><table class="table table-vcenter card-table">
+    <thead><tr>
+      <th>Описание</th>
+      <th class="text-center">Публичных</th>
+      <th class="text-center">Всего доступно</th>
+      <th class="w-1"></th>
+    </tr></thead>
+    <tbody>
+    {% for r in filter_rows %}
+      <tr>
+        <td>{{ r.f.description or 'все документы' }}</td>
+        <td class="text-center">{{ r.public }}</td>
+        <td class="text-center">{{ r.total }}</td>
+        <td class="text-nowrap text-end">
+          <a href="{{ r.link }}" class="btn btn-sm btn-ghost-secondary">открыть</a>
+          <form class="d-inline" hx-post="/sets/{{ set.id }}/filters/{{ r.f.id }}/remove"
+                hx-target="#setbody" hx-swap="outerHTML"
+                hx-confirm="Убрать этот фильтр из набора?">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <button class="btn btn-sm btn-ghost-danger">убрать</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="text-secondary">
+        Фильтров нет. Сохраните поисковый запрос в набор со страницы «Поиск».
+      </td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% if fpages > 1 %}
+  <div class="card-footer">
+    <ul class="pagination pagination-sm m-0">
+      {% for p in range(1, fpages + 1) %}
+      <li class="page-item {{ 'active' if p == fpage }}">
+        <a class="page-link" hx-get="/sets/{{ set.id }}?fpage={{ p }}&dpage={{ dpage }}"
+           hx-target="#setbody" hx-swap="outerHTML">{{ p }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 </div>
 
 <div class="card">
   <div class="card-header">
-    <h3 class="card-title">Документы</h3>
-    <span class="card-subtitle">резолв: {{ resolved_count }}{% if resolved_count > preview|length %} (первые {{ preview|length }}){% endif %}</span>
+    <h3 class="card-title">Явно привязанные документы</h3>
+    {% if item_total %}<span class="badge bg-secondary-lt ms-2">{{ item_total }}</span>{% endif %}
   </div>
-  <div class="list-group list-group-flush">
-    {% for doc in preview %}
-    <div class="list-group-item d-flex align-items-center">
-      <div class="flex-fill">
-        <a data-detail href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a>
-        <span class="text-secondary">· {{ doc.size_bytes|humansize }}{% if doc.doc_date %} · {{ doc.doc_date|shortdate }}{% endif %}</span>
-        {% if doc.is_public %}<span class="badge bg-green-lt ms-1">публичный</span>{% endif %}
-        {% if doc.id in explicit_ids %}<span class="badge bg-blue-lt ms-1">вручную</span>{% endif %}
-      </div>
-      {% if doc.id in explicit_ids %}
-      <form hx-post="/sets/{{ set.id }}/items/{{ doc.id }}/remove" hx-target="#setbody">
-        <input type="hidden" name="csrf_token" value="{{ csrf }}">
-        <button class="btn btn-sm btn-ghost-danger">убрать</button>
-      </form>
-      {% endif %}
-    </div>
+  <div class="table-responsive"><table class="table table-vcenter card-table">
+    <thead><tr>
+      <th>Название</th><th>Размер</th><th>Дата</th>
+      <th class="text-center">Публичный</th><th class="w-1"></th>
+    </tr></thead>
+    <tbody>
+    {% for doc in items %}
+      <tr>
+        <td><a data-detail href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a></td>
+        <td class="text-secondary">{{ doc.size_bytes|humansize }}</td>
+        <td class="text-secondary">{{ doc.doc_date|shortdate }}</td>
+        <td class="text-center">{% if doc.is_public %}<span class="text-green">{{ ic.icon('check') }}</span>{% endif %}</td>
+        <td>
+          <form hx-post="/sets/{{ set.id }}/items/{{ doc.id }}/remove"
+                hx-target="#setbody" hx-swap="outerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <button class="btn btn-sm btn-ghost-danger">убрать</button>
+          </form>
+        </td>
+      </tr>
     {% else %}
-    <div class="list-group-item text-secondary">Набор сейчас пуст.</div>
+      <tr><td colspan="5" class="text-secondary">
+        Вручную документы не добавляли. Отметьте их в поиске → «В набор».
+      </td></tr>
     {% endfor %}
+    </tbody>
+  </table></div>
+  {% if dpages > 1 %}
+  <div class="card-footer">
+    <ul class="pagination pagination-sm m-0">
+      {% for p in range(1, dpages + 1) %}
+      <li class="page-item {{ 'active' if p == dpage }}">
+        <a class="page-link" hx-get="/sets/{{ set.id }}?fpage={{ fpage }}&dpage={{ p }}"
+           hx-target="#setbody" hx-swap="outerHTML">{{ p }}</a>
+      </li>
+      {% endfor %}
+    </ul>
   </div>
+  {% endif %}
   <div class="card-footer">
     <form hx-post="/sets/{{ set.id }}/delete" hx-confirm="Удалить набор?">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">

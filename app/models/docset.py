@@ -6,7 +6,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, JSONVariant, TimestampMixin, uuid_pk
@@ -20,7 +20,7 @@ class DocumentSet(Base, TimestampMixin):
         ForeignKey("user.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(200))
-    description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class DocumentSetFilter(Base):

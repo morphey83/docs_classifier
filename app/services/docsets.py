@@ -46,13 +46,17 @@ class SetError(ValueError):
 
 
 # --- CRUD ------------------------------------------------------------------
-async def list_sets(db: AsyncSession, owner_id: uuid.UUID) -> list[DocumentSet]:
-    rows = await db.scalars(
+async def list_sets(
+    db: AsyncSession, owner_id: uuid.UUID, *, q: str | None = None
+) -> list[DocumentSet]:
+    stmt = (
         select(DocumentSet)
         .where(DocumentSet.owner_id == owner_id)
         .order_by(DocumentSet.updated_at.desc())
     )
-    return list(rows)
+    if q and q.strip():
+        stmt = stmt.where(DocumentSet.name.ilike(f"%{q.strip()}%"))
+    return list(await db.scalars(stmt))
 
 
 async def get_owned_set(
@@ -272,6 +276,68 @@ async def resolve_set(
     if view == "share":
         result = [d for d in result if d.is_public]
     return result
+
+
+async def filter_doc_counts(
+    db: AsyncSession, s: DocumentSet, fr: DocumentSetFilter
+) -> tuple[int, int]:
+    """``(public, total)`` documents a single stored filter currently resolves
+    to, within the owner's downloadable domains."""
+    dl_domains = set(await _download_domain_ids(db, s.owner_id))
+    sf = SearchFilters.from_dict(fr.filter)
+    scope = [d for d in (sf.domain_ids or dl_domains) if d in dl_domains]
+    if not scope:
+        return (0, 0)
+    sf.page, sf.page_size = 1, settings.set_max_docs + 1
+    docs, _total, _facets = await search_documents(db, scope, sf)
+    docs = [d for d in docs if d.deleted_at is None]
+    return (sum(1 for d in docs if d.is_public), len(docs))
+
+
+async def set_doc_counts(db: AsyncSession, s: DocumentSet) -> tuple[int, int]:
+    """``(public, accessible)`` — the sizes of the set's ``share`` and ``full``
+    resolutions. One pass over the full resolution."""
+    docs = await resolve_set(db, s, view="full")
+    return (sum(1 for d in docs if d.is_public), len(docs))
+
+
+async def count_filters(db: AsyncSession, set_id: uuid.UUID) -> int:
+    return int(
+        await db.scalar(
+            select(func.count()).where(DocumentSetFilter.set_id == set_id)
+        )
+        or 0
+    )
+
+
+async def count_items(db: AsyncSession, set_id: uuid.UUID) -> int:
+    """Live explicitly-added documents (deleted ones don't count)."""
+    return int(
+        await db.scalar(
+            select(func.count())
+            .select_from(DocumentSetItem)
+            .join(Document, Document.id == DocumentSetItem.document_id)
+            .where(DocumentSetItem.set_id == set_id, Document.deleted_at.is_(None))
+        )
+        or 0
+    )
+
+
+async def list_items(
+    db: AsyncSession, set_id: uuid.UUID, *, offset: int = 0, limit: int | None = None
+) -> list[Document]:
+    """Explicitly-added documents (not filter matches), in their set order,
+    excluding any that are now deleted."""
+    stmt = (
+        select(Document)
+        .join(DocumentSetItem, DocumentSetItem.document_id == Document.id)
+        .where(DocumentSetItem.set_id == set_id, Document.deleted_at.is_(None))
+        .order_by(DocumentSetItem.position, DocumentSetItem.added_at)
+        .offset(offset)
+    )
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    return list(await db.scalars(stmt))
 
 
 async def _tags_by_doc(

@@ -4,40 +4,28 @@
 {% block page_title %}Мои наборы{% endblock %}
 {% block content %}
 
-<div class="row row-cards mb-3">
-  {% for s in sets %}
-  <div class="col-sm-6 col-lg-4">
-    <div class="card card-sm">
-      <div class="card-body">
-        <a data-detail href="/sets/{{ s.id }}" class="text-reset fw-bold d-block">{{ s.name }}</a>
-        <div class="text-secondary small">
-          {{ item_counts.get(s.id, 0) }} явно · обновлён {{ s.updated_at|shortdate }}
-        </div>
+<form method="post" action="/sets" class="card mb-3">
+  <div class="card-body row g-2 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="col">
+      <label class="form-label">Новый набор</label>
+      <div class="input-icon">
+        <span class="input-icon-addon">{{ ic.icon('clipboard') }}</span>
+        <input class="form-control" name="name" placeholder="Название набора" required maxlength="200">
       </div>
     </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary">Создать</button></div>
   </div>
-  {% else %}
-  <div class="col-12"><div class="card"><div class="card-body text-secondary">
-    Наборов пока нет. Создайте набор ниже, затем добавьте в него документы или сохранённые фильтры из поиска.
-  </div></div></div>
-  {% endfor %}
+</form>
+
+<div class="mb-3">
+  <div class="input-icon">
+    <span class="input-icon-addon">{{ ic.icon('search') }}</span>
+    <input class="form-control" name="q" value="{{ q }}" placeholder="фильтр по названию" autocomplete="off"
+           hx-get="/sets" hx-target="#sets-table" hx-swap="outerHTML" hx-push-url="true"
+           hx-trigger="input changed delay:300ms, search">
+  </div>
 </div>
 
-<div class="row">
-  <div class="col-12 col-lg-6">
-    <form method="post" action="/sets" class="card">
-      <div class="card-body">
-        <h3 class="card-title">Новый набор</h3>
-        <input type="hidden" name="csrf_token" value="{{ csrf }}">
-        <div class="mb-3">
-          <div class="input-icon">
-            <span class="input-icon-addon">{{ ic.icon('clipboard') }}</span>
-            <input class="form-control" name="name" placeholder="Название набора" required maxlength="200">
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary">Создать</button>
-      </div>
-    </form>
-  </div>
-</div>
+{% include "_sets_table.html" %}
 {% endblock %}
