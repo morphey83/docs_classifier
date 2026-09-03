@@ -1,4 +1,5 @@
 {% import "_icons.html" as ic %}
+{% import "_macros.html" as m %}
 {% set d = view.domain %}
 {% set can_write = view.has('write') %}
 {% set can_process = view.has('process') %}
@@ -43,17 +44,7 @@
         <h3 class="card-title">Теги</h3>
         {% if can_write %}
         <form hx-post="/documents/{{ doc.id }}/tags" hx-target="#doc">
-          <textarea class="form-control dc-autogrow" name="tags" id="doc-tagfield" rows="2"
-                    autocomplete="off" style="resize:none; overflow:hidden"
-                    placeholder="через запятую; пустое поле снимет все">{{ tags|join(', ') }}</textarea>
-          {% if freq %}
-          <div class="freq-tags mt-2">
-            <span class="freq-label">частые:</span>
-            {% for name in freq %}
-            <button type="button" class="freq" data-tag="{{ name }}">{{ name }}</button>
-            {% endfor %}
-          </div>
-          {% endif %}
+          {{ m.tagfield('tags', tags|join(', '), freq, 'тег и Enter · пустое поле снимет все') }}
           <button type="submit" class="btn btn-primary mt-2">Сохранить теги</button>
         </form>
         {% else %}
@@ -246,39 +237,3 @@
 </div>
 {% endif %}
 
-{% if can_write %}
-<script>
-(function () {
-  var field = document.getElementById('doc-tagfield');
-  if (!field) return;
-  function grow() {
-    if (field.clientWidth < 60) return;   // modal still fading in — skip, retry later
-    field.style.height = 'auto';
-    field.style.height = Math.min(field.scrollHeight + 2, 400) + 'px';
-  }
-  field.addEventListener('input', grow);
-
-  var chips = Array.prototype.slice.call(document.querySelectorAll('#doc .freq-tags .freq'));
-  function cur() {
-    return field.value.split(/[,\n]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
-  }
-  function sync() {
-    var have = cur();
-    chips.forEach(function (c) { c.disabled = have.indexOf(c.dataset.tag.toLowerCase()) !== -1; });
-  }
-  chips.forEach(function (c) {
-    c.addEventListener('click', function () {
-      if (cur().indexOf(c.dataset.tag.toLowerCase()) === -1) {
-        var v = field.value.trim().replace(/,\s*$/, '');
-        field.value = (v ? v + ', ' : '') + c.dataset.tag;
-      }
-      sync(); grow(); field.focus();
-    });
-  });
-  field.addEventListener('input', sync);
-  sync();
-  grow();
-  setTimeout(grow, 300);   // once the detail modal has finished opening
-})();
-</script>
-{% endif %}

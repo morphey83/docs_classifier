@@ -288,8 +288,14 @@
       <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
     </div>
     <div class="modal-body">
-      <input class="form-control" id="bulktag-input" placeholder="договор, 2024" autocomplete="off">
-      <div class="form-hint mt-1">через запятую. уже проставленные теги не трогаем.</div>
+      <div class="dc-tagfield" data-tagfield id="bulktag-field">
+        <input type="hidden" value="">
+        <div class="dc-tagfield-box">
+          <input type="text" class="dc-tagfield-entry" autocomplete="off" placeholder="тег и Enter">
+          <div class="dc-tagfield-suggest" hidden role="listbox"></div>
+        </div>
+      </div>
+      <div class="form-hint mt-1">уже проставленные теги не трогаем.</div>
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-primary" id="bulktag-apply">Применить</button>

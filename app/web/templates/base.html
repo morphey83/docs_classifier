@@ -73,6 +73,37 @@
     .freq-tags .freq:disabled { cursor:default; opacity:1;
       background:var(--tblr-bg-surface-secondary); border:1px dashed var(--tblr-border-color);
       color:var(--tblr-secondary); text-decoration:line-through; }
+
+    /* shared tag input: chips + one-line entry, Enter commits a chip
+       (used by the document card, the inbox card and the bulk-tag modal) */
+    .dc-tagfield-box { display:flex; flex-wrap:wrap; align-items:center; gap:4px;
+      min-height:38px; padding:5px 7px; position:relative; cursor:text;
+      border:1px solid var(--tblr-border-color); border-radius:var(--tblr-border-radius);
+      background:var(--tblr-bg-surface); }
+    .dc-tagfield-box.focus { border-color:var(--tblr-primary);
+      box-shadow:0 0 0 .25rem rgba(var(--tblr-primary-rgb, 4 111 209), .25); }
+    .dc-tagfield-box .chip { display:inline-flex; align-items:center; border-radius:4px;
+      line-height:1; font-size:.8rem; background:var(--tblr-primary-lt); color:var(--tblr-primary); }
+    .dc-tagfield-box .chip .lbl { padding:4px 3px 4px 7px; }
+    .dc-tagfield-box .chip .x { border:0; background:transparent; color:inherit; line-height:1;
+      opacity:.55; cursor:pointer; padding:0 6px 0 3px; font-size:.95rem; }
+    .dc-tagfield-box .chip .x:hover { opacity:1; }
+    .dc-tagfield-entry { border:0; outline:0; background:transparent; font:inherit; flex:1;
+      min-width:90px; padding:4px 2px; color:var(--tblr-body-color); }
+    .dc-tagfield-entry::placeholder { color:var(--tblr-secondary); }
+    .dc-tagfield-suggest { position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:1085;
+      background:var(--tblr-bg-surface); border:1px solid var(--tblr-border-color);
+      border-radius:var(--tblr-border-radius); box-shadow:0 .5rem 1.5rem rgba(0,0,0,.16);
+      padding:4px; max-height:220px; overflow-y:auto; }
+    .dc-tagfield-suggest[hidden] { display:none; }
+    .dc-tagfield-suggest button { display:flex; width:100%; align-items:center;
+      justify-content:space-between; gap:10px; border:0; background:transparent;
+      color:var(--tblr-body-color); font:inherit; font-size:.85rem; text-align:left;
+      padding:5px 8px; border-radius:4px; cursor:pointer; }
+    .dc-tagfield-suggest button.hl, .dc-tagfield-suggest button:hover {
+      background:var(--tblr-bg-surface-secondary); }
+    .dc-tagfield-suggest .cnt { color:var(--tblr-secondary); font-size:.78rem;
+      font-variant-numeric:tabular-nums; }
   </style>
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/tabler.min.js" defer></script>
@@ -335,18 +366,18 @@
           else fire(b.dataset.bulk);
         };
       });
+      var tagField = document.getElementById('bulktag-field');
       var tagBtn = document.querySelector('[data-bulk-tagdlg]');
       if (tagBtn) tagBtn.onclick = function () {
         if (!sel.size) return;
-        var inp = document.getElementById('bulktag-input');
-        if (inp) inp.value = '';
+        if (tagField && tagField._tagfield) tagField._tagfield.reset();
         window.tabler.Modal.getOrCreateInstance(document.getElementById('bulktagdlg')).show();
       };
       var tagApply = document.getElementById('bulktag-apply');
       if (tagApply) tagApply.onclick = function () {
-        var inp = document.getElementById('bulktag-input');
         window.tabler.Modal.getOrCreateInstance(document.getElementById('bulktagdlg')).hide();
-        if (inp && inp.value.trim()) fire('tags', '', inp.value.trim());
+        var val = tagField && tagField._tagfield ? tagField._tagfield.value().trim() : '';
+        if (val) fire('tags', '', val);
       };
       // "В набор" → pick target (selection / whole filter) → set-picker modal
       function setpickModal() {
@@ -403,12 +434,124 @@
       } catch (e) {}
     }
 
+    // --- shared tag input: chips + single-line entry, Enter commits a chip ---
+    var _tagOptions;
+    function tagOptions() {
+      if (!_tagOptions) {
+        _tagOptions = fetch('/api/tags', { credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.json() : []; })
+          .catch(function () { return []; });
+      }
+      return _tagOptions;
+    }
+    function DcTagField(root) {
+      var hidden = root.querySelector('input[type=hidden]');
+      var box = root.querySelector('.dc-tagfield-box');
+      var entry = root.querySelector('.dc-tagfield-entry');
+      var sug = root.querySelector('.dc-tagfield-suggest');
+      var freq = Array.prototype.slice.call(root.querySelectorAll('.dc-tagfield-freq .freq'));
+      var chips = (hidden.value || '').split(/[,\n]/).map(function (s) { return s.trim(); })
+        .filter(Boolean);
+      var seen = {}; chips = chips.filter(function (n) {
+        var k = n.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true;
+      });
+
+      function has(name) { return chips.some(function (c) { return c.toLowerCase() === name.toLowerCase(); }); }
+      function syncFreq() {
+        freq.forEach(function (b) { b.disabled = has(b.dataset.tag); });
+      }
+      function commit() {
+        hidden.value = chips.join(', ');
+        hidden.dispatchEvent(new Event('input', { bubbles: true }));
+        hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        render(); syncFreq();
+      }
+      function render() {
+        Array.prototype.slice.call(box.querySelectorAll('.chip')).forEach(function (n) { n.remove(); });
+        chips.forEach(function (name, i) {
+          var chip = document.createElement('span');
+          chip.className = 'chip';
+          var lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = name;
+          var x = document.createElement('button'); x.type = 'button'; x.className = 'x';
+          x.setAttribute('aria-label', 'убрать'); x.textContent = '×';
+          x.addEventListener('click', function () { chips.splice(i, 1); commit(); entry.focus(); });
+          chip.appendChild(lbl); chip.appendChild(x);
+          box.insertBefore(chip, entry);
+        });
+      }
+      function add(name) {
+        name = (name || '').trim().replace(/,+$/, '').trim();
+        if (name && !has(name)) { chips.push(name); commit(); }
+        entry.value = ''; hideSug();
+      }
+      function hideSug() { sug.hidden = true; sug.innerHTML = ''; }
+      function showSug() {
+        var q = entry.value.trim().toLowerCase();
+        if (!q) return hideSug();
+        tagOptions().then(function (opts) {
+          if (entry.value.trim().toLowerCase() !== q) return;
+          var hits = opts.filter(function (o) {
+            return o.name.toLowerCase().indexOf(q) !== -1 && !has(o.name);
+          }).slice(0, 8);
+          var exact = opts.some(function (o) { return o.name.toLowerCase() === q; });
+          sug.innerHTML = '';
+          if (!exact) {
+            var mk = document.createElement('button'); mk.type = 'button';
+            mk.innerHTML = 'добавить «' + entry.value.trim() + '»';
+            mk.addEventListener('mousedown', function (ev) { ev.preventDefault(); add(entry.value); });
+            sug.appendChild(mk);
+          }
+          hits.forEach(function (o) {
+            var b = document.createElement('button'); b.type = 'button';
+            b.innerHTML = '<span>' + o.name + '</span><span class="cnt">' + (o.usage_count || 0) + '</span>';
+            b.addEventListener('mousedown', function (ev) { ev.preventDefault(); add(o.name); });
+            sug.appendChild(b);
+          });
+          sug.hidden = !sug.children.length;
+        });
+      }
+
+      box.addEventListener('click', function (e) { if (e.target === box) entry.focus(); });
+      entry.addEventListener('focus', function () { box.classList.add('focus'); });
+      entry.addEventListener('blur', function () {
+        box.classList.remove('focus');
+        setTimeout(function () { if (entry.value.trim()) add(entry.value); else hideSug(); }, 150);
+      });
+      entry.addEventListener('input', showSug);
+      entry.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ',') {
+          e.preventDefault();
+          if (entry.value.trim()) add(entry.value);
+        } else if (e.key === 'Backspace' && !entry.value && chips.length) {
+          chips.pop(); commit();
+        } else if (e.key === 'Escape') { hideSug(); }
+      });
+      freq.forEach(function (b) {
+        b.addEventListener('click', function () { if (!b.disabled) { add(b.dataset.tag); entry.focus(); } });
+      });
+
+      render(); syncFreq();
+      root._tagfield = {
+        value: function () { return hidden.value; },
+        reset: function () { chips.length = 0; entry.value = ''; hideSug(); commit(); },
+        focus: function () { entry.focus(); }
+      };
+    }
+    function dcInitTagFields(scope) {
+      (scope || document).querySelectorAll('[data-tagfield]').forEach(function (el) {
+        if (el._tf) return;
+        el._tf = true;
+        DcTagField(el);
+      });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
-      initTooltips(); dcInitSelection(); showTgLinked();
+      initTooltips(); dcInitSelection(); showTgLinked(); dcInitTagFields();
     });
     document.body.addEventListener('htmx:afterSettle', function (e) {
       initTooltips(e.target);
       dcInitSelection();
+      dcInitTagFields();
     });
 
     // --- shared detail modal: open document / set cards without navigating ---

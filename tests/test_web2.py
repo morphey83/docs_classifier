@@ -345,11 +345,11 @@ async def test_inbox_is_derived_from_tags_not_a_flag(alice, web_domain):
     assert (await alice.get("/api/documents/" + doc_id)).json()["status"] == "inbox"
 
 
-async def test_doc_tag_editor_accepts_newlines_from_the_textarea(alice, web_domain):
+async def test_doc_tag_editor_accepts_newlines(alice, web_domain):
     await _upload(alice, web_domain, "nl.txt")
     doc_id = await _doc_id(alice, web_domain)
     dp = (await alice.get(f"/documents/{doc_id}")).text
-    # the tag field is a growing textarea now — a pasted list may carry newlines
+    # the tag route still splits on newlines (a pasted list may carry them)
     await alice.post(
         f"/documents/{doc_id}/tags",
         data={"tags": "договор,\nсрочно\nважно", "csrf_token": web_csrf(dp)},

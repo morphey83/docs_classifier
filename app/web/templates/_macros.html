@@ -57,3 +57,24 @@
   </button>
 </div>
 {%- endmacro %}
+
+{# shared tag input: chips + a single-line entry (Enter commits a chip), with an
+   expandable "частые" row below. `value` is the current comma-joined tags,
+   `freq` an optional list of frequent tag names. Wired by dcInitTagFields()
+   in base.html. #}
+{% macro tagfield(name, value='', freq=None, placeholder='тег и Enter') -%}
+<div class="dc-tagfield" data-tagfield>
+  <input type="hidden" name="{{ name }}" value="{{ value }}">
+  <div class="dc-tagfield-box">
+    <input type="text" class="dc-tagfield-entry" autocomplete="off"
+           placeholder="{{ placeholder }}" aria-label="Новый тег">
+    <div class="dc-tagfield-suggest" hidden role="listbox"></div>
+  </div>
+  {% if freq %}
+  <div class="freq-tags dc-tagfield-freq mt-2">
+    <span class="freq-label">частые:</span>
+    {% for n in freq %}<button type="button" class="freq" data-tag="{{ n }}">{{ n }}</button>{% endfor %}
+  </div>
+  {% endif %}
+</div>
+{%- endmacro %}

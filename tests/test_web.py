@@ -218,7 +218,8 @@ async def test_document_page_and_tag_edit(alice, web_domain):
     doc_id = await _one_doc(alice, web_domain)
 
     page = await alice.get(f"/documents/{doc_id}")
-    assert page.status_code == 200 and 'id="doc-tagfield"' in page.text
+    assert page.status_code == 200 and 'data-tagfield' in page.text
+    assert 'name="tags"' in page.text
 
     r = await alice.post(
         f"/documents/{doc_id}/tags",
