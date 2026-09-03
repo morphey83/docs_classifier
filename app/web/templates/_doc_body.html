@@ -69,16 +69,16 @@
     <div class="card">
       <div class="card-body">
         <h3 class="card-title">Наборы</h3>
-        {% if doc_sets %}
+        {% set mine = sets|selectattr('id', 'in', doc_sets)|list %}
+        {% set avail = sets|rejectattr('id', 'in', doc_sets)|list %}
+        {% if mine %}
         <div class="mb-2">
-          {% for s in doc_sets %}
+          {% for s in mine %}
           <span class="badge bg-blue-lt me-1 mb-1">
-            <a href="/domains/{{ d.slug }}/sets/{{ s.id }}" class="text-reset">{{ s.name }}</a>
-            {% if can_view %}
+            <a href="/sets/{{ s.id }}" class="text-reset">{{ s.name }}</a>
             <a href="#" class="text-reset ms-1" title="Убрать из набора"
                hx-post="/documents/{{ doc.id }}/remove-from-set" hx-target="#doc"
                hx-vals='{"set_id": "{{ s.id }}"}'>✕</a>
-            {% endif %}
           </span>
           {% endfor %}
         </div>
@@ -86,9 +86,6 @@
         <p class="text-secondary">Документ не входит ни в один набор.</p>
         {% endif %}
 
-        {% set _in = doc_sets|map(attribute='id')|list %}
-        {% set avail = sets|rejectattr('id', 'in', _in)|list %}
-        {% if can_view %}
         <form hx-post="/documents/{{ doc.id }}/add-to-set" hx-target="#doc">
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
           <div class="d-flex gap-2">
@@ -115,7 +112,6 @@
           });
         })();
         </script>
-        {% endif %}
       </div>
     </div>
   </div>
@@ -173,6 +169,18 @@
         <div class="datagrid">
           <div class="datagrid-item"><div class="datagrid-title">домен</div>
             <div class="datagrid-content"><a href="/domains/{{ d.slug }}">{{ d.name }}</a></div></div>
+          <div class="datagrid-item"><div class="datagrid-title">видимость</div>
+            <div class="datagrid-content">
+              {% if doc.is_public %}
+              <span class="text-green">{{ ic.icon('check') }}</span> публичный
+              {% else %}<span class="text-secondary">приватный</span>{% endif %}
+              {% if can_publish %}
+              <a href="#" class="ms-2 small"
+                 hx-post="/documents/{{ doc.id }}/visibility" hx-target="#doc"
+                 hx-vals='{"is_public": "{{ 0 if doc.is_public else 1 }}"}'>
+                {{ 'сделать приватным' if doc.is_public else 'сделать публичным' }}</a>
+              {% endif %}
+            </div></div>
           <div class="datagrid-item"><div class="datagrid-title">статус</div>
             <div class="datagrid-content d-inline-flex align-items-center gap-1">
               {% if doc.status.value == 'inbox' %}

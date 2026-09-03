@@ -130,6 +130,7 @@
               ('/search', 'Поиск', 'search'),
               ('/inbox', 'Очередь на сортировку', 'inbox'),
               ('/upload', 'Загрузка', 'upload'),
+              ('/sets', 'Наборы', 'clipboard'),
               ('/', 'Домены', 'folder'),
             ] %}
             {% for href, label, name in nav %}
@@ -270,8 +271,8 @@
         refresh();
       };
 
-      function fire(action, setId, newName) {
-        if (!sel.size || !form) return;
+      function fire(action, setId, newName, noSel) {
+        if ((!noSel && !sel.size) || !form) return;
         document.getElementById('bulk-action').value = action;
         document.getElementById('bulk-set-id').value = setId || '';
         document.getElementById('bulk-new-name').value = newName || '';
@@ -283,11 +284,12 @@
       Array.prototype.slice.call(document.querySelectorAll('[data-bulk-set]')).forEach(function (b) {
         b.onclick = function (e) {
           e.preventDefault();
-          var v = b.dataset.bulkSet;
+          var v = b.dataset.bulkSet, save = b.dataset.bulkSave === '1';
+          var act = save ? 'save_filter' : 'set';
           if (v === '__new__') {
             var name = window.prompt('Название нового набора');
-            if (name && name.trim()) fire('set', '__new__', name.trim());
-          } else { fire('set', v); }
+            if (name && name.trim()) fire(act, '__new__', name.trim(), save);
+          } else { fire(act, v, '', save); }
         };
       });
       refresh();

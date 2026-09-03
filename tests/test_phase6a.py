@@ -131,13 +131,12 @@ async def test_share_link_is_absolute_when_public_base_url_set(alice, monkeypatc
     monkeypatch.setattr(settings, "public_base_url", "https://docs.example.com")
     d = (await alice.post("/api/domains", json={"name": "PB"})).json()
     doc = (await _upload(alice, d["id"], "p.txt")).json()["document"]
+    await alice.post(f"/api/documents/{doc['id']}/visibility?is_public=true")
     s = (
-        await alice.post(
-            f"/api/domains/{d['id']}/sets", json={"name": "s", "document_ids": [doc["id"]]}
-        )
+        await alice.post("/api/sets", json={"name": "s", "document_ids": [doc["id"]]})
     ).json()
     link = (
-        await alice.post(f"/api/domains/{d['id']}/sets/{s['id']}/links", json={"kind": "one_time"})
+        await alice.post(f"/api/sets/{s['id']}/links", json={"kind": "one_time"})
     ).json()
     assert link["url"] == f"https://docs.example.com/d/{link['token']}"
 

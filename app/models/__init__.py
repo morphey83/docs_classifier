@@ -8,7 +8,7 @@ from app.models.artifact import (
 )
 from app.models.base import Base
 from app.models.botstate import BotUserState
-from app.models.docset import DocumentSet, DocumentSetItem, SetVisibility
+from app.models.docset import DocumentSet, DocumentSetFilter, DocumentSetItem
 from app.models.document import (
     BatchKind,
     DocSource,
@@ -40,6 +40,7 @@ __all__ = [
     "DocStatus",
     "Document",
     "DocumentSet",
+    "DocumentSetFilter",
     "DocumentSetItem",
     "DocumentTag",
     "DocumentVersion",
@@ -51,7 +52,6 @@ __all__ = [
     "IndexStatus",
     "OcrStatus",
     "Session",
-    "SetVisibility",
     "Tag",
     "TextSource",
     "TgLinkToken",

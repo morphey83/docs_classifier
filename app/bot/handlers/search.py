@@ -23,7 +23,7 @@ from app.bot.keyboards import pager_kb, result_kb, set_pick_kb
 from app.bot.parsing import describe, parse_query, to_filters
 from app.config import settings
 from app.jobs import dispatch
-from app.models import DocumentSet, DocumentTag, SetVisibility, Tag, User
+from app.models import DocumentTag, Tag, User
 from app.ocr import engine as ocr_engine
 from app.ocr.tasks import ocr_document
 from app.rbac import Cap
@@ -268,13 +268,13 @@ async def choose_set(
     if user is None:
         return await needs_link(cb)
     try:
-        doc, domain, _c = await doc_ctx(db, user, uuid.UUID(callback_data.id), need=Cap.view)
+        doc, _domain, _c = await doc_ctx(db, user, uuid.UUID(callback_data.id), need=Cap.download)
     except BotAccessError as err:
         return await cb.answer(str(err), show_alert=True)
-    sets = await docsets_svc.list_sets(db, domain.id, user.id)
+    sets = await docsets_svc.list_sets(db, user.id)
     await state.update_data(doc=callback_data.id)
     await cb.answer()
-    rows = [(str(s.id), f"{s.name} ({s.item_count})") for s in sets]
+    rows = [(str(s.id), s.name) for s in sets]
     await cb.message.answer(
         f"В какой набор добавить «{doc.title}»?",
         reply_markup=set_pick_kb(rows, str(doc.id)),
@@ -295,16 +295,13 @@ async def add_to_set(
     doc_id = data.get("doc")
     if not doc_id:
         return await cb.answer("Начните заново.", show_alert=True)
-    s = await db.get(DocumentSet, uuid.UUID(callback_data.id))
+    s = await docsets_svc.get_owned_set(db, uuid.UUID(callback_data.id), user.id)
     if s is None:
         return await cb.answer("Набор не найден.", show_alert=True)
-    is_creator = s.created_by == user.id
-    if not is_creator and s.visibility != SetVisibility.domain:
-        return await cb.answer("Набор недоступен.", show_alert=True)
     added = await docsets_svc.add_items(db, s, [uuid.UUID(doc_id)], actor=user)
     await state.clear()
     await cb.answer("Добавлено" if added else "Уже в наборе")
-    await cb.message.answer(f"«{s.name}»: {s.item_count} док.")
+    await cb.message.answer(f"«{s.name}» обновлён. /sets")
 
 
 @router.callback_query(NewSetCb.filter())
@@ -328,16 +325,10 @@ async def new_set_create(
     if user is None:
         return await needs_link(message)
     try:
-        doc, domain, _c = await doc_ctx(db, user, uuid.UUID(data["doc"]), need=Cap.view)
+        doc, _domain, _c = await doc_ctx(db, user, uuid.UUID(data["doc"]), need=Cap.download)
     except BotAccessError as err:
         return await message.answer(str(err))
     s = await docsets_svc.create_set(
-        db,
-        domain,
-        user,
-        name=message.text.strip(),
-        description=None,
-        visibility=SetVisibility.private,
-        document_ids=[doc.id],
+        db, user, name=message.text.strip(), document_ids=[doc.id]
     )
     await message.answer(f"✅ Набор «{s.name}» создан, документ добавлен. /sets")

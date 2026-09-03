@@ -19,6 +19,8 @@ ignore = ["B008"]  # FastAPI Depends() in defaults
 "app/api/tglink.py" = ["E501", "RUF001"]
 # the bot is Russian-facing: Cyrillic UI strings + long inline keyboard rows
 "app/bot/**" = ["RUF001", "RUF002", "RUF003", "E501"]
+# user-facing Russian: set-size limit messages + default names (§15)
+"app/services/docsets.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

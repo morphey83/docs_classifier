@@ -1,4 +1,4 @@
-"""Document-set, archive, and share-link schemas (§15)."""
+"""Document-set, archive, and share-link schemas (§15 rev 4)."""
 
 from __future__ import annotations
 
@@ -8,55 +8,58 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.models import SetVisibility
-from app.schemas.documents import DocumentOut
-
 
 class SetCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
-    visibility: SetVisibility = SetVisibility.private
     document_ids: list[uuid.UUID] | None = None
 
 
 class SetUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
-    visibility: SetVisibility | None = None
 
 
 class SetItemsAdd(BaseModel):
     document_ids: list[uuid.UUID] = Field(min_length=1)
 
 
+class FilterAdd(BaseModel):
+    filter: dict = Field(default_factory=dict)
+    description: str = Field(default="", max_length=500)
+
+
+class FilterOut(BaseModel):
+    id: uuid.UUID
+    position: int
+    filter: dict
+    description: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class SetOut(BaseModel):
     id: uuid.UUID
-    domain_id: uuid.UUID
+    owner_id: uuid.UUID
     name: str
     description: str | None
-    visibility: SetVisibility
-    created_by: uuid.UUID | None
-    item_count: int
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-class SetItemOut(BaseModel):
-    document: DocumentOut
-    added_at: datetime
-    position: int
-
-
 class SetDetail(SetOut):
-    items: list[SetItemOut] = []
+    filters: list[FilterOut] = []
+    item_count: int = 0
+    resolved_count: int = 0
 
 
 class ArchiveStatusOut(BaseModel):
     status: str  # building | ready | failed
     ready: bool
-    stale: bool  # a rebuild has been queued
+    stale: bool
     item_count: int
     missing_count: int
     size_bytes: int

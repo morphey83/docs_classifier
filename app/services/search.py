@@ -6,8 +6,9 @@ PostgreSQL: `to_tsvector('russian', …)` for the body + `pg_trgm`-backed
 
 from __future__ import annotations
 
+import contextlib
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -89,10 +90,76 @@ class SearchFilters:
     ocr_to: datetime | None = None
     text_source: TextSource | None = None
     include_trash: bool = False
+    # Domain scope — only meaningful for a saved set filter (§15); empty means
+    # "every domain the owner can currently reach". The live /search UI passes
+    # its scope to search_documents() directly and leaves this empty.
+    domain_ids: list[uuid.UUID] = field(default_factory=list)
     sort: str = "uploaded_at"
     sort_dir: str = "desc"  # "asc" | "desc"
     page: int = 1
     page_size: int = 50
+
+    # --- serialization for document_set_filter.filter (JSON) --------------
+    _SCALARS = (
+        "q", "ext", "mime", "size_min", "size_max", "uploaded_by",
+        "has_index", "has_ocr", "include_trash", "sort", "sort_dir",
+    )
+    _DATES = (
+        "doc_date_from", "doc_date_to", "uploaded_from", "uploaded_to",
+        "indexed_from", "indexed_to", "ocr_from", "ocr_to",
+    )
+
+    def to_dict(self) -> dict:
+        out: dict = {}
+        for k in self._SCALARS:
+            v = getattr(self, k)
+            if v not in (None, "", False):
+                out[k] = str(v) if isinstance(v, uuid.UUID) else v
+        for k in self._DATES:
+            v = getattr(self, k)
+            if v is not None:
+                out[k] = v.isoformat()
+        for k in ("tags_all", "tags_any", "tags_none"):
+            if getattr(self, k):
+                out[k] = list(getattr(self, k))
+        if self.status is not None:
+            out["status"] = self.status.value
+        if self.text_source is not None:
+            out["text_source"] = self.text_source.value
+        if self.domain_ids:
+            out["domain_ids"] = [str(d) for d in self.domain_ids]
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping | None) -> SearchFilters:
+        data = data or {}
+        f = cls()
+        for k in cls._SCALARS:
+            if k in data:
+                setattr(f, k, data[k])
+        if isinstance(f.uploaded_by, str):
+            with contextlib.suppress(ValueError):
+                f.uploaded_by = uuid.UUID(f.uploaded_by)
+        if not isinstance(f.uploaded_by, uuid.UUID):
+            f.uploaded_by = None
+        for k in cls._DATES:
+            if data.get(k):
+                with contextlib.suppress(TypeError, ValueError):
+                    setattr(f, k, datetime.fromisoformat(data[k]))
+        for k in ("tags_all", "tags_any", "tags_none"):
+            if data.get(k):
+                setattr(f, k, [str(t) for t in data[k]])
+        if data.get("status"):
+            with contextlib.suppress(ValueError):
+                f.status = DocStatus(data["status"])
+        if data.get("text_source"):
+            with contextlib.suppress(ValueError):
+                f.text_source = TextSource(data["text_source"])
+        f.domain_ids = []
+        for d in data.get("domain_ids", []) or []:
+            with contextlib.suppress(ValueError):
+                f.domain_ids.append(uuid.UUID(str(d)))
+        return f
 
 
 @dataclass
@@ -126,6 +193,41 @@ async def _tag_name_index(db: AsyncSession, domain_ids: Sequence[uuid.UUID]) -> 
 
 def _tag_doc_subquery(tag_ids: list[uuid.UUID]) -> Select:
     return select(DocumentTag.document_id).where(DocumentTag.tag_id.in_(tag_ids))
+
+
+_STATUS_RU = {
+    DocStatus.inbox: "в очереди",
+    DocStatus.tagged: "размечен",
+}
+
+
+def describe_filters(f: SearchFilters, domain_names: Mapping[uuid.UUID, str] | None = None) -> str:
+    """A short human summary of a saved set filter, for the set card."""
+    parts: list[str] = []
+    if f.domain_ids and domain_names:
+        parts.append(" / ".join(domain_names.get(d, "?") for d in f.domain_ids))
+    if f.q:
+        parts.append(f'«{f.q}»')
+    parts += [f"#{t}" for t in f.tags_all]
+    parts += [f"~{t}" for t in f.tags_any]
+    parts += [f"-{t}" for t in f.tags_none]
+    if f.ext:
+        parts.append(f.ext.lower().lstrip("."))
+    if f.status is not None:
+        parts.append(_STATUS_RU.get(f.status, str(f.status)))
+    if f.has_ocr is True:
+        parts.append("OCR")
+    if f.has_index is True:
+        parts.append("проиндексирован")
+    for lo, hi, label in (
+        (f.doc_date_from, f.doc_date_to, "дата док."),
+        (f.uploaded_from, f.uploaded_to, "загружен"),
+    ):
+        if lo or hi:
+            span = f"{lo:%Y-%m-%d}" if lo else "..."
+            span += f" - {hi:%Y-%m-%d}" if hi else " - ..."
+            parts.append(f"{label} {span}")
+    return " · ".join(parts) or "все документы"
 
 
 def _apply(

@@ -59,6 +59,11 @@ async def _load_artifact(db: AsyncSession, artifact_id: uuid.UUID, user: User) -
     artifact = await db.get(Artifact, artifact_id)
     if artifact is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "artifact not found")
+    # owner-scoped artifact (a set's «Полная выгрузка») — no domain
+    if artifact.domain_id is None:
+        if artifact.requested_by == user.id:
+            return artifact
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "artifact not found")
     row = await domains_svc.get_membership(db, artifact.domain_id, user.id)
     if row is None or not row[1] or Cap.download not in _caps(row[1].role):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "artifact not found")

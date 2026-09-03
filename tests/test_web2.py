@@ -29,10 +29,8 @@ async def test_set_lifecycle(alice, web_domain):
     await _upload(alice, web_domain, "s1.txt")
     doc_id = await _doc_id(alice, web_domain)
 
-    page = (await alice.get(f"/domains/{web_domain}/sets")).text
-    r = await alice.post(
-        f"/domains/{web_domain}/sets", data={"name": "Подборка", "csrf_token": web_csrf(page)}
-    )
+    page = (await alice.get("/sets")).text
+    r = await alice.post("/sets", data={"name": "Подборка", "csrf_token": web_csrf(page)})
     assert r.status_code == 303
     set_id = r.headers["location"].rsplit("/", 1)[-1]
 
@@ -44,7 +42,7 @@ async def test_set_lifecycle(alice, web_domain):
     )
     assert add.status_code == 200 and "Подборка" in add.text  # doc-page fragment, now in the set
 
-    detail = await alice.get(f"/domains/{web_domain}/sets/{set_id}")
+    detail = await alice.get(f"/sets/{set_id}")
     assert "s1" in detail.text
 
     # the document page can also take it back out of the set
@@ -103,11 +101,11 @@ async def test_bulk_index_and_add_to_set(alice, web_domain):
     )
     assert r.status_code == 200 and "Пакет" in _toast(r)
 
-    sets = (await alice.get(f"/domains/{web_domain}/sets")).text
+    sets = (await alice.get("/sets")).text
     assert "Пакет" in sets
 
 
-async def test_bulk_add_to_set_rejects_a_cross_domain_selection(alice, web_domain):
+async def test_bulk_add_to_set_spans_domains(alice, web_domain):
     home = (await alice.get("/")).text
     other = (
         await alice.post("/domains", data={"name": "Второй", "csrf_token": web_csrf(home)})
@@ -129,35 +127,56 @@ async def test_bulk_add_to_set_rejects_a_cross_domain_selection(alice, web_domai
             "doc_ids": ",".join(ids),
             "action": "set",
             "set_id": "__new__",
-            "new_name": "Ничей",
+            "new_name": "Общий",
         },
         headers={"HX-Request": "true"},
     )
-    assert r.status_code == 200 and "Выберите один домен" in _toast(r)
+    assert r.status_code == 200 and "Создан набор «Общий»" in _toast(r)
+    # both cross-domain docs are in it
+    detail = (await alice.get("/sets")).text
+    assert "Общий" in detail
+
+
+async def test_save_search_as_a_set_filter(alice, web_domain):
+    await _upload(alice, web_domain, "kw1.txt", b"needle in a haystack")
+    page = (await alice.get("/search")).text
+    r = await alice.post(
+        "/search/bulk",
+        data={
+            "csrf_token": web_csrf(page),
+            "q": "needle",
+            "action": "save_filter",
+            "set_id": "__new__",
+            "new_name": "Иголки",
+        },
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200 and "Иголки" in _toast(r)
+    detail = (await alice.get("/sets")).text
+    assert "Иголки" in detail
 
 
 async def test_set_share_link_and_revoke(alice, web_domain):
     await _upload(alice, web_domain, "sh.txt")
     doc_id = await _doc_id(alice, web_domain)
-    page = (await alice.get(f"/domains/{web_domain}/sets")).text
+    await alice.post(f"/api/documents/{doc_id}/visibility?is_public=true")
+    page = (await alice.get("/sets")).text
     set_id = (
-        await alice.post(
-            f"/domains/{web_domain}/sets", data={"name": "L", "csrf_token": web_csrf(page)}
-        )
+        await alice.post("/sets", data={"name": "L", "csrf_token": web_csrf(page)})
     ).headers["location"].rsplit("/", 1)[-1]
     dp = (await alice.get(f"/documents/{doc_id}")).text
     await alice.post(
         f"/documents/{doc_id}/add-to-set", data={"set_id": set_id, "csrf_token": web_csrf(dp)}
     )
 
-    detail = (await alice.get(f"/domains/{web_domain}/sets/{set_id}")).text
+    detail = (await alice.get(f"/sets/{set_id}")).text
     r = await alice.post(
-        f"/domains/{web_domain}/sets/{set_id}/links",
+        f"/sets/{set_id}/links",
         data={"kind": "one_time", "csrf_token": web_csrf(detail)},
     )
     assert r.status_code == 303
 
-    detail2 = await alice.get(f"/domains/{web_domain}/sets/{set_id}")
+    detail2 = await alice.get(f"/sets/{set_id}")
     assert "/d/" in detail2.text
     link_id = re.search(r"/links/([0-9a-f-]{36})/revoke", detail2.text).group(1)
     rv = await alice.post(f"/links/{link_id}/revoke", data={"csrf_token": web_csrf(detail2.text)})

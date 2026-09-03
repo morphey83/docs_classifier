@@ -314,6 +314,17 @@ async def update_document(
     return await document_out(db, doc)
 
 
+@router.post("/documents/{document_id}/visibility", response_model=DocumentOut)
+async def set_visibility(
+    is_public: bool,
+    ctx: DocCtx = Depends(require_doc(Cap.manage)),
+    db: AsyncSession = Depends(get_session),
+) -> DocumentOut:
+    ctx.document.is_public = is_public
+    await db.flush()
+    return await document_out(db, ctx.document)
+
+
 @router.get("/documents/{document_id}/content")
 async def download_document(
     ctx: DocCtx = Depends(require_doc(Cap.download)),

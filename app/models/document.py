@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
     text,
 )
@@ -133,6 +134,12 @@ class Document(Base):
     status: Mapped[DocStatus] = mapped_column(_status_enum, default=DocStatus.inbox, index=True)
     source: Mapped[DocSource] = mapped_column(_source_enum, default=DocSource.upload)
     version: Mapped[int] = mapped_column(Integer, default=1)
+
+    # May this document leave its domain through a set's share link? Set at
+    # ingest from domain.settings.default_document_visibility; changed by a
+    # `manage` holder per-doc or in bulk (§15). Pure sharing gate — in-domain
+    # visibility stays RBAC.
+    is_public: Mapped[bool] = mapped_column(default=False, server_default=false())
 
     # Can be large (a whole document's body). Never read back for display —
     # only written during indexing and matched via SQL — so keep it off the

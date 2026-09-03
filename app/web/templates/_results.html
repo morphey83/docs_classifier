@@ -44,20 +44,39 @@
       <button type="button" class="btn btn-sm" data-bulk="ocr">
         {{ ic.icon('scan') }} OCR
       </button>
+      {% if can_publish_any %}
+      <button type="button" class="btn btn-sm" data-bulk="public">Сделать публичными</button>
+      <button type="button" class="btn btn-sm" data-bulk="private">Сделать приватными</button>
+      {% endif %}
       <div class="dropdown">
-        <button type="button" class="btn btn-sm dropdown-toggle" data-bs-toggle="dropdown"
-                {{ 'disabled' if not f.domain_id }}>
+        <button type="button" class="btn btn-sm dropdown-toggle" data-bs-toggle="dropdown">
           {{ ic.icon('folder') }} В набор
         </button>
         <div class="dropdown-menu dropdown-menu-end">
-          {% for s in domain_sets %}
+          {% for s in user_sets %}
           <a class="dropdown-item" href="#" data-bulk-set="{{ s.id }}">{{ s.name }}</a>
           {% endfor %}
-          {% if domain_sets %}<div class="dropdown-divider"></div>{% endif %}
+          {% if user_sets %}<div class="dropdown-divider"></div>{% endif %}
           <a class="dropdown-item" href="#" data-bulk-set="__new__">➕ Новый набор…</a>
         </div>
       </div>
       <button type="button" class="btn btn-sm btn-ghost-secondary" id="bulk-clear">Снять</button>
+    </div>
+  </div>
+</div>
+
+{# save the current search as a set filter (no selection needed) #}
+<div class="mb-2">
+  <div class="dropdown">
+    <button type="button" class="btn btn-sm btn-ghost-secondary dropdown-toggle" data-bs-toggle="dropdown">
+      {{ ic.icon('clipboard') }} Сохранить фильтр в набор
+    </button>
+    <div class="dropdown-menu">
+      {% for s in user_sets %}
+      <a class="dropdown-item" href="#" data-bulk-set="{{ s.id }}" data-bulk-save="1">{{ s.name }}</a>
+      {% endfor %}
+      {% if user_sets %}<div class="dropdown-divider"></div>{% endif %}
+      <a class="dropdown-item" href="#" data-bulk-set="__new__" data-bulk-save="1">➕ Новый набор…</a>
     </div>
   </div>
 </div>

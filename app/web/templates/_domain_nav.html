@@ -11,9 +11,6 @@
     <a class="nav-link{{ ' active' if active == 'overview' }}" href="/domains/{{ d.slug }}">Обзор</a>
   </li>
   <li class="nav-item">
-    <a class="nav-link{{ ' active' if active == 'sets' }}" href="/domains/{{ d.slug }}/sets">Наборы</a>
-  </li>
-  <li class="nav-item">
     <a class="nav-link{{ ' active' if active == 'tags' }}" href="/domains/{{ d.slug }}/tags">Теги</a>
   </li>
   {% if view.has('delete') %}

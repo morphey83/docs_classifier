@@ -22,7 +22,7 @@ Last updated: 2026-09-01 (rev 5 — API moved to /api, HTMX+Jinja web UI at /).
 | UI | **HTMX + Jinja on Tabler** (Bootstrap 5, vendored, no build), server-rendered, same FastAPI app. See phase 7h. |
 | At-rest encryption | Not in scope. |
 | Reverse proxy | **No proxy / no domain on the VDS yet** → compose ships its own **Caddy**. Interim: `tls internal` (self-signed) for IP access; once a (sub)domain points at the VDS, one Caddyfile line switches to real Let's Encrypt TLS. A free `*.duckdns.org` name + Caddy DNS-01 also works. |
-| Document sets | Persistent hand-curated collections. The archive is a **cache of the set's current content** — built on first download, rebuilt automatically (overwritten in place) when the set changes, file purged after `domain.set_archive_ttl_days` (default 7). **Permanent / one-time links** bind to the set's stable artifact and always serve current contents (rights re-checked each access). See §15. |
+| Document sets | **User-owned** collections defined as *N saved search filters + explicit include/exclude overrides*, resolved live against the owner's current access (§15 rev 4). The archive is a **cache of the set's current result** — rebuilt automatically when the result changes, file purged after `SET_ARCHIVE_TTL_DAYS` (global, default 7). **Permanent / one-time links** bind to the set's stable artifact and always serve current contents (rights re-checked each access). See §15. |
 | Cross-domain search | The bot (and later a global web search) needs to search across every domain a user belongs to at once. `GET /documents` makes `domain_id` an optional filter rather than a path segment; `GET /domains/{d}/documents` is kept for domain-scoped browsing. Tag filters switch from slug- to **name**-matching (case-insensitive) so they compose across domains with different vocabularies. See §7. |
 | Telegram account linking | **Bidirectional, always verified** — never a typed `@username`. Bot-initiated (`/start`) sends a link to a minimal linking page; web-initiated (profile) shows a bot deep-link (`t.me/<bot>?start=<token>`). One `tg_link_token`, single-use, 15 min TTL, either direction. See §8. |
 | Allowed file types | Owner/admin can restrict a domain to a list of extensions (`domain.settings.allowed_types`, instance default `DEFAULT_ALLOWED_TYPES`). A disallowed direct upload is rejected (415); a disallowed archive entry is skipped and reported on the batch, not fatal. Applies to web and bot alike (one choke point, `ingest_upload`). See §3.1. |
@@ -304,7 +304,7 @@ session(id, user_id, created_at, expires_at, user_agent, ip)          # server-s
 domain(id, name, slug, owner_id, description, settings_jsonb, created_at)
   settings: auto_ocr, auto_index, default_ocr_lang,
             max_upload_mb, storage_quota_mb, trash_retention_days,
-            archive_on_conflict (skip|new), set_archive_ttl_days,
+            archive_on_conflict (skip|new),
             allow_public_links, allowed_types (list[ext] | null)
 domain_member(domain_id, user_id, role, added_by, added_at)
 domain_invite(id, domain_id, email|username, role, token, created_by,
@@ -319,11 +319,11 @@ document_tag(document_id, tag_id, assigned_by, assigned_at)
 upload_batch(id, domain_id, uploaded_by, source_filename, kind, item_count,
              conflict_count, status, error, uploaded_at)
 
-document_set(id, domain_id, name, description, visibility (private|domain),
-             created_by, item_count, created_at, updated_at)
-document_set_item(set_id, document_id, added_by, added_at, position)   # uniq(set,doc)
+document_set(id, owner_id, name, description, created_at, updated_at)   # user-owned, §15 rev 4
+document_set_filter(id, set_id, position, filter_jsonb, description, created_at)
+document_set_item(set_id, document_id, added_by, added_at, position)   # PK(set,doc) — explicit adds
 
-artifact(id, domain_id, kind (adhoc_export|set_archive), source_id, content_hash?,
+artifact(id, domain_id?, kind (adhoc_export|set_archive), source_id, content_hash?,
          format (zip), status (building|ready|failed), storage_key?, size_bytes,
          item_count, missing_count, snapshot_jsonb, requested_by, created_at,
          expires_at?)                       # replaces export_job
@@ -414,17 +414,20 @@ PATCH  /domains/{d}/tags/{id}            DELETE /domains/{d}/tags/{id}
 POST   /domains/{d}/tags/{id}/merge      # into another tag
 GET    /tags                             # cross-domain tag-name options (§7)
 
-# --- document sets (§15) ---
-GET    /domains/{d}/sets                 POST /domains/{d}/sets
-GET    /domains/{d}/sets/{s}             PATCH /domains/{d}/sets/{s}   DELETE …
-POST   /domains/{d}/sets/{s}/items       # body: {document_ids:[…]} — idempotent add
-DELETE /domains/{d}/sets/{s}/items/{doc}
-POST   /domains/{d}/sets/{s}/archives    # -> artifact (build job)
+# --- document sets (§15 rev 4 — user-owned, top-level) ---
+GET    /sets                            POST /sets
+GET    /sets/{s}                        PATCH /sets/{s}   DELETE /sets/{s}
+POST   /sets/{s}/filters                # body: a serialized SearchFilters (+ domain_ids)
+DELETE /sets/{s}/filters/{fid}
+POST   /sets/{s}/items                  # body: {document_ids:[…]} — explicit adds
+DELETE /sets/{s}/items/{doc}
+GET    /sets/{s}/archive[/download]     # ensure-current -> 200 stream | 202 building
+POST   /sets/{s}/export                 # «Полная выгрузка» -> adhoc_export artifact
 
 # --- artifacts & links (§15) ---
 GET    /artifacts/{id}                   GET /artifacts/{id}/download   # authed
-POST   /artifacts/{id}/links             # {kind: permanent|one_time, expires_at?}
-DELETE /links/{id}                       # revoke
+POST   /sets/{s}/links                   # {kind: permanent|one_time, expires_at?} — owner only
+DELETE /links/{id}                       # revoke — owner only
 GET    /d/{token}                        # PUBLIC download, no auth
 
 POST   /domains/{d}/exports              # ad-hoc: filter/id-list -> artifact
@@ -639,14 +642,18 @@ Global hard caps in `.env` (a per-domain setting can never exceed these):
 | `DEFAULT_DOMAIN_QUOTA_MB` | 5000 | storage per domain |
 | `DEFAULT_TRASH_RETENTION_DAYS` | 30 | |
 | `EXPORT_TTL_HOURS` | 48 | ad-hoc export artifact lifetime |
-| `SET_ARCHIVE_TTL_DAYS` | 7 | set-archive cache file lifetime (per-domain `set_archive_ttl_days`) |
+| `SET_ARCHIVE_TTL_DAYS` | 7 | set-archive cache file lifetime (global; sets are user-owned, §15 rev 4) |
+| `SET_MAX_DOCS` | 5000 | hard cap on a set's resolved document count (build fails above it) |
+| `SET_ARCHIVE_MAX_BYTES` | 5 GiB | hard cap on a set archive's total blob size |
 | `DEFAULT_ALLOWED_TYPES` | *(unset = unrestricted)* | instance-wide default file-type allowlist, extensions (§3.1) |
 | `PUBLIC_BASE_URL` | *(unset = relative)* | scheme+host used to build every absolute link the app hands out (share links, the bot's deep-links, the linking page, §8) — the one place that changes when a real (sub)domain replaces the bare VDS IP |
 
 Per-domain overrides (`domain.settings`, editable by `owner`/`admin`, clamped to
 the global caps): `storage_quota_mb`, `max_upload_mb`, `trash_retention_days`,
 `auto_ocr`, `auto_index`, `default_ocr_lang`, `archive_on_conflict`,
-`set_archive_ttl_days`, `allow_public_links`, `allowed_types`.
+`allow_public_links`, `allowed_types`. (`allow_public_links` is now enforced at
+set-resolve time — see §15 — so a domain's kill-switch still keeps its documents
+out of anyone's personal set archive.)
 
 Enforcement: upload rejected with `413` when
 `used_bytes + incoming > storage_quota`; for archives the *projected* unpacked
@@ -740,127 +747,192 @@ Archive entries can't prompt: the batch carries `archive_on_conflict`
 
 ## 15. Document sets & shareable archives
 
+> **Rev 4 (2026-09-03).** Sets left domains — a set now belongs to a **user**
+> and spans every domain that user can reach. A set is no longer a static list:
+> it is **N saved search filters + explicitly added documents**, resolved live.
+> Only the owner edits or even sees a set. Two ways out: a **share link** (the
+> *public segment* — only `is_public` documents) and the owner's own **«Полная
+> выгрузка»** (everything the owner can reach).
+
 ### Concept
 
-A **document set** (`набор`) is a persistent, hand-curated list of documents
-that a user fills incrementally: run a search → tick some results →
-**"добавить в набор"** → pick an existing set or create a new one. Distinct from
-a search filter (dynamic) and from an ad-hoc export (one-shot).
+A **document set** (`набор`) belongs to one user. It has a *definition* the
+owner controls and a *result* computed on demand:
 
-The user never explicitly "builds" an archive. The archive is a **cache of the
-set's current content**, produced on demand and rebuilt automatically whenever
-the set has changed. Links are created against the set and keep working across
-rebuilds — a link always serves the set's *current* contents (rights are
-re-checked on every access).
+```
+result(set) =
+    ( ⋃ over each saved filter: search(filter, scope from the filter) )
+  ∪ explicitly-added documents
+  ∩ documents the owner can currently `download`
+```
+
+The definition is static and owner-only. The result is **dynamic**: as other
+people upload or tag documents that match a saved filter, those documents enter
+the set — and its archive — on the next access. "Nobody but the owner edits the
+set" and "the contents change on their own" are both true and intended: the
+owner owns the *rules*, not the *matches*. There is no per-document exclusion —
+to drop a match, narrow the filter.
 
 ### Model
 
-- `document_set` — `domain_id`, `name`, `description`, `visibility`
-  (`private` to creator, or `domain` = visible to all members),
-  `created_by`, `item_count`.
-- `document_set_item` — `(set_id, document_id)` unique (idempotent add),
-  `added_by`, `added_at`, `position` (manual reorder). If a document is trashed
-  the item stays but is skipped on build; on blob purge it is removed.
-- `artifact` — **one per set** (`kind = set_archive`, `source_id = set_id`),
-  created lazily and **overwritten in place** when the set changes. Fields:
-  `status` (`building`/`ready`/`failed`), `storage_key` (fixed
-  `set-<set_id>.zip`, cleared when the file is purged), `content_hash` (the set
-  hash the current file was built from), `size_bytes`, `item_count`,
-  `missing_count`, `snapshot` (doc ids at last build), `expires_at` (**file**
-  expiry — see cleanup). Ad-hoc exports also use `artifact`
-  (`kind = adhoc_export`) but those are point-in-time snapshots, never rebuilt.
-- `download_link` — `artifact_id` (the set's stable artifact), opaque `token`
-  (≈192-bit, URL-safe), `max_downloads` (`1` = one-time, `NULL` = unlimited),
-  `expires_at` (nullable), `download_count`, `revoked_at`, `last_downloaded_at`,
-  `created_by`.
+- `document_set` — `id`, `owner_id` (FK `user`, **NOT NULL**, `ON DELETE
+  CASCADE`), `name`, `description`, timestamps. No `domain_id` / `visibility` /
+  `item_count` (the count is dynamic — computed live for the UI).
+- `document_set_filter` — a saved search attached to a set. `id`, `set_id`
+  (FK CASCADE), `position`, `filter` (JSON — a serialized `SearchFilters`,
+  **including a `domain_ids` list**; empty = every domain the owner can reach
+  at query time), `description` (cached human summary for the card, e.g.
+  *«стройка · #договор · pdf · 2024»*), `created_at`. Any search on `/search`
+  can be saved here.
+- `document_set_item` — `(set_id, document_id)` PK, `added_by`, `added_at`,
+  `position`. Explicitly-added documents, always in the result (subject to the
+  owner still having `download`). Trashed → skipped on build; blob purge →
+  row removed.
+- `artifact` — **one per set**, `kind = set_archive`, `source_id = set_id`,
+  **`domain_id` nullable** (no domain; the owner is `requested_by`). Overwritten
+  in place. `status`, `storage_key` (`set-<set_id>.zip`), `content_hash`,
+  `size_bytes`, `item_count`, `missing_count`, `snapshot`, `expires_at`. Ad-hoc
+  exports still use `artifact` (`kind = adhoc_export`, domain-scoped or
+  owner-scoped, never rebuilt).
+- `download_link` — unchanged. `artifact_id`, opaque `token`, `max_downloads`
+  (`1` = one-time, `NULL` = unlimited), `expires_at`, `download_count`,
+  `revoked_at`, `last_downloaded_at`, `created_by` (= the set owner).
 
-### Set content hash
+### Per-document visibility (`is_public`)
 
-Deterministic, computed on every archive access and compared to
-`artifact.content_hash`:
+Sharing is a **public segment**: a share link only ever exposes documents
+flagged public.
 
-```
-sha256(json([
-  (str(doc.id), doc.sha256, doc.title,
-   doc.doc_date.isoformat() or "", ",".join(sorted(tag_slugs)))
-  for doc in non-deleted items, sorted by doc.id
-]))
-```
+- `domain.settings.default_document_visibility` — `private` (default) |
+  `public`. Set by the domain owner.
+- `document.is_public` (bool) — set at ingest from the domain default,
+  **whoever uploads** (the rule follows the domain, not the uploader).
+- Changed per-document or in bulk from `/search`; the capability is `manage`
+  (domain owner / admin), same as who configures the domain.
+- Changing the domain default affects **new** uploads only; existing documents
+  are re-flagged with the search bulk action.
+- `is_public` only governs set-archive / share-link exposure. Inside a domain,
+  who sees a document is still pure RBAC.
 
-Covers everything that ends up in the zip or the manifest, so any change that
-would change the archive triggers a rebuild.
+### Resolving a set (`resolve_set`)
 
-### Ensure-current (the transparent build)
+Produces the ordered document list for the hash, the archive, the live count.
+One scope rule, two visibility filters:
 
-On `GET …/sets/{s}/archive[/download]` and on `GET /d/{token}`:
+1. For each filter: `scope = filter.domain_ids` (empty → every domain in
+   `list_memberships(owner)`), intersected with the owner's **current**
+   membership; run `search_documents(db, scope, filter)` with
+   `page_size = SET_MAX_DOCS + 1`. Union the ids.
+2. Add `document_set_item` ids.
+3. Keep ids where `deleted_at IS NULL` and the owner still has `download` in
+   that document's domain.
+4. Apply the visibility filter for the caller:
+   - **share link / set archive** → keep only `is_public = true`.
+   - **«Полная выгрузка»** (owner, authed) → no visibility filter.
+5. Order: explicit items first by `position`, then filter matches by
+   `uploaded_at DESC, id`.
 
-1. compute `current_hash` from the set.
-2. load the set's `artifact` (create it, `status=building`, if absent).
-3. if `artifact.content_hash != current_hash` **or** the file is missing **or**
-   `expires_at` has passed → enqueue `build_set_archive`, set
-   `status=building`, `expires_at = now + domain.set_archive_ttl_days`.
-4. respond:
-   - `ready` and current → **200**, stream the file.
-   - building → **202** `{status:"building", retry_after: 2}` — the client
-     polls / retries.
+### Set content hash & ensure-current
 
-`build_set_archive(set_id)` writes `data/artifacts/set-<set_id>.zip` (files/ +
-`manifest.json` + `manifest.csv`), sets `content_hash`, `size_bytes`,
-`item_count`, `missing_count`, `status=ready`.
+The cached `artifact` is the **public** archive (step 4 → share view). Its
+`content_hash` is `sha256(json([...]))` over the resolved public list — same
+shape as before (`doc.id`, `sha256`, `title`, `doc_date`, sorted tag slugs),
+sorted by id. `is_public` and the owner's live access are baked into the
+resolve, so flipping a document private or losing membership changes the hash
+and rebuilds the archive without it.
+
+On `GET /sets/{s}/archive[/download]` and `GET /d/{token}`:
+
+1. `current_hash = hash(resolve_set(share view))`.
+2. load / lazily create the set's `artifact`.
+3. rebuild if `content_hash != current_hash` **or** the file is missing **or**
+   `expires_at` passed → enqueue `build_set_archive`, `status=building`,
+   `expires_at = now + SET_ARCHIVE_TTL_DAYS` (**global**). Concurrent hits with
+   the same target hash do not re-enqueue.
+4. `ready` and current → **200** stream; else **202**
+   `{status:"building", retry_after: 2}`.
+
+`build_set_archive(set_id)` resolves the share view, writes
+`data/artifacts/set-<set_id>.zip` (`files/` + `manifest.json` +
+`manifest.csv`), sets `content_hash` / `size_bytes` / `item_count` /
+`missing_count` / `status=ready`.
+
+**Size guard.** Resolved list over `SET_MAX_DOCS` (default 5000) or total blob
+size over `SET_ARCHIVE_MAX_BYTES` (default 5 GiB) → build `status=failed` with a
+clear error — **never a silent truncation** of a shared archive.
+
+### «Полная выгрузка» — the owner's full export
+
+A button on the set page, **owner only, authenticated**. Builds an
+`adhoc_export` artifact from `resolve_set(full view)` — every document the
+owner can `download`, ignoring `is_public`. One-shot: not cached long-term
+(`EXPORT_TTL_HOURS`), never linkable. Each press rebuilds. Note under the
+button: *«В архив войдут все документы ваших доменов и все документы из чужих
+доменов, к которым у вас есть доступ. Архив личный — поделиться им по ссылке
+нельзя.»*
 
 ### Workflow
 
-1. Search results carry checkboxes → **"добавить в набор"** → dialog lists the
-   user's sets (+ editable `domain`-visible sets) or **"＋ создать набор"**.
-2. Duplicates are ignored. Toast: *добавлено N в «набор X»*.
-3. **Наборы** section: each set with its count; open a set to review, reorder,
-   remove items, edit name/visibility.
-4. **Скачать архив** — just a download. The first request builds it (202 while
-   building), later requests stream it. Editing the set and downloading again
-   transparently rebuilds.
-5. **Создать ссылку** — *постоянная* (`max_downloads=NULL`, `expires_at=NULL`) /
-   *одноразовая* (`max_downloads=1`, optional expiry) / *с истечением* (custom
-   `expires_at`). The link binds to the set's stable `artifact_id`.
-6. Links are managed on the set: list, copy, download count, **revoke**.
+1. **`/search`** → tick results → *«＋ в набор»* adds them as
+   `document_set_item`s to a chosen / new set (cross-domain is fine).
+   Separately, *«сохранить фильтр в набор»* stores the current query as a
+   `document_set_filter`.
+2. **Мои наборы** (top-level nav): the owner's sets with a live count.
+3. **Set page** — name / description; the saved filters, each with its
+   `description` and an **«открыть в поиске»** link (`/search?…` rebuilt from
+   the stored filter); the explicitly-added documents; a live preview of the
+   resolved result; the archive block; **«Полная выгрузка»**.
+4. **Скачать архив** / **создать ссылку** — *постоянная* (`max_downloads=NULL`)
+   / *одноразовая* (`max_downloads=1`, optional expiry). No capability gate:
+   the set is the owner's and the archive is public-only anyway. The link binds
+   to the set's stable `artifact_id`.
+5. Links: list, copy, download count, **revoke** (owner only).
 
 ### Public download — `GET /d/{token}`
 
-No auth cookie, but **rights are re-checked every time**:
-
-- link not `revoked`, not past `expires_at`, `download_count < max_downloads`;
-- `allow_public_links` still `true` for the domain;
-- the link's `created_by` still has `download` in the domain (removed → link
-  dies).
-
-Then runs *ensure-current* (§ above); if `ready`, streams the file
-(`Content-Disposition: attachment; filename="<set> <date>.zip"`), increments
-`download_count`, sets `last_downloaded_at`. IP rate-limited. A one-time link is
-dead after the first completed download.
+No auth cookie, **re-checked every hit**: link not `revoked` / not past
+`expires_at` / `download_count < max_downloads`; the set exists and its owner
+account is active; then *ensure-current* on the share view. `ready` → stream
+(`Content-Disposition: attachment; filename="<set> <date>.zip"`), bump
+`download_count`, set `last_downloaded_at`. Resolved list **empty** (nothing
+public, or owner lost access) → **410 GONE**. IP rate-limited. One-time links
+die after the first completed download.
 
 ### Permissions
 
-| action | capability |
+| action | who |
 |---|---|
-| create / edit own set, add/remove items | `view` |
-| edit a `domain`-visible set someone else made | `manage` (or be the creator) |
-| download the set archive | `download` |
-| create a **one-time** link | `download` |
-| create a **permanent** link | `write` *(a standing public URL is a bigger commitment)* |
-| revoke a link | link creator, or `manage` |
+| everything about a set — see it, edit the definition, download, share, revoke | the **owner**, nobody else |
+| open a share link | anyone with the token, subject to the re-check |
+| set `document.is_public` (per-doc or bulk) | `manage` in that document's domain |
 
-Domain setting `allow_public_links` (default `true`). Every link create /
-revoke / public download is in `audit_log`.
+A future `document_set_member` table can add co-owners / read grants without
+touching this model.
 
 ### Lifecycle & cleanup
 
-- Set‑archive **files** expire after `domain.set_archive_ttl_days` (default
-  **7**, per‑domain). The `cleanup` job deletes any expired archive file and
-  clears `artifact.storage_key` / sets `status=building` — the row and its
-  links survive; the next access rebuilds. Nothing is "pinned", so temp
-  storage stays bounded.
-- Ad‑hoc export files expire after `EXPORT_TTL_HOURS` and are removed row‑and‑
-  all (they are snapshots, not rebuildable).
-- Deleting a set deletes its artifact file, artifact row, and links.
+- Set-archive **files** expire after `SET_ARCHIVE_TTL_DAYS` (default **7**,
+  global). `cleanup` deletes the file, clears `storage_key`, sets
+  `status=building` — row + links survive, next access rebuilds.
+- Ad-hoc export files (incl. «Полная выгрузка») expire after `EXPORT_TTL_HOURS`,
+  removed row-and-all.
+- Deleting a set (or its owner) cascades: `document_set_filter`,
+  `document_set_item`, the `artifact` row + file, `download_link`s.
+
+### Routes (moved off `/domains/{…}`)
+
+`/sets` · `/sets/{id}` · `/sets/{id}/filters` · `/sets/{id}/filters/{fid}` ·
+`/sets/{id}/items` · `/sets/{id}/items/{doc}` · `/sets/{id}/archive[/download]` ·
+`/sets/{id}/export` («Полная выгрузка») · `/sets/{id}/links` · `/links/{id}` ·
+public `GET /d/{token}` unchanged.
+
+### Migration
+
+`0010` — `document_set`: drop `domain_id` / `visibility` / `item_count`, add
+`owner_id NOT NULL`; add `document_set_filter`; `document`: add `is_public bool`
+(server default `false`); `artifact.domain_id` → nullable; drop the
+`SetVisibility` enum and the `allow_public_links` domain setting. Existing sets
+are **dropped** (test-phase data). `document_set_item` keeps its shape.
 
 ---
 

@@ -77,6 +77,11 @@ async def _domain_used_bytes(db: AsyncSession, domain_id: uuid.UUID) -> int:
     )
 
 
+def default_is_public(domain: Domain) -> bool:
+    """The visibility a new document in this domain gets (§15)."""
+    return (domain.settings or {}).get("default_document_visibility") == "public"
+
+
 def _quota_bytes(domain: Domain) -> int:
     mb = (domain.settings or {}).get("storage_quota_mb", settings.default_domain_quota_mb)
     return int(mb) * 1024 * 1024
@@ -225,6 +230,7 @@ def _new_document(
         doc_date=meta.doc_date,
         status=DocStatus.inbox,
         source=source,
+        is_public=default_is_public(domain),
         upload_batch_id=batch_id,
         uploaded_by=uploader.id,
     )

@@ -1,98 +1,137 @@
 {% extends "base.html" %}
 {% import "_icons.html" as ic %}
 {% import "_docmeta.html" as dm with context %}
-{% set d = view.domain %}
-{% block title %}{{ set.name }} — {{ d.name }}{% endblock %}
+{% block title %}{{ set.name }}{% endblock %}
 {% block content %}
-{% set active = 'sets' %}
-{% set crumb = set.name %}
-{% include "_domain_nav.html" %}
 
-<div class="d-flex align-items-baseline justify-content-between mb-3">
-  <h2 class="m-0">{{ set.name }}</h2>
-  <span class="text-secondary">
-    {{ set.item_count }} документов ·
-    {% if set.visibility == 'domain' %}<span class="badge bg-blue-lt">общий</span>{% else %}личный{% endif %}
-  </span>
+<ol class="breadcrumb" aria-label="breadcrumbs">
+  <li class="breadcrumb-item"><a href="/sets">Наборы</a></li>
+  <li class="breadcrumb-item active">{{ set.name }}</li>
+</ol>
+
+<form method="post" action="/sets/{{ set.id }}" class="row g-2 align-items-end mb-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="col-sm">
+    <label class="form-label">Название</label>
+    <input class="form-control" name="name" value="{{ set.name }}" required maxlength="200">
+  </div>
+  <div class="col-sm">
+    <label class="form-label">Описание</label>
+    <input class="form-control" name="description" value="{{ set.description or '' }}" maxlength="2000">
+  </div>
+  <div class="col-auto"><button class="btn">Сохранить</button></div>
+</form>
+
+{% if building %}
+<div class="alert alert-info">Архив готовится — обновите страницу и нажмите «Скачать архив» снова.</div>
+{% endif %}
+{% if export %}
+<div class="alert alert-{{ 'success' if export.status == 'ready' else ('danger' if export.status == 'failed' else 'info') }}">
+  {% if export.status == 'ready' %}
+    Полная выгрузка готова.
+    <a href="/sets/{{ set.id }}/export/{{ export.id }}/download" class="alert-link">Скачать ({{ export.size_bytes|humansize }})</a>
+  {% elif export.status == 'failed' %}
+    Не удалось собрать полную выгрузку: {{ export.error }}
+  {% else %}
+    Полная выгрузка готовится — обновите страницу через несколько секунд.
+  {% endif %}
 </div>
-
-{% if request.query_params.get('building') %}
-<div class="alert alert-info">Архив готовится — обновите страницу через несколько секунд и нажмите «Скачать» снова.</div>
 {% endif %}
 
 <div class="btn-list mb-3">
-  <a href="/domains/{{ d.slug }}/sets/{{ set.id }}/archive" class="btn btn-outline-primary">
+  <a href="/sets/{{ set.id }}/archive" class="btn btn-outline-primary">
     {{ ic.icon('download') }} Скачать архив
   </a>
-  {% if view.has('download') %}
-  <form method="post" action="/domains/{{ d.slug }}/sets/{{ set.id }}/links" class="btn-list">
+  <form method="post" action="/sets/{{ set.id }}/links" class="btn-list">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <button name="kind" value="one_time" class="btn btn-outline-secondary">{{ ic.icon('link') }} разовая ссылка</button>
-    {% if view.has('write') %}
     <button name="kind" value="permanent" class="btn btn-outline-secondary">{{ ic.icon('link') }} постоянная</button>
-    {% endif %}
   </form>
-  {% endif %}
+  <form method="post" action="/sets/{{ set.id }}/export">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button class="btn btn-outline-secondary">{{ ic.icon('download') }} Полная выгрузка</button>
+  </form>
 </div>
+<p class="text-secondary small mb-3">
+  «Скачать архив» и ссылки отдают только <strong>публичные</strong> документы
+  ({{ public_count }} из {{ resolved_count }}). «Полная выгрузка» — все документы ваших
+  доменов и все доступные вам из чужих; поделиться ей по ссылке нельзя.
+</p>
 
 {% if links %}
 <div class="card mb-3">
   <div class="card-header"><h3 class="card-title">Ссылки</h3></div>
-  <div class="table-responsive">
-    <table class="table table-vcenter card-table">
-      <thead><tr><th>ссылка</th><th>тип</th><th>скачано</th><th class="w-1"></th></tr></thead>
-      <tbody>
-      {% for link, url in links %}
-        <tr>
-          <td><span class="text-secondary">{{ url }}</span></td>
-          <td>{{ 'одноразовая' if link.max_downloads == 1 else 'постоянная' }}</td>
-          <td>{{ link.download_count }}{% if link.max_downloads %}/{{ link.max_downloads }}{% endif %}</td>
-          <td>
-            <form method="post" action="/links/{{ link.id }}/revoke">
-              <input type="hidden" name="csrf_token" value="{{ csrf }}">
-              <button class="btn btn-sm btn-ghost-danger">отозвать</button>
-            </form>
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <div class="table-responsive"><table class="table table-vcenter card-table">
+    <thead><tr><th>ссылка</th><th>тип</th><th>скачано</th><th class="w-1"></th></tr></thead>
+    <tbody>
+    {% for link, url in links %}
+      <tr>
+        <td><span class="text-secondary">{{ url }}</span></td>
+        <td>{{ 'одноразовая' if link.max_downloads == 1 else 'постоянная' }}</td>
+        <td>{{ link.download_count }}{% if link.max_downloads %}/{{ link.max_downloads }}{% endif %}</td>
+        <td>
+          <form method="post" action="/links/{{ link.id }}/revoke">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <button class="btn btn-sm btn-ghost-danger">отозвать</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
 </div>
 {% endif %}
 
-<div class="card">
-  <div class="card-header"><h3 class="card-title">Документы</h3></div>
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Фильтры</h3></div>
   <div class="list-group list-group-flush">
-    {% for doc in docs %}
+    {% for f, link in filters %}
+    <div class="list-group-item d-flex align-items-center">
+      <div class="flex-fill">{{ f.description or 'все документы' }}</div>
+      <a href="{{ link }}" class="btn btn-sm btn-ghost-secondary me-2">открыть в поиске</a>
+      <form method="post" action="/sets/{{ set.id }}/filters/{{ f.id }}/remove">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <button class="btn btn-sm btn-ghost-danger">убрать</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="list-group-item text-secondary">
+      Фильтров нет. Сохраните поисковый запрос в набор со страницы «Поиск».
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Документы</h3>
+    <span class="card-subtitle">резолв: {{ resolved_count }}{% if resolved_count > preview|length %} (показаны первые {{ preview|length }}){% endif %}</span>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for doc in preview %}
     <div class="list-group-item d-flex align-items-center">
       <div class="flex-fill">
         <a href="/documents/{{ doc.id }}" class="text-reset">{{ doc.title }}</a>
         <span class="text-secondary">· {{ doc.size_bytes|humansize }}{% if doc.doc_date %} · {{ doc.doc_date|shortdate }}{% endif %}</span>
-        <span class="ms-1">{{ dm.state_icons(doc) }}</span>
-        {% for name in tag_map.get(doc.id, [])|sort %}<span class="badge bg-secondary-lt ms-1">{{ name }}</span>{% endfor %}
+        {% if doc.is_public %}<span class="badge bg-green-lt ms-1">публичный</span>{% endif %}
+        {% if doc.id in explicit_ids %}<span class="badge bg-blue-lt ms-1">добавлен вручную</span>{% endif %}
       </div>
-      {% if can_edit %}
-      <form method="post" action="/domains/{{ d.slug }}/sets/{{ set.id }}/items/{{ doc.id }}/remove">
+      {% if doc.id in explicit_ids %}
+      <form method="post" action="/sets/{{ set.id }}/items/{{ doc.id }}/remove">
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
         <button class="btn btn-sm btn-ghost-danger">убрать</button>
       </form>
       {% endif %}
     </div>
     {% else %}
-    <div class="list-group-item text-secondary">
-      В наборе нет документов. Добавляйте их со страницы документа или из поиска.
-    </div>
+    <div class="list-group-item text-secondary">Набор сейчас пуст.</div>
     {% endfor %}
   </div>
-  {% if can_edit %}
   <div class="card-footer">
-    <form method="post" action="/domains/{{ d.slug }}/sets/{{ set.id }}/delete"
-          onsubmit="return confirm('Удалить набор?')">
+    <form method="post" action="/sets/{{ set.id }}/delete" onsubmit="return confirm('Удалить набор?')">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <button class="btn btn-outline-danger">Удалить набор</button>
     </form>
   </div>
-  {% endif %}
 </div>
 {% endblock %}

@@ -35,8 +35,10 @@ class Artifact(Base):
     __tablename__ = "artifact"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    domain_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("domain.id", ondelete="CASCADE"), index=True
+    # NULL for a set_archive — a set is user-owned, not domain-scoped (§15).
+    # adhoc_export keeps its domain (or is also NULL for a set's «Полная выгрузка»).
+    domain_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("domain.id", ondelete="CASCADE"), nullable=True, index=True
     )
     kind: Mapped[ArtifactKind] = mapped_column(_kind_enum)
     source_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)  # set_id, for set_archive

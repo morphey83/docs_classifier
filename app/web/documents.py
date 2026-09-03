@@ -19,7 +19,6 @@ from app.models import (
     DocumentSet,
     DocumentTag,
     OcrStatus,
-    SetVisibility,
     Tag,
     UploadBatch,
     UploadBatchItem,
@@ -158,10 +157,9 @@ async def _doc_ctx(db: AsyncSession, user: User, doc, view) -> dict:
         "tags": await _tag_names(db, doc.id),
         "freq": freq,
         "ocr_supported": ocr_engine.is_supported(doc.mime),
-        "sets": await docsets_svc.list_sets(db, doc.domain_id, user.id),
-        "doc_sets": await docsets_svc.sets_of_document(
-            db, doc.id, domain_id=doc.domain_id, user_id=user.id
-        ),
+        "sets": await docsets_svc.list_sets(db, user.id),
+        "doc_sets": await docsets_svc.sets_containing_document(db, doc.id, user.id),
+        "can_publish": view.has(Cap.manage),
     }
 
 
@@ -261,13 +259,9 @@ async def document_index(
     return await _doc_fragment(request, db, user, document_id, toast="Проиндексировано")
 
 
-async def _visible_set(db, user, doc, set_id: uuid.UUID) -> DocumentSet:
-    s = await db.get(DocumentSet, set_id)
-    if (
-        s is None
-        or s.domain_id != doc.domain_id
-        or (s.created_by != user.id and s.visibility != SetVisibility.domain)
-    ):
+async def _owned_set(db, user, set_id: uuid.UUID) -> DocumentSet:
+    s = await docsets_svc.get_owned_set(db, set_id, user.id)
+    if s is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "набор не найден")
     return s
 
@@ -283,14 +277,10 @@ async def document_add_to_set(
     db: AsyncSession = Depends(get_session),
 ) -> Response:
     doc, view = await load_document(db, user, document_id)
-    require_cap(view, Cap.view)
+    require_cap(view, Cap.download)
     if set_id == "__new__" or (not set_id and new_name.strip()):
-        require_cap(view, Cap.write)
         s = await docsets_svc.create_set(
-            db, view.domain, user,
-            name=new_name.strip() or "Новый набор",
-            description=None, visibility=SetVisibility.private,
-            document_ids=[doc.id],
+            db, user, name=new_name.strip() or "Новый набор", document_ids=[doc.id]
         )
         msg = f"Создан набор «{s.name}»"
     else:
@@ -298,7 +288,7 @@ async def document_add_to_set(
             sid = uuid.UUID(set_id)
         except ValueError as err:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "нужно выбрать набор") from err
-        s = await _visible_set(db, user, doc, sid)
+        s = await _owned_set(db, user, sid)
         await docsets_svc.add_items(db, s, [doc.id], actor=user)
         msg = f"Добавлено в «{s.name}»"
     return await _doc_fragment(request, db, user, document_id, toast=msg)
@@ -313,11 +303,27 @@ async def document_remove_from_set(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
-    doc, view = await load_document(db, user, document_id)
-    require_cap(view, Cap.view)
-    s = await _visible_set(db, user, doc, set_id)
+    doc, _view = await load_document(db, user, document_id)
+    s = await _owned_set(db, user, set_id)
     await docsets_svc.remove_item(db, s, doc.id)
     return await _doc_fragment(request, db, user, document_id, toast=f"Убрано из «{s.name}»")
+
+
+@router.post("/documents/{document_id}/visibility")
+async def document_visibility(
+    request: Request,
+    document_id: uuid.UUID,
+    is_public: str = Form(default=""),
+    _: None = CsrfGuard,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    doc, view = await load_document(db, user, document_id)
+    require_cap(view, Cap.manage)
+    doc.is_public = is_public in ("1", "true", "on", "yes")
+    await db.flush()
+    msg = "Документ публичный" if doc.is_public else "Документ приватный"
+    return await _doc_fragment(request, db, user, document_id, toast=msg)
 
 
 @router.post("/documents/{document_id}/delete")

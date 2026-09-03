@@ -22,7 +22,7 @@ class ExportCreate(BaseModel):
 
 class ArtifactOut(BaseModel):
     id: uuid.UUID
-    domain_id: uuid.UUID
+    domain_id: uuid.UUID | None
     kind: str
     status: str
     size_bytes: int

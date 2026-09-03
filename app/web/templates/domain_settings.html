@@ -34,10 +34,18 @@
             <input class="form-check-input" type="checkbox" name="auto_index" {{ 'checked' if s.get('auto_index') }}>
             <span class="form-check-label">авто-индексация при загрузке</span>
           </label>
-          <label class="form-check">
-            <input class="form-check-input" type="checkbox" name="allow_public_links" {{ 'checked' if s.get('allow_public_links', True) }}>
-            <span class="form-check-label">разрешить публичные ссылки</span>
-          </label>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Видимость новых документов</label>
+          <select class="form-select" name="default_document_visibility">
+            <option value="private" {{ 'selected' if s.get('default_document_visibility') != 'public' }}>приватные (по умолчанию)</option>
+            <option value="public" {{ 'selected' if s.get('default_document_visibility') == 'public' }}>публичные</option>
+          </select>
+          <div class="form-hint">
+            Публичные документы могут попасть в архив набора и уйти по ссылке.
+            Влияет только на новые загрузки; для старых используйте массовое действие в поиске.
+          </div>
         </div>
 
         <div class="mb-3">
@@ -78,11 +86,6 @@
             <label class="form-label">Хранить корзину, дней</label>
             <input class="form-control" name="trash_retention_days" type="number" min="0"
                    value="{{ s.get('trash_retention_days', caps.trash) }}">
-          </div>
-          <div class="col-sm-6 mb-3">
-            <label class="form-label">Хранить архив набора, дней</label>
-            <input class="form-control" name="set_archive_ttl_days" type="number" min="0"
-                   value="{{ s.get('set_archive_ttl_days', 7) }}">
           </div>
         </div>
 

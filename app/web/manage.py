@@ -57,10 +57,9 @@ async def settings_save(
     storage_quota_mb: str = Form(default=""),
     max_upload_mb: str = Form(default=""),
     trash_retention_days: str = Form(default=""),
-    set_archive_ttl_days: str = Form(default=""),
     auto_ocr: str = Form(default=""),
     auto_index: str = Form(default=""),
-    allow_public_links: str = Form(default=""),
+    default_document_visibility: str = Form(default="private"),
     _: None = CsrfGuard,
     view: DomainView = Depends(domain_by_slug),
     db: AsyncSession = Depends(get_session),
@@ -73,7 +72,9 @@ async def settings_save(
     s = dict(d.settings or {})
     s["auto_ocr"] = auto_ocr == "on"
     s["auto_index"] = auto_index == "on"
-    s["allow_public_links"] = allow_public_links == "on"
+    s["default_document_visibility"] = (
+        "public" if default_document_visibility == "public" else "private"
+    )
     s["archive_on_conflict"] = "new" if archive_on_conflict == "new" else "skip"
     s["default_ocr_lang"] = default_ocr_lang.strip() or cfg.ocr_default_lang
     types = [t.strip().lower().lstrip(".") for t in allowed_types.split(",") if t.strip()]
@@ -82,7 +83,6 @@ async def settings_save(
         ("storage_quota_mb", storage_quota_mb, cfg.default_domain_quota_mb),
         ("max_upload_mb", max_upload_mb, cfg.max_upload_mb),
         ("trash_retention_days", trash_retention_days, 3650),
-        ("set_archive_ttl_days", set_archive_ttl_days, 3650),
     ):
         v = _int(raw, cap)
         if v is not None:

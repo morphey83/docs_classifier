@@ -130,13 +130,12 @@ async def test_cleanup_sweeps_orphan_blobs(alice, domain):
 async def test_cleanup_clears_expired_set_archive_but_keeps_row_and_link(alice, domain):
     d = domain["id"]
     doc = await _upload(alice, d, "s.txt")
+    await alice.post(f"/api/documents/{doc['id']}/visibility?is_public=true")
     s = (
-        await alice.post(
-            f"/api/domains/{d}/sets", json={"name": "set", "document_ids": [doc["id"]]}
-        )
+        await alice.post("/api/sets", json={"name": "set", "document_ids": [doc["id"]]})
     ).json()
     link = (
-        await alice.post(f"/api/domains/{d}/sets/{s['id']}/links", json={"kind": "permanent"})
+        await alice.post(f"/api/sets/{s['id']}/links", json={"kind": "permanent"})
     ).json()
     assert (await _download_when_ready(alice, link["url"])).status_code == 200
     assert storage.set_archive_path(s["id"]).is_file()

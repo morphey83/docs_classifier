@@ -1,4 +1,4 @@
-"""Document sets, their archive cache, and public share links (§15)."""
+"""User-owned document sets, their shareable archive, and public links (§15)."""
 
 from __future__ import annotations
 
@@ -6,41 +6,35 @@ import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse, JSONResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import storage
-from app.api._common import document_out
 from app.config import settings
 from app.db import get_session
-from app.deps import DomainCtx, require
 from app.models import (
     Artifact,
     ArtifactKind,
     ArtifactStatus,
-    Document,
     DocumentSet,
-    DocumentSetItem,
-    Domain,
     DownloadLink,
-    SetVisibility,
     User,
 )
-from app.rbac import ROLE_CAPS, Cap, Role
 from app.schemas.docsets import (
     ArchiveStatusOut,
+    FilterAdd,
+    FilterOut,
     LinkCreate,
     LinkOut,
     SetCreate,
     SetDetail,
-    SetItemOut,
     SetItemsAdd,
     SetOut,
     SetUpdate,
 )
+from app.schemas.exports import ArtifactOut
 from app.security import get_current_user
 from app.services import docsets as svc
-from app.services import domains as domains_svc
+from app.services.search import SearchFilters
 from app.util import ratelimit
 from app.util.time import as_aware, utcnow
 from app.util.urls import absolute_url
@@ -50,164 +44,149 @@ router = APIRouter(tags=["sets"])
 public_router = APIRouter(tags=["share"])
 
 
-# --- helpers ----------------------------------------------------------
 def _client_ip(request: Request) -> str:
     fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.client.host if request.client else "?"
+    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "?")
 
 
-def _has_manage(role: Role | str) -> bool:
-    return Cap.manage in ROLE_CAPS[Role(role)]
-
-
-def _has_download(role: Role | str) -> bool:
-    return Cap.download in ROLE_CAPS[Role(role)]
-
-
-async def _load_set(
-    db: AsyncSession, ctx: DomainCtx, set_id: uuid.UUID, *, need_edit: bool = False
-) -> DocumentSet:
-    s = await db.get(DocumentSet, set_id)
-    if s is None or s.domain_id != ctx.domain.id:
+async def _owned(db: AsyncSession, set_id: uuid.UUID, user: User) -> DocumentSet:
+    s = await svc.get_owned_set(db, set_id, user.id)
+    if s is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "set not found")
-    is_creator = s.created_by == ctx.user.id
-    if not is_creator and s.visibility != SetVisibility.domain:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "set not found")
-    if need_edit and not is_creator and not ctx.has(Cap.manage):
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "editing this set needs 'manage' in the domain"
-        )
     return s
 
 
-def _archive_filename(set_obj: DocumentSet) -> str:
-    safe = "".join(c if c.isalnum() or c in " -_." else "_" for c in set_obj.name).strip()
+def _archive_filename(s: DocumentSet) -> str:
+    safe = "".join(c if c.isalnum() or c in " -_." else "_" for c in s.name).strip()
     return f"{safe or 'set'} {utcnow():%Y-%m-%d}.zip"
 
 
-async def _set_out(db: AsyncSession, set_obj: DocumentSet) -> SetOut:
-    # server_default / onupdate columns (created_at, updated_at) may be expired
-    # after a flush — reload before the sync pydantic validation touches them.
-    await db.refresh(set_obj)
-    return SetOut.model_validate(set_obj)
+async def _detail(db: AsyncSession, s: DocumentSet) -> SetDetail:
+    await db.refresh(s)
+    filters = await svc.list_filters(db, s.id)
+    resolved = await svc.resolve_set(db, s, view="full")
+    from sqlalchemy import func, select
 
+    from app.models import DocumentSetItem
 
-async def _set_detail(db: AsyncSession, set_obj: DocumentSet) -> SetDetail:
-    rows = await db.execute(
-        select(Document, DocumentSetItem.added_at, DocumentSetItem.position)
-        .join(DocumentSetItem, DocumentSetItem.document_id == Document.id)
-        .where(DocumentSetItem.set_id == set_obj.id)
-        .order_by(DocumentSetItem.position, DocumentSetItem.added_at)
+    item_count = int(
+        await db.scalar(
+            select(func.count()).where(DocumentSetItem.set_id == s.id)
+        )
+        or 0
     )
-    items = [
-        SetItemOut(document=await document_out(db, doc), added_at=added_at, position=pos)
-        for doc, added_at, pos in rows
-    ]
-    base = await _set_out(db, set_obj)
-    return SetDetail(**base.model_dump(), items=items)
-
-
-_ensure_current = svc.ensure_current_archive
+    return SetDetail(
+        **SetOut.model_validate(s).model_dump(),
+        filters=[FilterOut.model_validate(f) for f in filters],
+        item_count=item_count,
+        resolved_count=len(resolved),
+    )
 
 
 # --- set CRUD --------------------------------------------------------
-@router.post(
-    "/domains/{domain_id}/sets", response_model=SetOut, status_code=status.HTTP_201_CREATED
-)
+@router.post("/sets", response_model=SetOut, status_code=status.HTTP_201_CREATED)
 async def create_set(
     body: SetCreate,
-    ctx: DomainCtx = Depends(require(Cap.view)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> SetOut:
     s = await svc.create_set(
-        db,
-        ctx.domain,
-        ctx.user,
-        name=body.name,
-        description=body.description,
-        visibility=body.visibility,
-        document_ids=body.document_ids,
+        db, user, name=body.name, description=body.description, document_ids=body.document_ids
     )
-    return await _set_out(db, s)
+    await db.refresh(s)
+    return SetOut.model_validate(s)
 
 
-@router.get("/domains/{domain_id}/sets", response_model=list[SetOut])
+@router.get("/sets", response_model=list[SetOut])
 async def list_sets(
-    ctx: DomainCtx = Depends(require(Cap.view)), db: AsyncSession = Depends(get_session)
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)
 ) -> list[SetOut]:
-    return [SetOut.model_validate(s) for s in await svc.list_sets(db, ctx.domain.id, ctx.user.id)]
+    return [SetOut.model_validate(s) for s in await svc.list_sets(db, user.id)]
 
 
-@router.get("/domains/{domain_id}/sets/{set_id}", response_model=SetDetail)
+@router.get("/sets/{set_id}", response_model=SetDetail)
 async def get_set(
     set_id: uuid.UUID,
-    ctx: DomainCtx = Depends(require(Cap.view)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> SetDetail:
-    return await _set_detail(db, await _load_set(db, ctx, set_id))
+    return await _detail(db, await _owned(db, set_id, user))
 
 
-@router.patch("/domains/{domain_id}/sets/{set_id}", response_model=SetOut)
+@router.patch("/sets/{set_id}", response_model=SetOut)
 async def update_set(
     set_id: uuid.UUID,
     body: SetUpdate,
-    ctx: DomainCtx = Depends(require(Cap.view)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> SetOut:
-    s = await _load_set(db, ctx, set_id, need_edit=True)
-    if body.name is not None:
-        s.name = body.name.strip()
-    if body.description is not None:
-        s.description = body.description or None
-    if body.visibility is not None:
-        s.visibility = body.visibility
-    await db.flush()
-    return await _set_out(db, s)
+    s = await _owned(db, set_id, user)
+    await svc.rename_set(db, s, name=body.name, description=body.description)
+    await db.refresh(s)
+    return SetOut.model_validate(s)
 
 
-@router.delete("/domains/{domain_id}/sets/{set_id}")
+@router.delete("/sets/{set_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_set(
     set_id: uuid.UUID,
-    ctx: DomainCtx = Depends(require(Cap.view)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
-    s = await _load_set(db, ctx, set_id, need_edit=True)
-    artifact = await svc.get_set_artifact(db, set_id)
-    if artifact is not None:
-        storage.set_archive_path(str(set_id)).unlink(missing_ok=True)
-        await db.delete(artifact)  # cascades its download_links
-    await db.delete(s)  # cascades document_set_item
+    await svc.delete_set(db, await _owned(db, set_id, user))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# --- items ----------------------------------------------------------
-@router.post("/domains/{domain_id}/sets/{set_id}/items", response_model=SetDetail)
+# --- filters --------------------------------------------------------
+@router.post("/sets/{set_id}/filters", response_model=SetDetail)
+async def add_filter(
+    set_id: uuid.UUID,
+    body: FilterAdd,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> SetDetail:
+    s = await _owned(db, set_id, user)
+    await svc.add_filter(db, s, SearchFilters.from_dict(body.filter), description=body.description)
+    return await _detail(db, s)
+
+
+@router.delete("/sets/{set_id}/filters/{filter_id}", response_model=SetDetail)
+async def remove_filter(
+    set_id: uuid.UUID,
+    filter_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> SetDetail:
+    s = await _owned(db, set_id, user)
+    await svc.remove_filter(db, s, filter_id)
+    return await _detail(db, s)
+
+
+# --- explicit items -----------------------------------------------
+@router.post("/sets/{set_id}/items", response_model=SetDetail)
 async def add_items(
     set_id: uuid.UUID,
     body: SetItemsAdd,
-    ctx: DomainCtx = Depends(require(Cap.view)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> SetDetail:
-    s = await _load_set(db, ctx, set_id, need_edit=True)
-    await svc.add_items(db, s, body.document_ids, actor=ctx.user)
-    return await _set_detail(db, s)
+    s = await _owned(db, set_id, user)
+    await svc.add_items(db, s, body.document_ids, actor=user)
+    return await _detail(db, s)
 
 
-@router.delete("/domains/{domain_id}/sets/{set_id}/items/{document_id}", response_model=SetDetail)
+@router.delete("/sets/{set_id}/items/{document_id}", response_model=SetDetail)
 async def remove_item(
     set_id: uuid.UUID,
     document_id: uuid.UUID,
-    ctx: DomainCtx = Depends(require(Cap.view)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> SetDetail:
-    s = await _load_set(db, ctx, set_id, need_edit=True)
+    s = await _owned(db, set_id, user)
     await svc.remove_item(db, s, document_id)
-    return await _set_detail(db, s)
+    return await _detail(db, s)
 
 
-# --- archive ------------------------------------------------------
+# --- shareable archive -------------------------------------------
 def _archive_status(artifact: Artifact, current: str) -> ArchiveStatusOut:
     ready = artifact.status == ArtifactStatus.ready and artifact.content_hash == current
     return ArchiveStatusOut(
@@ -222,46 +201,58 @@ def _archive_status(artifact: Artifact, current: str) -> ArchiveStatusOut:
     )
 
 
-@router.get("/domains/{domain_id}/sets/{set_id}/archive", response_model=ArchiveStatusOut)
+@router.get("/sets/{set_id}/archive", response_model=ArchiveStatusOut)
 async def archive_status(
     set_id: uuid.UUID,
     background: BackgroundTasks,
-    ctx: DomainCtx = Depends(require(Cap.download)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> ArchiveStatusOut:
-    s = await _load_set(db, ctx, set_id)
-    artifact, current = await _ensure_current(
-        db, background, ctx.domain, s, requested_by=ctx.user.id
-    )
+    s = await _owned(db, set_id, user)
+    artifact, current = await svc.ensure_current_archive(db, background, s, requested_by=user.id)
     return _archive_status(artifact, current)
 
 
-@router.get("/domains/{domain_id}/sets/{set_id}/archive/download")
+@router.get("/sets/{set_id}/archive/download")
 async def download_archive(
     set_id: uuid.UUID,
     background: BackgroundTasks,
-    ctx: DomainCtx = Depends(require(Cap.download)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
-    s = await _load_set(db, ctx, set_id)
-    artifact, current = await _ensure_current(
-        db, background, ctx.domain, s, requested_by=ctx.user.id
-    )
-    path = storage.set_archive_path(str(set_id))
-    if (
-        artifact.status == ArtifactStatus.ready
-        and artifact.content_hash == current
-        and path.is_file()
-    ):
+    s = await _owned(db, set_id, user)
+    artifact, current = await svc.ensure_current_archive(db, background, s, requested_by=user.id)
+    if svc.archive_is_ready(artifact, current):
         return FileResponse(
-            path, media_type="application/zip", filename=_archive_filename(s)
+            storage.set_archive_path(str(set_id)),
+            media_type="application/zip",
+            filename=_archive_filename(s),
         )
     return JSONResponse(
         {"status": "building", "retry_after": 2}, status_code=status.HTTP_202_ACCEPTED
     )
 
 
-# --- share links --------------------------------------------------
+@router.post(
+    "/sets/{set_id}/export",
+    response_model=ArtifactOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def full_export(
+    set_id: uuid.UUID,
+    background: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> ArtifactOut:
+    s = await _owned(db, set_id, user)
+    try:
+        artifact = await svc.start_full_export(db, background, s, user)
+    except svc.SetError as err:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(err)) from err
+    return ArtifactOut.model_validate(artifact)
+
+
+# --- share links ------------------------------------------------
 def _link_out(link: DownloadLink) -> LinkOut:
     return LinkOut(
         id=link.id,
@@ -277,54 +268,32 @@ def _link_out(link: DownloadLink) -> LinkOut:
     )
 
 
-@router.post(
-    "/domains/{domain_id}/sets/{set_id}/links",
-    response_model=LinkOut,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/sets/{set_id}/links", response_model=LinkOut, status_code=status.HTTP_201_CREATED)
 async def create_link(
     set_id: uuid.UUID,
     body: LinkCreate,
     background: BackgroundTasks,
-    ctx: DomainCtx = Depends(require(Cap.view)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> LinkOut:
-    s = await _load_set(db, ctx, set_id)
-    try:
-        link = await svc.create_share_link(
-            db,
-            background,
-            domain=ctx.domain,
-            set_obj=s,
-            user=ctx.user,
-            role=ctx.role,
-            kind=body.kind,
-            expires_at=body.expires_at,
-        )
-    except svc.SetError as err:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, str(err)) from err
+    s = await _owned(db, set_id, user)
+    link = await svc.create_share_link(
+        db, background, s=s, user=user, kind=body.kind, expires_at=body.expires_at
+    )
     return _link_out(link)
 
 
-@router.get("/domains/{domain_id}/sets/{set_id}/links", response_model=list[LinkOut])
+@router.get("/sets/{set_id}/links", response_model=list[LinkOut])
 async def list_links(
     set_id: uuid.UUID,
-    ctx: DomainCtx = Depends(require(Cap.view)),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> list[LinkOut]:
-    s = await _load_set(db, ctx, set_id)
-    artifact = await svc.get_set_artifact(db, s.id)
-    if artifact is None:
-        return []
-    rows = await db.scalars(
-        select(DownloadLink)
-        .where(DownloadLink.artifact_id == artifact.id)
-        .order_by(DownloadLink.created_at.desc())
-    )
-    return [_link_out(link) for link in rows]
+    s = await _owned(db, set_id, user)
+    return [_link_out(link) for link in await svc.links_of_set(db, s.id)]
 
 
-@router.delete("/links/{link_id}")
+@router.delete("/links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_link(
     link_id: uuid.UUID,
     user: User = Depends(get_current_user),
@@ -334,17 +303,14 @@ async def revoke_link(
     if link is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "link not found")
     artifact = await db.get(Artifact, link.artifact_id)
-    row = await domains_svc.get_membership(db, artifact.domain_id, user.id) if artifact else None
-    if row is None:
+    s = await db.get(DocumentSet, artifact.source_id) if artifact else None
+    if s is None or s.owner_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "link not found")
-    if link.created_by != user.id and not _has_manage(row[1].role):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "only the creator or 'manage' can revoke")
-    if link.revoked_at is None:
-        link.revoked_at = utcnow()
+    await svc.revoke_link(db, link)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# --- public download (no auth, mounted at root) -----------------
+# --- public download (no auth, mounted at root) ---------------
 @public_router.get("/d/{token}")
 async def public_download(
     token: str,
@@ -352,6 +318,8 @@ async def public_download(
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_session),
 ) -> Response:
+    from sqlalchemy import select
+
     ip = _client_ip(request)
     if not ratelimit.check(f"d:{ip}", settings.public_download_rate_per_min):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "slow down")
@@ -367,36 +335,26 @@ async def public_download(
     artifact = await db.get(Artifact, link.artifact_id)
     if artifact is None or artifact.kind != ArtifactKind.set_archive or artifact.source_id is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "link not found")
-    set_obj = await db.get(DocumentSet, artifact.source_id)
-    domain = await db.get(Domain, artifact.domain_id)
-    if set_obj is None or domain is None:
+    s = await db.get(DocumentSet, artifact.source_id)
+    if s is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "link not found")
+    owner = await db.get(User, s.owner_id)
+    if owner is None or not owner.is_active:
+        raise HTTPException(status.HTTP_410_GONE, "this share is no longer available")
 
-    if not (domain.settings or {}).get("allow_public_links", True):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "public links are disabled")
-    row = (
-        await domains_svc.get_membership(db, domain.id, link.created_by)
-        if link.created_by
-        else None
-    )
-    if row is None or not _has_download(row[1].role):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "this link is no longer valid")
-
-    art, current = await _ensure_current(
-        db, background, domain, set_obj, requested_by=link.created_by
-    )
-    path = storage.set_archive_path(str(set_obj.id))
-    if (
-        art.status == ArtifactStatus.ready
-        and art.content_hash == current
-        and path.is_file()
-    ):
-        link.download_count += 1
-        link.last_downloaded_at = utcnow()
-        await db.commit()
-        return FileResponse(
-            path, media_type="application/zip", filename=_archive_filename(set_obj)
+    art, current = await svc.ensure_current_archive(db, background, s, requested_by=s.owner_id)
+    if not svc.archive_is_ready(art, current):
+        return JSONResponse(
+            {"status": "building", "retry_after": 2}, status_code=status.HTTP_202_ACCEPTED
         )
-    return JSONResponse(
-        {"status": "building", "retry_after": 2}, status_code=status.HTTP_202_ACCEPTED
+    if art.item_count == 0:
+        raise HTTPException(status.HTTP_410_GONE, "this share has no accessible content")
+
+    link.download_count += 1
+    link.last_downloaded_at = utcnow()
+    await db.commit()
+    return FileResponse(
+        storage.set_archive_path(str(s.id)),
+        media_type="application/zip",
+        filename=_archive_filename(s),
     )

@@ -30,7 +30,9 @@ class Settings(BaseSettings):
     default_domain_quota_mb: int = 5000
     default_trash_retention_days: int = 30
     export_ttl_hours: int = 48
-    set_archive_ttl_days: int = 7  # set-archive cache file lifetime
+    set_archive_ttl_days: int = 7  # set-archive cache file lifetime (global; §15)
+    set_max_docs: int = 5000  # hard cap on a set's resolved document count
+    set_archive_max_bytes: int = 5 * 1024**3  # hard cap on a set archive's total size
     public_download_rate_per_min: int = 60  # per-IP cap on GET /d/{token}
     default_allowed_types: str | None = None  # comma-separated extensions; unset = unrestricted
     tg_link_ttl_minutes: int = 15

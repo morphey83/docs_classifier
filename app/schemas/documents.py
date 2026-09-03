@@ -25,6 +25,7 @@ class DocumentOut(BaseModel):
     status: DocStatus
     source: DocSource
     version: int
+    is_public: bool = False
     text_source: TextSource
     index_status: IndexStatus
     indexed_at: datetime | None

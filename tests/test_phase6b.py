@@ -118,40 +118,26 @@ async def test_clear_dangling_domain(alice, alice_user):
 
 
 # --- shared set service ----------------------------------------------
-async def test_create_share_link_service_enforces_caps(alice, bob):
+async def test_create_share_link_service(alice):
     d = (await alice.post("/api/domains", json={"name": "SL"})).json()
-    bob_me = (await bob.get("/api/auth/me")).json()
-    await alice.post(
-        f"/api/domains/{d['id']}/members", json={"username": bob_me["username"], "role": "viewer"}
-    )
     r = await alice.post(
         f"/api/domains/{d['id']}/uploads", files={"file": ("a.txt", b"a", "text/plain")}
     )
     doc_id = r.json()["document"]["id"]
-    s = (
-        await alice.post(
-            f"/api/domains/{d['id']}/sets", json={"name": "s", "document_ids": [doc_id]}
-        )
-    ).json()
-
-    from app.models import Domain
-    from app.rbac import Role
+    alice_me = (await alice.get("/api/auth/me")).json()
+    s = (await alice.post("/api/sets", json={"name": "s", "document_ids": [doc_id]})).json()
 
     async with get_sessionmaker()() as db:
-        domain = await db.get(Domain, uuid.UUID(d["id"]))
         set_obj = await db.get(docsets_svc.DocumentSet, uuid.UUID(s["id"]))
-        bob_user = await db.get(User, uuid.UUID(bob_me["id"]))
-
-        with pytest.raises(docsets_svc.SetError):
-            await docsets_svc.create_share_link(
-                db, None, domain=domain, set_obj=set_obj, user=bob_user,
-                role=Role.viewer, kind="permanent",
-            )
-        link = await docsets_svc.create_share_link(
-            db, None, domain=domain, set_obj=set_obj, user=bob_user,
-            role=Role.viewer, kind="one_time",
+        owner = await db.get(User, uuid.UUID(alice_me["id"]))
+        # the owner can make either kind of link, no capability gate
+        perm = await docsets_svc.create_share_link(
+            db, None, s=set_obj, user=owner, kind="permanent"
         )
-        assert link.max_downloads == 1
+        once = await docsets_svc.create_share_link(
+            db, None, s=set_obj, user=owner, kind="one_time"
+        )
+        assert perm.max_downloads is None and once.max_downloads == 1
         await db.commit()
 
 

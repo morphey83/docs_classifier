@@ -17,10 +17,8 @@ from app.jobs import dispatch
 from app.models import (
     DocStatus,
     Document,
-    DocumentSet,
     DocumentTag,
     OcrStatus,
-    SetVisibility,
     Tag,
     User,
 )
@@ -30,7 +28,7 @@ from app.rbac import ROLE_CAPS, Cap, Role
 from app.services import docsets as docsets_svc
 from app.services import domains as domains_svc
 from app.services import search as search_svc
-from app.services.search import index_document
+from app.services.search import describe_filters, index_document
 from app.web.csrf import CsrfGuard
 from app.web.deps import current_user
 from app.web.templating import render
@@ -63,6 +61,18 @@ def _status(value: str | None) -> DocStatus | None:
         return DocStatus(value) if value else None
     except ValueError:
         return None
+
+
+def _filters_from_params(params: Mapping[str, str]) -> search_svc.SearchFilters:
+    """The narrowing part of a /search query as a SearchFilters (no page/sort)."""
+    return search_svc.SearchFilters(
+        q=(params.get("q") or "") or None,
+        tags_all=_csv(params.get("tags")),
+        ext=(params.get("type") or "") or None,
+        status=_status(params.get("status")),
+        has_ocr=_tri(params.get("has_ocr")),
+        has_index=_tri(params.get("has_index")),
+    )
 
 
 async def _distinct_exts(db: AsyncSession, domain_ids: list[uuid.UUID]) -> list[str]:
@@ -117,18 +127,10 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
     view = "table" if params.get("view") == "table" else "cards"
     status_enum = _status(params.get("status"))
 
-    f = search_svc.SearchFilters(
-        q=(params.get("q") or "") or None,
-        tags_all=_csv(params.get("tags")),
-        ext=(params.get("type") or "") or None,
-        status=status_enum,
-        has_ocr=_tri(params.get("has_ocr")),
-        has_index=_tri(params.get("has_index")),
-        sort=sort,
-        sort_dir=sort_dir,
-        page=max(1, int(params.get("page") or 1)),
-        page_size=PAGE_SIZE,
-    )
+    f = _filters_from_params(params)
+    f.sort, f.sort_dir = sort, sort_dir
+    f.page = max(1, int(params.get("page") or 1))
+    f.page_size = PAGE_SIZE
     docs, total, _facets = await search_svc.search_documents(db, scope_ids, f)
 
     fd = {
@@ -155,7 +157,10 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
         "sorts": SORTS,
         "view": view,
         "domains": [d for d, _ in memberships],
-        "domain_sets": (await docsets_svc.list_sets(db, picked, user.id)) if picked else [],
+        "user_sets": await docsets_svc.list_sets(db, user.id),
+        "can_publish_any": any(
+            Cap.manage in ROLE_CAPS[Role(m.role)] for _, m in memberships
+        ),
         # everything that narrows the result set (not page / sort / view) —
         # the client wipes its selection when this string changes.
         "filter_sig": "|".join(
@@ -208,6 +213,8 @@ async def search_bulk(
 
 
 async def _apply_bulk(db, user, action, docs, caps, dom_by_id, form) -> str:
+    if action == "save_filter":
+        return await _save_filter(db, user, form)
     if not docs:
         return "Ничего не выбрано."
 
@@ -234,29 +241,58 @@ async def _apply_bulk(db, user, action, docs, caps, dom_by_id, form) -> str:
         tail = f", пропущено (тип не поддерживается): {skipped}" if skipped else ""
         return f"Отправлено на распознавание: {n}{tail}"
 
+    if action in ("public", "private"):
+        want = action == "public"
+        n = skipped = 0
+        for d in docs:
+            if Cap.manage not in caps[d.domain_id]:
+                skipped += 1
+                continue
+            if d.is_public != want:
+                d.is_public = want
+            n += 1
+        await db.flush()
+        tail = f", пропущено (нет прав): {skipped}" if skipped else ""
+        return f"{'Опубликовано' if want else 'Сделано приватным'}: {n}{tail}"
+
     if action == "set":
-        domain_ids = {d.domain_id for d in docs}
-        if len(domain_ids) != 1:
-            return "Выберите один домен, чтобы добавить в набор."
-        domain_id = next(iter(domain_ids))
-        if Cap.view not in caps[domain_id]:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "нет прав")
-        domain = dom_by_id[domain_id]
         new_name = (form.get("new_name") or "").strip()
         set_id = form.get("set_id") or ""
         if set_id == "__new__" or (not set_id and new_name):
-            if Cap.write not in caps[domain_id]:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, "нет прав на создание набора")
             s = await docsets_svc.create_set(
-                db, domain, user, name=new_name or "Новый набор",
-                description=None, visibility=SetVisibility.private,
-                document_ids=[d.id for d in docs],
+                db, user, name=new_name or "Новый набор", document_ids=[d.id for d in docs]
             )
-            return f"Создан набор «{s.name}», добавлено документов: {s.item_count}"
-        s = await db.get(DocumentSet, uuid.UUID(set_id))
-        if s is None or s.domain_id != domain_id:
+            return f"Создан набор «{s.name}»"
+        try:
+            s = await docsets_svc.get_owned_set(db, uuid.UUID(set_id), user.id)
+        except ValueError:
+            s = None
+        if s is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "набор не найден")
         added = await docsets_svc.add_items(db, s, [d.id for d in docs], actor=user)
         return f"Добавлено в «{s.name}»: {added}"
 
     return "Неизвестное действие."
+
+
+async def _save_filter(db, user, form) -> str:
+    memberships = await domains_svc.list_memberships(db, user)
+    dom_by_id_all = {d.id: d for d, _ in memberships}
+    picked, _scope_ids = _scope(form, dom_by_id_all)
+    f = _filters_from_params(form)
+    if picked is not None:
+        f.domain_ids = [picked]
+    desc = describe_filters(f, {d.id: d.name for d, _ in memberships})
+    new_name = (form.get("new_name") or "").strip()
+    set_id = form.get("set_id") or ""
+    if set_id == "__new__" or (not set_id and new_name):
+        s = await docsets_svc.create_set(db, user, name=new_name or "Новый набор")
+    else:
+        try:
+            s = await docsets_svc.get_owned_set(db, uuid.UUID(set_id), user.id)
+        except ValueError:
+            s = None
+        if s is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "набор не найден")
+    await docsets_svc.add_filter(db, s, f, description=desc)
+    return f"Фильтр сохранён в «{s.name}»"

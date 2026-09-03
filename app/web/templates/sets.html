@@ -1,50 +1,40 @@
 {% extends "base.html" %}
 {% import "_icons.html" as ic %}
-{% set d = view.domain %}
-{% block title %}Наборы — {{ d.name }}{% endblock %}
+{% block title %}Наборы{% endblock %}
+{% block page_title %}Мои наборы{% endblock %}
 {% block content %}
-{% set active = 'sets' %}
-{% include "_domain_nav.html" %}
-
-<h2 class="mb-3">Наборы документов</h2>
 
 <div class="row row-cards mb-3">
   {% for s in sets %}
   <div class="col-sm-6 col-lg-4">
     <div class="card card-sm">
       <div class="card-body">
-        <a href="/domains/{{ d.slug }}/sets/{{ s.id }}" class="text-reset fw-bold d-block">{{ s.name }}</a>
-        <div class="text-secondary">
-          {{ s.item_count }} док. ·
-          {% if s.visibility == 'domain' %}<span class="badge bg-blue-lt">общий</span>{% else %}личный{% endif %}
+        <a href="/sets/{{ s.id }}" class="text-reset fw-bold d-block">{{ s.name }}</a>
+        <div class="text-secondary small">
+          {{ item_counts.get(s.id, 0) }} явно · обновлён {{ s.updated_at|shortdate }}
         </div>
       </div>
     </div>
   </div>
   {% else %}
   <div class="col-12"><div class="card"><div class="card-body text-secondary">
-    Наборов пока нет. Добавляйте документы из поиска.
+    Наборов пока нет. Создайте набор ниже, затем добавьте в него документы или сохранённые фильтры из поиска.
   </div></div></div>
   {% endfor %}
 </div>
 
 <div class="row">
   <div class="col-12 col-lg-6">
-    <form method="post" action="/domains/{{ d.slug }}/sets" class="card">
+    <form method="post" action="/sets" class="card">
       <div class="card-body">
         <h3 class="card-title">Новый набор</h3>
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
         <div class="mb-3">
-          <label class="form-label">Название</label>
           <div class="input-icon">
             <span class="input-icon-addon">{{ ic.icon('clipboard') }}</span>
             <input class="form-control" name="name" placeholder="Название набора" required maxlength="200">
           </div>
         </div>
-        <label class="form-check mb-3">
-          <input class="form-check-input" type="checkbox" name="visibility" value="domain">
-          <span class="form-check-label">виден всем участникам домена</span>
-        </label>
         <button type="submit" class="btn btn-primary">Создать</button>
       </div>
     </form>
