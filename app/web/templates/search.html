@@ -84,16 +84,62 @@
   .dc-clearable.has-value .dc-clear { display:flex; }
   .dc-clearable.has-value .form-control { padding-right:2rem; }
 
-  /* tag-filter autocomplete */
-  .dc-suggest { display:flex; flex-wrap:wrap; gap:.25rem; margin-top:.4rem; }
-  .dc-suggest:empty { display:none; }
-  .dc-suggest button {
-    border:1px solid var(--tblr-border-color); background:var(--tblr-bg-surface);
-    color:var(--tblr-body-color); border-radius:4px; padding:.05rem .5rem;
-    font-size:.8rem; line-height:1.6; cursor:pointer;
+  /* tag chip editor: add = «и», клик по чипу = «не с этим тегом» */
+  .dc-tags {
+    display:flex; flex-wrap:wrap; align-items:center; gap:4px;
+    min-height:38px; padding:5px 7px; position:relative; cursor:text;
+    border:1px solid var(--tblr-border-color); border-radius:var(--tblr-border-radius);
+    background:var(--tblr-bg-surface);
+    transition:border-color .12s ease, box-shadow .12s ease;
   }
-  .dc-suggest button:hover { background:var(--tblr-primary); color:#fff; border-color:var(--tblr-primary); }
-  .dc-suggest button .cnt { opacity:.55; margin-left:.3rem; font-size:.9em; }
+  .dc-tags.focus { border-color:var(--tblr-primary);
+    box-shadow:0 0 0 .25rem rgba(var(--tblr-primary-rgb, 4 111 209), .25); }
+  .dc-tags .chip {
+    display:inline-flex; align-items:center; border-radius:4px; line-height:1;
+    font-size:.8rem; border:1px solid transparent;
+    background:var(--tblr-primary-lt); color:var(--tblr-primary);
+  }
+  .dc-tags .chip .lbl {
+    border:0; background:transparent; font:inherit; color:inherit; cursor:pointer;
+    padding:4px 4px 4px 7px; display:inline-flex; align-items:center; gap:3px;
+  }
+  .dc-tags .chip .lbl .op { font-weight:700; }
+  .dc-tags .chip .x {
+    border:0; background:transparent; font:inherit; color:inherit; line-height:1;
+    opacity:.5; cursor:pointer; padding:0 6px 0 2px; font-size:.95rem;
+  }
+  .dc-tags .chip .x:hover { opacity:1; }
+  .dc-tags .chip.exc {
+    background:transparent; color:var(--tblr-secondary);
+    border-color:var(--tblr-border-color);
+  }
+  .dc-tags .chip.exc .lbl .nm { text-decoration:line-through; }
+  .dc-tags-entry {
+    border:0; outline:0; background:transparent; font:inherit; flex:1; min-width:84px;
+    padding:4px 2px; color:var(--tblr-body-color);
+  }
+  .dc-tags-entry::placeholder { color:var(--tblr-secondary); }
+
+  .dc-suggest {
+    position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:20;
+    background:var(--tblr-bg-surface); border:1px solid var(--tblr-border-color);
+    border-radius:var(--tblr-border-radius); box-shadow:0 .5rem 1.5rem rgba(0,0,0,.16);
+    padding:4px; max-height:230px; overflow-y:auto;
+  }
+  .dc-suggest[hidden] { display:none; }
+  .dc-suggest button {
+    display:flex; width:100%; align-items:center; justify-content:space-between; gap:10px;
+    border:0; background:transparent; color:var(--tblr-body-color); font:inherit;
+    font-size:.85rem; text-align:left; padding:5px 8px; border-radius:4px; cursor:pointer;
+  }
+  .dc-suggest button.hl, .dc-suggest button:hover { background:var(--tblr-bg-surface-secondary); }
+  .dc-suggest button .cnt { color:var(--tblr-secondary); font-size:.78rem; font-variant-numeric:tabular-nums; }
+
+  /* result-card badges that drive the filter */
+  .dc-fbtn { border:0; cursor:pointer; font:inherit; font-size:.6875rem; font-weight:500;
+    line-height:1.4; transition:filter .1s ease, box-shadow .1s ease; }
+  .dc-fbtn:hover { filter:brightness(.93); }
+  .dc-fbtn:focus-visible { outline:0; box-shadow:0 0 0 .15rem rgba(var(--tblr-primary-rgb, 4 111 209), .4); }
 </style>
 
 <div class="row row-cards">
@@ -141,14 +187,14 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Теги <span class="form-hint d-inline">через запятую</span></label>
-          <div class="input-icon dc-clearable">
-            <span class="input-icon-addon">{{ ic.icon('hash') }}</span>
-            <input class="form-control" name="tags" value="{{ f.tags }}" placeholder="договор, 2024"
-                   autocomplete="off">
-            <button type="button" class="dc-clear" tabindex="-1" aria-label="Очистить">{{ ic.icon('x') }}</button>
+          <label class="form-label">Теги
+            <span class="form-hint d-inline">через запятую · клик по тегу — исключить</span></label>
+          <div class="dc-tags" id="dc-tags">
+            <input class="dc-tags-entry" id="dc-tags-entry" type="text" autocomplete="off"
+                   placeholder="договор, 2024" aria-label="Теги">
+            <div class="dc-suggest" id="tag-suggest" hidden role="listbox"></div>
           </div>
-          <div id="tag-suggest" class="dc-suggest"></div>
+          <input type="hidden" name="tags" id="dc-tags-value" value="{{ f.tags }}">
         </div>
 
         <div class="mb-3">
@@ -267,70 +313,156 @@
     });
   })();
 
-  // tag-filter autocomplete: suggest existing tags for the segment being typed
+  // tag filter — chips: добавить = «и», клик по чипу = «не с этим тегом» («-» в вводе тоже)
   (function () {
-    var field = document.querySelector('#filters input[name=tags]');
-    var box = document.getElementById('tag-suggest');
-    if (!field || !box) return;
-    var all = null;
+    var box = document.getElementById('dc-tags');
+    var entry = document.getElementById('dc-tags-entry');
+    var hidden = document.getElementById('dc-tags-value');
+    var sug = document.getElementById('tag-suggest');
+    if (!box || !entry || !hidden || !sug) return;
 
-    function load() {
-      if (all) return Promise.resolve(all);
-      return fetch('/api/tags', { credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.json() : []; })
-        .then(function (list) { all = Array.isArray(list) ? list : []; return all; })
-        .catch(function () { all = []; return all; });
+    var pool = null, sugIdx = -1;
+    var chips = (hidden.value || '').split(',').map(function (s) {
+      s = s.trim();
+      if (!s) return null;
+      var exc = s.charAt(0) === '-';
+      var name = (exc ? s.slice(1) : s).trim();
+      return name ? { name: name, exc: exc } : null;
+    }).filter(Boolean);
+
+    function has(name) {
+      return chips.some(function (c) { return c.name.toLowerCase() === name.toLowerCase(); });
     }
-    function segs() { return field.value.split(','); }
-    function seg() { return segs().pop().trim().toLowerCase(); }
-    function chosen() {
-      return segs().slice(0, -1).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    function commit() {
+      hidden.value = chips.map(function (c) { return (c.exc ? '-' : '') + c.name; }).join(',');
+      hidden.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    function render() {
-      var q = seg();
-      box.innerHTML = '';
-      if (!q) return;
-      var have = chosen();
-      all.filter(function (t) {
-        var n = t.name.toLowerCase();
-        return n.indexOf(q) !== -1 && n !== q && have.indexOf(n) === -1;
-      }).slice(0, 8).forEach(function (t) {
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.innerHTML = t.name.replace(/</g, '&lt;') +
-          (t.usage_count ? ' <span class="cnt">' + t.usage_count + '</span>' : '');
-        b.addEventListener('click', function () {
-          var arr = segs();
-          arr[arr.length - 1] = ' ' + t.name;
-          field.value = arr.join(',').replace(/^\s+/, '') + ', ';
-          box.innerHTML = '';
-          field.focus();
-          field.dispatchEvent(new Event('input', { bubbles: true }));
+    function add(name, exc) {
+      name = String(name).trim().replace(/^-\s*/, '');
+      if (!name || has(name)) return;
+      chips.push({ name: name, exc: !!exc });
+      renderChips(); commit();
+    }
+
+    // called from a result-card tag badge
+    window.dcAddTagFilter = function (name) {
+      var cur = chips.filter(function (c) { return c.name.toLowerCase() === String(name).toLowerCase(); })[0];
+      if (cur) { if (cur.exc) { cur.exc = false; renderChips(); commit(); } }
+      else { chips.push({ name: String(name), exc: false }); renderChips(); commit(); }
+    };
+    function renderChips() {
+      Array.prototype.slice.call(box.querySelectorAll('.chip')).forEach(function (n) { n.remove(); });
+      chips.forEach(function (c, i) {
+        var chip = document.createElement('span');
+        chip.className = 'chip' + (c.exc ? ' exc' : '');
+        chip.innerHTML =
+          '<button type="button" class="lbl" title="' +
+          (c.exc ? 'вернуть — искать с этим тегом' : 'исключить — документы без этого тега') +
+          '">' + (c.exc ? '<span class="op">−</span>' : '') +
+          '<span class="nm"></span></button>' +
+          '<button type="button" class="x" aria-label="убрать">×</button>';
+        chip.querySelector('.nm').textContent = c.name;
+        chip.querySelector('.lbl').addEventListener('click', function () {
+          c.exc = !c.exc; renderChips(); commit();
         });
-        box.appendChild(b);
+        chip.querySelector('.x').addEventListener('click', function () {
+          chips.splice(i, 1); renderChips(); commit();
+        });
+        box.insertBefore(chip, entry);
       });
     }
-    field.addEventListener('focus', function () { load().then(render); });
-    field.addEventListener('input', function () { load().then(render); });
-    field.addEventListener('blur', function () { setTimeout(function () { box.innerHTML = ''; }, 150); });
-    field.addEventListener('keydown', function (e) { if (e.key === 'Escape') box.innerHTML = ''; });
+
+    function loadPool() {
+      if (pool) return Promise.resolve(pool);
+      return fetch('/api/tags', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (l) { pool = Array.isArray(l) ? l : []; return pool; })
+        .catch(function () { pool = []; return pool; });
+    }
+    function renderSug() {
+      var raw = entry.value.trim();
+      var exc = raw.charAt(0) === '-';
+      var q = (exc ? raw.slice(1) : raw).trim().toLowerCase();
+      if (!q || !pool) { sug.hidden = true; sugIdx = -1; return; }
+      var hits = pool.filter(function (t) {
+        return t.name.toLowerCase().indexOf(q) !== -1 && !has(t.name);
+      }).sort(function (a, b) { return (b.usage_count || 0) - (a.usage_count || 0); }).slice(0, 7);
+      var exact = pool.some(function (t) { return t.name.toLowerCase() === q; });
+      sug.innerHTML = hits.map(function (t, i) {
+        return '<button type="button" role="option" data-name="' +
+          t.name.replace(/"/g, '&quot;') + '"' + (i === sugIdx ? ' class="hl"' : '') +
+          '><span>' + t.name.replace(/</g, '&lt;') + '</span><span class="cnt">' +
+          (t.usage_count || 0) + (exc ? ' · исключить' : '') + '</span></button>';
+      }).join('');
+      if (!exact && q.length >= 2) {
+        sug.insertAdjacentHTML('beforeend',
+          '<button type="button" data-name="' + q.replace(/"/g, '&quot;') +
+          '"><span>' + (exc ? 'исключить «' : 'создать «') + q.replace(/</g, '&lt;') + '»</span></button>');
+      }
+      sug.hidden = sug.children.length === 0;
+      Array.prototype.slice.call(sug.querySelectorAll('button')).forEach(function (b) {
+        b.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          add(b.dataset.name, exc);
+          entry.value = ''; renderSug(); entry.focus();
+        });
+      });
+    }
+
+    box.addEventListener('mousedown', function (e) {
+      if (e.target === box) { entry.focus(); e.preventDefault(); }
+    });
+    entry.addEventListener('focus', function () { box.classList.add('focus'); loadPool().then(renderSug); });
+    entry.addEventListener('blur', function () {
+      box.classList.remove('focus');
+      setTimeout(function () { sug.hidden = true; sugIdx = -1; }, 130);
+    });
+    entry.addEventListener('input', function () { sugIdx = -1; loadPool().then(renderSug); });
+    entry.addEventListener('keydown', function (e) {
+      var opts = sug.hidden ? [] : Array.prototype.slice.call(sug.querySelectorAll('button'));
+      var exc = entry.value.trim().charAt(0) === '-';
+      if (e.key === 'ArrowDown' && opts.length) { e.preventDefault(); sugIdx = (sugIdx + 1) % opts.length; renderSug(); }
+      else if (e.key === 'ArrowUp' && opts.length) { e.preventDefault(); sugIdx = (sugIdx - 1 + opts.length) % opts.length; renderSug(); }
+      else if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        if (sugIdx >= 0 && opts[sugIdx]) add(opts[sugIdx].dataset.name, exc);
+        else if (entry.value.trim()) add(entry.value, exc);
+        entry.value = ''; sugIdx = -1; renderSug();
+      }
+      else if (e.key === 'Backspace' && !entry.value && chips.length) { chips.pop(); renderChips(); commit(); }
+      else if (e.key === 'Escape') { sug.hidden = true; sugIdx = -1; }
+    });
+
+    renderChips();
   })();
 
-  // sort: dropdown option + direction toggle → the hidden #filters inputs
+  // sort dropdown + direction toggle → hidden #filters inputs;
+  // result-card badges → domain / tag filter
   document.body.addEventListener('click', function (e) {
     var filters = document.getElementById('filters');
-    if (!filters) return;
-    var opt = e.target.closest && e.target.closest('[data-sort]');
-    var dir = e.target.closest && e.target.closest('[data-sort-dir]');
-    var sortField = filters.querySelector('[name=sort]');
-    var dirField = filters.querySelector('[name=dir]');
-    if (opt && sortField) {
-      if (sortField.value === opt.dataset.sort) return;
-      sortField.value = opt.dataset.sort;
-      sortField.dispatchEvent(new Event('change', { bubbles: true }));
-    } else if (dir && dirField) {
-      dirField.value = dirField.value === 'asc' ? 'desc' : 'asc';
-      dirField.dispatchEvent(new Event('change', { bubbles: true }));
+    if (!filters || !e.target.closest) return;
+    var opt = e.target.closest('[data-sort]');
+    var dir = e.target.closest('[data-sort-dir]');
+    var dom = e.target.closest('.dc-fdomain');
+    var tag = e.target.closest('.dc-ftag');
+    if (opt) {
+      var sf = filters.querySelector('[name=sort]');
+      if (sf && sf.value !== opt.dataset.sort) {
+        sf.value = opt.dataset.sort;
+        sf.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    } else if (dir) {
+      var df = filters.querySelector('[name=dir]');
+      if (df) { df.value = df.value === 'asc' ? 'desc' : 'asc';
+        df.dispatchEvent(new Event('change', { bubbles: true })); }
+    } else if (dom) {
+      var sel = filters.querySelector('[name=domain_id]');
+      if (sel && sel.value !== dom.dataset.domain) {
+        sel.value = dom.dataset.domain;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    } else if (tag && window.dcAddTagFilter) {
+      window.dcAddTagFilter(tag.dataset.tag);
     }
   });
 

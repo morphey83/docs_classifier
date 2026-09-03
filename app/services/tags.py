@@ -22,15 +22,20 @@ class TagError(ValueError):
 
 # --- reads ---------------------------------------------------------------
 async def list_tags(
-    db: AsyncSession, *, q: str | None = None
+    db: AsyncSession, *, q: str | None = None, include_orphans: bool = False
 ) -> list[tuple[Tag, int]]:
-    """Every tag with its live document count, most-used first."""
+    """Tags with their live document count, most-used first. Tags on zero
+    documents are hidden (they are limbo — waiting for the nightly
+    :func:`sweep_orphan_tags`); pass ``include_orphans`` to see them anyway."""
+    cnt = func.count(DocumentTag.document_id)
     stmt = (
-        select(Tag, func.count(DocumentTag.document_id))
+        select(Tag, cnt)
         .outerjoin(DocumentTag, DocumentTag.tag_id == Tag.id)
         .group_by(Tag.id)
-        .order_by(func.count(DocumentTag.document_id).desc(), Tag.name)
+        .order_by(cnt.desc(), Tag.name)
     )
+    if not include_orphans:
+        stmt = stmt.having(cnt > 0)
     if q and q.strip():
         stmt = stmt.where(Tag.name.ilike(f"%{q.strip()}%"))
     return list((await db.execute(stmt)).all())
@@ -113,9 +118,10 @@ async def merge_tags(
     db: AsyncSession, *, source: Tag, target: Tag, owner_id: uuid.UUID
 ) -> int:
     """Move ``source`` → ``target`` on every document in a domain ``owner_id``
-    owns (dedup). Documents in other people's domains keep ``source``. If that
-    leaves ``source`` on no documents at all, it is deleted. Returns the number
-    of documents changed."""
+    owns (dedup). Documents in other people's domains keep ``source``. The tag
+    row itself is never deleted here — like any tag that drops to zero documents
+    it waits for the nightly :func:`sweep_orphan_tags`. Returns the number of
+    documents changed."""
     if source.id == target.id:
         raise TagError("cannot merge a tag into itself")
 
@@ -137,12 +143,6 @@ async def merge_tags(
             link.tag_id = target.id
         changed += 1
     await db.flush()
-
-    still_used = await db.scalar(
-        select(func.count()).select_from(DocumentTag).where(DocumentTag.tag_id == source.id)
-    )
-    if not still_used:
-        await db.delete(source)
     return changed
 
 

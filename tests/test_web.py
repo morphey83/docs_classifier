@@ -136,6 +136,34 @@ async def test_search_sort(alice, web_domain):
     assert "сортировка: название" in r.text
 
 
+async def test_search_tag_include_and_exclude(alice, web_domain):
+    await _upload(alice, web_domain, "keep.txt", b"a")
+    await _upload(alice, web_domain, "drop.txt", b"b")
+    doms = (await alice.get("/api/domains")).json()
+    dom = next(d["id"] for d in doms if d["slug"] == web_domain)
+    items = (await alice.get(f"/api/domains/{dom}/documents")).json()["items"]
+    docs = {d["title"]: d["id"] for d in items}
+    await alice.patch(
+        f"/api/documents/{docs['keep']}/tags", json={"tag_names": ["договор", "срочно"]}
+    )
+    await alice.patch(
+        f"/api/documents/{docs['drop']}/tags", json={"tag_names": ["договор", "черновик"]}
+    )
+
+    both = await alice.get("/search?tags=договор", headers={"HX-Request": "true"})
+    assert "Найдено: 2" in both.text
+
+    r = await alice.get("/search?tags=договор,-черновик", headers={"HX-Request": "true"})
+    assert "Найдено: 1" in r.text
+    assert docs["keep"] in r.text and docs["drop"] not in r.text
+
+
+async def test_search_page_has_the_tag_chip_editor(alice, web_domain):
+    page = (await alice.get("/search")).text
+    assert 'id="dc-tags"' in page
+    assert 'id="dc-tags-value"' in page and 'name="tags"' in page
+
+
 async def test_search_domain_filter(alice):
     home = (await alice.get("/")).text
     a = (await alice.post("/domains", data={"name": "DF-A", "csrf_token": web_csrf(home)})

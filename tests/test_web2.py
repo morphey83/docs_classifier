@@ -185,6 +185,27 @@ async def test_save_search_as_a_set_filter(alice, web_domain):
     assert "Иголки" in detail
 
 
+async def test_saved_filter_round_trips_an_excluded_tag(alice, web_domain):
+    await _upload(alice, web_domain, "f.txt")
+    page = (await alice.get("/search")).text
+    r = await alice.post(
+        "/search/bulk",
+        data={
+            "csrf_token": web_csrf(page),
+            "tags": "договор,-черновик",
+            "action": "save_filter",
+            "set_id": "__new__",
+            "new_name": "Без черновиков",
+        },
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200
+    sid = re.search(r"/sets/([0-9a-f-]{36})", (await alice.get("/sets")).text)
+    body = (await alice.get(f"/sets/{sid.group(1)}", headers={"HX-Request": "true"})).text
+    # the filter card renders the exclusion, and its "открыть" link carries -черновик
+    assert "-черновик" in body
+
+
 async def test_set_share_link_and_revoke(alice, web_domain):
     await _upload(alice, web_domain, "sh.txt")
     doc_id = await _doc_id(alice, web_domain)
@@ -609,4 +630,8 @@ async def test_global_search_spans_domains(alice):
     await _upload(alice, b, "gb-doc.txt")
 
     r = await alice.get("/search?q=doc", headers={"HX-Request": "true"})
-    assert "GA</span>" in r.text and "GB</span>" in r.text
+    da = next(d["id"] for d in (await alice.get("/api/domains")).json() if d["slug"] == a)
+    db_ = next(d["id"] for d in (await alice.get("/api/domains")).json() if d["slug"] == b)
+    # both domains show as clickable filter badges in the results
+    assert f'data-domain="{da}"' in r.text and f'data-domain="{db_}"' in r.text
+    assert "GA" in r.text and "GB" in r.text

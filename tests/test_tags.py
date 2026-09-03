@@ -50,19 +50,29 @@ async def test_rename_and_merge(alice, domain):
     assert r.status_code == 200
     doc_now = await alice.get(f"/api/documents/{doc['id']}")
     assert [t["name"] for t in doc_now.json()["tags"]] == ["Итоговый"]
+    # «old» now has 0 documents → hidden from the pool, but the row lives until the sweep
     assert {t["name"] for t in (await alice.get("/api/tags/all")).json()} == {"Итоговый"}
+    async with get_sessionmaker()() as db:
+        rows = await tags_svc.list_tags(db, include_orphans=True)
+    assert {t.name for t, _ in rows} == {"Итоговый", "old"}
 
 
 async def test_orphan_sweep_removes_unused_tags(alice, domain):
     d = domain["id"]
     doc = await _upload(alice, d, "y.txt")
     await alice.patch(f"/api/documents/{doc['id']}/tags", json={"tag_names": ["temp"]})
-    await alice.patch(f"/api/documents/{doc['id']}/tags", json={"tag_names": []})
-
     assert {t["name"] for t in (await alice.get("/api/tags/all")).json()} == {"temp"}
+
+    await alice.patch(f"/api/documents/{doc['id']}/tags", json={"tag_names": []})
+    # a zero-doc tag drops out of the listing, but the row still exists until the sweep
+    assert (await alice.get("/api/tags/all")).json() == []
+    async with get_sessionmaker()() as db:
+        assert len(await tags_svc.list_tags(db, include_orphans=True)) == 1
+
     stats = await run_cleanup()
     assert stats["orphan_tags"] == 1
-    assert (await alice.get("/api/tags/all")).json() == []
+    async with get_sessionmaker()() as db:
+        assert await tags_svc.list_tags(db, include_orphans=True) == []
 
 
 async def test_bulk_add_tags_is_additive(alice, domain):

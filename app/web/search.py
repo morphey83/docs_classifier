@@ -51,6 +51,24 @@ def _csv(value: str | None) -> list[str]:
     return [s.strip() for s in value.split(",") if s.strip()] if value else []
 
 
+def _tagtokens(raw: str | None) -> tuple[list[str], list[str]]:
+    """The `tags` param → (required, excluded). A leading '-' on an item
+    excludes that tag (documents must NOT carry it)."""
+    inc: list[str] = []
+    exc: list[str] = []
+    for part in (raw or "").split(","):
+        p = part.strip()
+        if not p:
+            continue
+        if p.startswith("-"):
+            name = p[1:].strip()
+            if name:
+                exc.append(name)
+        else:
+            inc.append(p)
+    return inc, exc
+
+
 def _tri(value: str | None) -> bool | None:
     if value in ("yes", "true", "1"):
         return True
@@ -85,9 +103,11 @@ def _typelist(params: Mapping[str, str]) -> list[str]:
 
 def _filters_from_params(params: Mapping[str, str]) -> search_svc.SearchFilters:
     """The narrowing part of a /search query as a SearchFilters (no page/sort)."""
+    tags_inc, tags_exc = _tagtokens(params.get("tags"))
     return search_svc.SearchFilters(
         q=(params.get("q") or "") or None,
-        tags_all=_csv(params.get("tags")),
+        tags_all=tags_inc,
+        tags_none=tags_exc,
         types=_typelist(params),
         status=_status(params.get("status")),
         has_ocr=_tri(params.get("has_ocr")),

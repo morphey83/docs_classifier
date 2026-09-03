@@ -11,7 +11,7 @@
       {{ dm.card_media(doc) }}
       <div class="card-body d-flex flex-column">
         <div class="d-flex align-items-center gap-2 mb-1">
-          {{ dm.domain_badge(domain_names.get(doc.domain_id, '?')) }}
+          {{ dm.domain_badge(domain_names.get(doc.domain_id, '?'), doc.domain_id) }}
           <span class="ms-auto">{{ dm.state_icons(doc) }}</span>
         </div>
         <div class="fw-bold mb-1">

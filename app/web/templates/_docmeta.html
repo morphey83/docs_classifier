@@ -28,18 +28,18 @@
      aria-label="{{ doc.title }}"></a>
 {%- endmacro %}
 
-{#- a tag chip; honours the tag's colour when one is set -#}
+{#- a tag chip; honours the tag's colour. Clicking it adds the tag to the search
+   filter (handled in search.html). -#}
 {% macro tag_badge(name, color) -%}
-{%- if color -%}
-<span class="badge me-1 mb-1" style="background:{{ color }};color:#fff;border-color:{{ color }}">{{ name }}</span>
-{%- else -%}
-<span class="badge bg-secondary-lt me-1 mb-1">{{ name }}</span>
-{%- endif -%}
+<button type="button" class="badge me-1 mb-1 dc-fbtn dc-ftag{{ '' if color else ' bg-secondary-lt' }}"
+        data-tag="{{ name }}" title="добавить тег в фильтр"
+        {% if color %}style="background:{{ color }};color:#fff;border-color:{{ color }}"{% endif %}>{{ name }}</button>
 {%- endmacro %}
 
-{#- the document's domain, as a chip -#}
-{% macro domain_badge(name) -%}
-<span class="badge bg-blue-lt d-inline-flex align-items-center gap-1">{{ ic.icon('folder') }} {{ name }}</span>
+{#- the document's domain, as a chip; clicking it filters the search to it -#}
+{% macro domain_badge(name, domain_id) -%}
+<button type="button" class="badge bg-blue-lt dc-fbtn dc-fdomain d-inline-flex align-items-center gap-1"
+        data-domain="{{ domain_id }}" title="показать только этот домен">{{ ic.icon('folder') }} {{ name }}</button>
 {%- endmacro %}
 
 {#- status / index / OCR as pictograms with tooltips -#}

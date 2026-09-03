@@ -180,8 +180,9 @@ def _filter_link(f) -> str:
         parts.append(f"type={t}")
     if d.get("ext"):
         parts.append(f"type={d['ext']}")
-    if d.get("tags_all"):
-        parts.append("tags=" + ",".join(d["tags_all"]))
+    toks = list(d.get("tags_all") or []) + ["-" + t for t in (d.get("tags_none") or [])]
+    if toks:
+        parts.append("tags=" + ",".join(toks))
     if d.get("has_ocr") is True:
         parts.append("has_ocr=yes")
     if d.get("has_index") is True:
