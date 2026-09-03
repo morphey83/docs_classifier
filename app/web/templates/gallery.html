@@ -61,14 +61,17 @@
 
   <div class="grid">
     {% for doc in docs %}
-    <a class="cell" href="/g/{{ token }}/i/{{ doc.id }}" target="_blank" rel="noopener">
-      {% if doc.mime.startswith('image/') %}
+    {% if doc.mime.startswith('image/') %}
+    <a class="cell" href="/g/{{ token }}/slideshow?order={{ order }}&paused=1&start={{ doc.id }}">
       <img src="/g/{{ token }}/i/{{ doc.id }}/thumb" alt="{{ doc.title }}" loading="lazy">
-      {% else %}
-      <span class="file"><img src="/static/filetypes/file.svg" alt=""></span>
-      {% endif %}
       <span class="cap">{{ doc.title }}</span>
     </a>
+    {% else %}
+    <a class="cell" href="/g/{{ token }}/i/{{ doc.id }}" target="_blank" rel="noopener">
+      <span class="file"><img src="/static/filetypes/file.svg" alt=""></span>
+      <span class="cap">{{ doc.title }}</span>
+    </a>
+    {% endif %}
     {% endfor %}
   </div>
 </body>

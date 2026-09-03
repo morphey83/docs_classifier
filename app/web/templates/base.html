@@ -327,6 +327,8 @@
             b.dataset.setTarget === 'filter' ? 'Фильтр в набор' : 'Документы в набор';
           var srch = document.getElementById('setpick-search');
           if (srch) { srch.value = ''; }
+          var nn = document.getElementById('setpick-newname');
+          if (nn) { nn.value = ''; }
           Array.prototype.slice.call(document.querySelectorAll('#setpick-list .setpick-row'))
             .forEach(function (r) { r.hidden = false; });
           setpickModal().show();
@@ -346,10 +348,15 @@
       Array.prototype.slice.call(document.querySelectorAll('#setpick-list .setpick-row'))
         .forEach(function (r) { r.onclick = function () { setpickFire(r.dataset.setId); }; });
       var setNew = document.getElementById('setpick-new');
-      if (setNew) setNew.onclick = function () {
-        var name = window.prompt('Название нового набора');
-        if (name && name.trim()) setpickFire('__new__', name.trim());
-      };
+      var setNewName = document.getElementById('setpick-newname');
+      function fireNew() {
+        var name = (setNewName && setNewName.value || '').trim();
+        if (name) setpickFire('__new__', name);
+      }
+      if (setNew) setNew.onclick = fireNew;
+      if (setNewName) setNewName.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); fireNew(); }
+      });
       refresh();
     }
 

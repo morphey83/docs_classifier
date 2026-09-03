@@ -213,7 +213,14 @@ async def gallery_slideshow(
     return _templates().TemplateResponse(
         request,
         "slideshow.html",
-        {"token": token, "set": s, "images": images, "interval": interval},
+        {
+            "token": token,
+            "set": s,
+            "images": images,
+            "interval": interval,
+            "start": request.query_params.get("start") or "",
+            "paused": request.query_params.get("paused") in ("1", "true", "yes"),
+        },
     )
 
 

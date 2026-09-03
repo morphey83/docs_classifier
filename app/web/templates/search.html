@@ -61,6 +61,15 @@
   #search-toolbar[data-preset="trash"] .tb-inbox { display:none; }
   #search-toolbar:not([data-preset="trash"]) .tb-trash { display:none; }
   #search-toolbar:not([data-preset="inbox"]) .tb-inbox { display:none; }
+
+  /* rectangular (non-pill) type toggles */
+  #type-group { gap:.25rem; }
+  #type-group .form-selectgroup-item { margin:0; }
+  #type-group .form-selectgroup-label { border-radius:2px; }
+
+  /* keep the set-picker body from resizing while filtering */
+  #setpickdlg .modal-dialog { max-width:22rem; }
+  #setpick-list { min-height:14rem; }
 </style>
 
 <div class="row row-cards">
@@ -116,8 +125,8 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Тип <span class="form-hint d-inline">можно несколько</span></label>
-          <div class="form-selectgroup form-selectgroup-pills flex-wrap" id="type-group">
+          <label class="form-label">Тип документа</label>
+          <div class="form-selectgroup flex-wrap" id="type-group">
             {% for value, label, icon in type_options %}
             <label class="form-selectgroup-item">
               <input type="checkbox" name="type" value="{{ value }}" class="form-selectgroup-input"
@@ -193,9 +202,12 @@
           <button type="button" class="list-group-item list-group-item-action setpick-row"
                   data-set-id="{{ s.id }}">{{ s.name }}</button>
           {% endfor %}
-          <button type="button" class="list-group-item list-group-item-action text-primary" id="setpick-new">
-            ➕ Новый набор…
-          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="input-group">
+          <input class="form-control" id="setpick-newname" placeholder="новый набор…" autocomplete="off">
+          <button type="button" class="btn btn-primary" id="setpick-new">Создать и добавить</button>
         </div>
       </div>
     </div>

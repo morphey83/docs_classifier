@@ -105,7 +105,7 @@ _EXT_ICON = {
 def _type_options(exts: list[str]) -> list[tuple[str, str, str]]:
     """(value, tooltip, icon) for each type toggle — categories then extensions."""
     out = [
-        ("", "Любое", "filter"),
+        ("", "Все типы документов", "grid"),  # noqa: RUF001
         ("image", "Изображения", "photo"),
         ("text", "Текстовые документы", "file-text"),
     ]
