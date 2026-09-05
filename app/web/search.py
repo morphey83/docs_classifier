@@ -214,7 +214,6 @@ async def _ctx(params: Mapping[str, str], db: AsyncSession, user: User) -> dict:
     f = _filters_from_params(params)
     if preset == "inbox":
         f.status = DocStatus.inbox
-        f.exclude_deferred_by = user.id
     elif preset == "trash":
         f.only_trash = True
         f.status = None

@@ -246,14 +246,14 @@ async def search_documents(
 async def inbox_status(
     ctx: DomainCtx = Depends(require(Cap.view)), db: AsyncSession = Depends(get_session)
 ) -> InboxStatus:
-    return InboxStatus(count=await svc.inbox_count(db, ctx.domain.id, ctx.user.id))
+    return InboxStatus(count=await svc.inbox_count(db, ctx.domain.id))
 
 
 @router.get("/domains/{domain_id}/inbox/next", response_model=DocumentOut | None)
 async def inbox_next(
     ctx: DomainCtx = Depends(require(Cap.write)), db: AsyncSession = Depends(get_session)
 ) -> DocumentOut | None:
-    doc = await svc.next_inbox_document(db, ctx.domain.id, ctx.user.id)
+    doc = await svc.next_inbox_document(db, ctx.domain.id)
     return await document_out(db, doc) if doc else None
 
 
@@ -280,13 +280,6 @@ async def purge_trash(
     ctx: DomainCtx = Depends(require(Cap.own)), db: AsyncSession = Depends(get_session)
 ) -> dict[str, int]:
     return {"purged": await trash_svc.purge_domain_trash(db, ctx.domain.id)}
-
-
-@router.post("/domains/{domain_id}/inbox/undefer")
-async def inbox_undefer(
-    ctx: DomainCtx = Depends(require(Cap.write)), db: AsyncSession = Depends(get_session)
-) -> dict[str, int]:
-    return {"cleared": await svc.clear_defers(db, ctx.domain.id, ctx.user.id)}
 
 
 # --- one document -------------------------------------------------------
@@ -384,15 +377,6 @@ async def complete(
 ) -> DocumentOut:
     await svc.complete_document(db, ctx.document)
     return await document_out(db, ctx.document)
-
-
-@router.post("/documents/{document_id}/defer")
-async def defer(
-    ctx: DocCtx = Depends(require_doc(Cap.write)),
-    db: AsyncSession = Depends(get_session),
-) -> Response:
-    await svc.defer_document(db, ctx.document, ctx.user.id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete("/documents/{document_id}")

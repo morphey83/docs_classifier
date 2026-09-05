@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.models import DocStatus, Document, DomainMember, InboxDefer, User
+from app.models import DocStatus, Document, DomainMember, User
 from app.rbac import ROLE_CAPS, Role
 from app.services import domains as domains_svc
 from app.web.csrf import CsrfGuard
@@ -19,10 +19,8 @@ router = APIRouter()
 PAGE_SIZE = 20
 
 
-async def _counts(db: AsyncSession, domain_ids: list, user_id) -> dict:
-    """{domain_id: {"members": n, "total": n, "queue": n}} — 3 grouped queries.
-    ``queue`` is this user's outstanding tagging queue: untagged and not deferred
-    by them, so it matches the /search inbox preset."""
+async def _counts(db: AsyncSession, domain_ids: list) -> dict:
+    """{domain_id: {"members": n, "total": n, "queue": n}} — 3 grouped queries."""
     out = {did: {"members": 0, "total": 0, "queue": 0} for did in domain_ids}
     if not domain_ids:
         return out
@@ -37,10 +35,8 @@ async def _counts(db: AsyncSession, domain_ids: list, user_id) -> dict:
     )
     for did, n in await db.execute(base.group_by(Document.domain_id)):
         out[did]["total"] = n
-    deferred = select(InboxDefer.document_id).where(InboxDefer.user_id == user_id)
     for did, n in await db.execute(
-        base.where(Document.status == DocStatus.inbox, Document.id.not_in(deferred))
-        .group_by(Document.domain_id)
+        base.where(Document.status == DocStatus.inbox).group_by(Document.domain_id)
     ):
         out[did]["queue"] = n
     return out
@@ -58,7 +54,7 @@ async def dashboard(
     pages = max(1, -(-total // PAGE_SIZE))
     page = min(page, pages)
     window = rows[(page - 1) * PAGE_SIZE : page * PAGE_SIZE]
-    counts = await _counts(db, [d.id for d, _ in window], user.id)
+    counts = await _counts(db, [d.id for d, _ in window])
 
     domains = [
         {

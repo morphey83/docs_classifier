@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO, Literal
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -21,7 +22,6 @@ from app.models import (
     Document,
     DocumentVersion,
     Domain,
-    InboxDefer,
     IndexStatus,
     User,
 )
@@ -295,88 +295,50 @@ async def update_document(
 
 
 # --- inbox queue ---------------------------------------------------------
-# The count means "documents still waiting for *this* user to tag them", so it
-# lines up with what the /search inbox preset shows: untagged, not deferred by
-# them. Pass ``user_id=None`` for a plain "untagged" count.
-async def inbox_count(
-    db: AsyncSession, domain_id: uuid.UUID, user_id: uuid.UUID | None = None
-) -> int:
-    return await inbox_count_across(db, [domain_id], user_id)
+async def inbox_count(db: AsyncSession, domain_id: uuid.UUID) -> int:
+    return await inbox_count_across(db, [domain_id])
 
 
-async def inbox_count_across(db: AsyncSession, domain_ids, user_id: uuid.UUID | None = None) -> int:
+async def inbox_count_across(db: AsyncSession, domain_ids) -> int:
     if not domain_ids:
         return 0
-    stmt = (
-        select(func.count())
-        .select_from(Document)
-        .where(
-            Document.domain_id.in_(list(domain_ids)),
-            Document.status == DocStatus.inbox,
-            Document.deleted_at.is_(None),
-        )
-    )
-    if user_id is not None:
-        stmt = stmt.where(
-            Document.id.not_in(
-                select(InboxDefer.document_id).where(InboxDefer.user_id == user_id)
+    return int(
+        await db.scalar(
+            select(func.count())
+            .select_from(Document)
+            .where(
+                Document.domain_id.in_(list(domain_ids)),
+                Document.status == DocStatus.inbox,
+                Document.deleted_at.is_(None),
             )
         )
-    return int(await db.scalar(stmt) or 0)
+        or 0
+    )
 
 
 async def next_inbox_across(
-    db: AsyncSession, domain_ids, user_id: uuid.UUID
+    db: AsyncSession, domain_ids, exclude_ids: Sequence[uuid.UUID] = ()
 ) -> Document | None:
+    """The oldest untagged document in ``domain_ids``, skipping ``exclude_ids``
+    — a purely in-request "skip past these for now", not persisted anywhere."""
     if not domain_ids:
         return None
-    deferred = select(InboxDefer.document_id).where(InboxDefer.user_id == user_id)
-    return await db.scalar(
-        select(Document)
-        .where(
-            Document.domain_id.in_(list(domain_ids)),
-            Document.status == DocStatus.inbox,
-            Document.deleted_at.is_(None),
-            Document.id.not_in(deferred),
-        )
-        .order_by(Document.uploaded_at.asc())
-        .limit(1)
+    stmt = select(Document).where(
+        Document.domain_id.in_(list(domain_ids)),
+        Document.status == DocStatus.inbox,
+        Document.deleted_at.is_(None),
     )
+    if exclude_ids:
+        stmt = stmt.where(Document.id.not_in(list(exclude_ids)))
+    return await db.scalar(stmt.order_by(Document.uploaded_at.asc()).limit(1))
 
 
 async def next_inbox_document(
-    db: AsyncSession, domain_id: uuid.UUID, user_id: uuid.UUID
+    db: AsyncSession, domain_id: uuid.UUID, exclude_ids: Sequence[uuid.UUID] = ()
 ) -> Document | None:
-    deferred = select(InboxDefer.document_id).where(InboxDefer.user_id == user_id)
-    return await db.scalar(
-        select(Document)
-        .where(
-            Document.domain_id == domain_id,
-            Document.status == DocStatus.inbox,
-            Document.deleted_at.is_(None),
-            Document.id.not_in(deferred),
-        )
-        .order_by(Document.uploaded_at.asc())
-        .limit(1)
-    )
+    return await next_inbox_across(db, [domain_id], exclude_ids)
 
 
 async def complete_document(db: AsyncSession, doc: Document) -> None:
-    # a document leaves the inbox by gaining a tag (set_document_tags keeps
-    # Document.status in step) — here we only clear this user's "defer".
-    await db.execute(delete(InboxDefer).where(InboxDefer.document_id == doc.id))
-    await db.flush()
-
-
-async def defer_document(db: AsyncSession, doc: Document, user_id: uuid.UUID) -> None:
-    if await db.get(InboxDefer, (user_id, doc.id)) is None:
-        db.add(InboxDefer(user_id=user_id, document_id=doc.id))
-        await db.flush()
-
-
-async def clear_defers(db: AsyncSession, domain_id: uuid.UUID, user_id: uuid.UUID) -> int:
-    docs = select(Document.id).where(Document.domain_id == domain_id)
-    result = await db.execute(
-        delete(InboxDefer).where(InboxDefer.user_id == user_id, InboxDefer.document_id.in_(docs))
-    )
-    return result.rowcount or 0
+    """A document leaves the inbox by gaining a tag — ``set_document_tags``
+    already keeps ``Document.status`` in step. Nothing else to do here."""

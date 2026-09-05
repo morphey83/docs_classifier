@@ -77,7 +77,7 @@ async def test_tagging_and_complete_flow(alice, domain):
     assert [x["id"] for x in found.json()["items"]] == [doc["id"]]
 
 
-async def test_inbox_next_and_defer(alice, domain):
+async def test_inbox_next_is_oldest_first(alice, domain):
     d = domain["id"]
     ids = []
     for i in range(3):
@@ -89,13 +89,11 @@ async def test_inbox_next_and_defer(alice, domain):
     first = (await alice.get(f"/api/domains/{d}/inbox/next")).json()
     assert first["id"] == ids[0]
 
-    await alice.post(f"/api/documents/{first['id']}/defer")
+    # tagging it moves the next request on — there is no "defer" any more,
+    # so /inbox/next always answers with the same oldest untagged document
+    await alice.patch(f"/api/documents/{ids[0]}/tags", json={"tag_names": ["done"]})
     second = (await alice.get(f"/api/domains/{d}/inbox/next")).json()
     assert second["id"] == ids[1]
-
-    cleared = await alice.post(f"/api/domains/{d}/inbox/undefer")
-    assert cleared.json()["cleared"] == 1
-    assert (await alice.get(f"/api/domains/{d}/inbox/next")).json()["id"] == ids[0]
 
 
 async def test_download_returns_bytes(alice, domain):

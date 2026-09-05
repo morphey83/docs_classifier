@@ -201,12 +201,15 @@ status (processing|done|partial), error, uploaded_at`.
 
 ### 3.2 Inbox processing ("на обработку")
 
-- `GET /domains/{d}/inbox/next` → the oldest `inbox` document not currently
-  "deferred" by this user. Optional `?after=<id>` to page through.
-- User assigns tags / edits `title`, `doc_date`, `notes`.
-- `POST /documents/{id}/complete` → `status=tagged`, leaves the inbox.
-- `POST /documents/{id}/defer` → pushed to the back of *this user's* queue view
-  (per-user skip, not a global state) so multiple people can process in parallel.
+- `GET /domains/{d}/inbox/next` → the oldest untagged (`inbox`) document.
+- User assigns tags / edits `title`, `doc_date`, `notes` — the first tag flips
+  `status` to `tagged` and the document leaves the inbox (§7/§14 rev 2).
+- The card-by-card web/bot walkthrough has a **"Пропустить"** action: it skips
+  the current document for the rest of *this* pass only — the skipped ids ride
+  along in the request (a hidden form field on the web, FSM state in the bot),
+  nothing is written to the database. Reopening the queue starts fresh, so a
+  skipped document shows up again. There is no persisted per-user "defer" any
+  more.
 - Bulk tagging: select N inbox docs → apply a tag set.
 
 ### 3.3 Search — see §7.
@@ -405,7 +408,7 @@ GET    /documents/{id}/content           # download original (+ range)
 GET    /documents/{id}/preview           # thumbnail / first page
 DELETE /documents/{id}                   POST /documents/{id}/restore
 PATCH  /documents/{id}/tags              # set/add/remove
-POST   /documents/{id}/complete          POST /documents/{id}/defer
+POST   /documents/{id}/complete
 POST   /documents/{id}/ocr               POST /documents/{id}/index
 
 GET    /domains/{d}/inbox/next           GET /domains/{d}/inbox        # count/list
@@ -443,7 +446,7 @@ counts by status / has_ocr / has_index) to drive filter UIs.
 > **Rev 2 (2026-09-03).** Search is the one document surface. **Корзина** and
 > **Очередь на сортировку** are search *presets*, not separate pages:
 > `?preset=active` (default, `deleted_at IS NULL`), `?preset=inbox`
-> (`status=inbox` + hide the docs this user deferred), `?preset=trash`
+> (`status=inbox` — every untagged document, no per-user hiding), `?preset=trash`
 > (`deleted_at IS NOT NULL`). Results carry state-aware actions — a trashed row
 > offers *restore* / *purge*, an inbox row opens the tagging modal. The
 > card-by-card tagging flow (`/inbox/card`) launches from the inbox preset.

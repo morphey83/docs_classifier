@@ -214,10 +214,19 @@ async def _one_doc(alice, slug):
     return re.search(r"/documents/([0-9a-f-]{36})", partial.text).group(1)
 
 
+async def test_document_page_is_modal_only(alice, web_domain):
+    doc_id = await _one_doc(alice, web_domain)
+    # no standalone page — a plain GET bounces to search, like domains/sets
+    assert (await alice.get(f"/documents/{doc_id}")).status_code == 303
+    page = await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})
+    assert page.status_code == 200 and "<html" not in page.text
+    assert "открыть ↗" not in page.text
+
+
 async def test_document_page_and_tag_edit(alice, web_domain):
     doc_id = await _one_doc(alice, web_domain)
 
-    page = await alice.get(f"/documents/{doc_id}")
+    page = await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})
     assert page.status_code == 200 and 'data-tagfield' in page.text
     assert 'name="tags"' in page.text
 
@@ -236,7 +245,7 @@ async def test_document_page_and_tag_edit(alice, web_domain):
 
 async def test_document_index_button(alice, web_domain):
     doc_id = await _one_doc(alice, web_domain)
-    page = await alice.get(f"/documents/{doc_id}")
+    page = await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})
     r = await alice.post(
         f"/documents/{doc_id}/index",
         data={"csrf_token": web_csrf(page.text)},

@@ -35,7 +35,7 @@ async def test_set_lifecycle(alice, web_domain):
     assert r.status_code == 303
     set_id = r.headers["location"].rsplit("/", 1)[-1]
 
-    doc_page = (await alice.get(f"/documents/{doc_id}")).text
+    doc_page = (await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})).text
     add = await alice.post(
         f"/documents/{doc_id}/add-to-set",
         data={"set_id": set_id, "csrf_token": web_csrf(doc_page)},
@@ -47,7 +47,7 @@ async def test_set_lifecycle(alice, web_domain):
     assert "s1" in detail.text
 
     # the document page can also take it back out of the set
-    dp2 = (await alice.get(f"/documents/{doc_id}")).text
+    dp2 = (await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})).text
     rm = await alice.post(
         f"/documents/{doc_id}/remove-from-set",
         data={"set_id": set_id, "csrf_token": web_csrf(dp2)},
@@ -59,7 +59,7 @@ async def test_set_lifecycle(alice, web_domain):
 async def test_document_page_creates_a_new_set_inline(alice, web_domain):
     await _upload(alice, web_domain, "n1.txt")
     doc_id = await _doc_id(alice, web_domain)
-    dp = (await alice.get(f"/documents/{doc_id}")).text
+    dp = (await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})).text
     r = await alice.post(
         f"/documents/{doc_id}/add-to-set",
         data={"set_id": "__new__", "new_name": "С нуля", "csrf_token": web_csrf(dp)},
@@ -146,7 +146,7 @@ async def test_bulk_tag_is_additive_and_ignores_existing(alice, web_domain):
         (await alice.get("/search", headers={"HX-Request": "true"})).text,
     )))[:2]
     # give the first one a tag already
-    dp = (await alice.get(f"/documents/{ids[0]}")).text
+    dp = (await alice.get(f"/documents/{ids[0]}", headers={"HX-Request": "true"})).text
     await alice.post(
         f"/documents/{ids[0]}/tags",
         data={"tags": "общий", "csrf_token": web_csrf(dp)},
@@ -215,7 +215,7 @@ async def test_set_share_link_and_revoke(alice, web_domain):
     set_id = (
         await alice.post("/sets", data={"name": "L", "csrf_token": web_csrf(page)})
     ).headers["location"].rsplit("/", 1)[-1]
-    dp = (await alice.get(f"/documents/{doc_id}")).text
+    dp = (await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})).text
     await alice.post(
         f"/documents/{doc_id}/add-to-set", data={"set_id": set_id, "csrf_token": web_csrf(dp)}
     )
@@ -264,7 +264,7 @@ async def test_set_detail_shows_filter_counts_and_explicit_docs(alice, web_domai
     assert 'name="description"' in detail and "<textarea" in detail
 
     # attach the visible doc explicitly + save a filter
-    dp = (await alice.get(f"/documents/{doc_id}")).text
+    dp = (await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})).text
     await alice.post(
         f"/documents/{doc_id}/add-to-set",
         data={"set_id": set_id, "csrf_token": web_csrf(dp)},
@@ -315,7 +315,7 @@ async def test_inbox_preset_and_modal_tagging(alice, web_domain):
 
     r2 = await alice.get("/search?preset=inbox", headers={"HX-Request": "true"})
     assert "Найдено: 1" in r2.text
-    doc_page = await alice.get(f"/documents/{doc_id}")
+    doc_page = await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})
     assert "Переименованный документ" in doc_page.text
 
 
@@ -326,7 +326,7 @@ async def test_inbox_is_derived_from_tags_not_a_flag(alice, web_domain):
     assert "Найдено: 1" in (await alice.get("/search?preset=inbox")).text
 
     # tagging from the document card takes it out of «не размечено»
-    dp = (await alice.get(f"/documents/{doc_id}")).text
+    dp = (await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})).text
     await alice.post(
         f"/documents/{doc_id}/tags",
         data={"tags": "договор", "csrf_token": web_csrf(dp)},
@@ -348,7 +348,7 @@ async def test_inbox_is_derived_from_tags_not_a_flag(alice, web_domain):
 async def test_doc_tag_editor_accepts_newlines(alice, web_domain):
     await _upload(alice, web_domain, "nl.txt")
     doc_id = await _doc_id(alice, web_domain)
-    dp = (await alice.get(f"/documents/{doc_id}")).text
+    dp = (await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})).text
     # the tag route still splits on newlines (a pasted list may carry them)
     await alice.post(
         f"/documents/{doc_id}/tags",
@@ -359,20 +359,30 @@ async def test_doc_tag_editor_accepts_newlines(alice, web_domain):
     assert got == {"договор", "срочно", "важно"}
 
 
-async def test_inbox_defer_drops_out_of_the_preset(alice, web_domain):
+async def test_inbox_skip_moves_on_without_persisting(alice, web_domain):
     await _upload(alice, web_domain, "d1.txt")
     await _upload(alice, web_domain, "d2.txt")
     card = await alice.get("/inbox/card", headers={"HX-Request": "true"})
-    doc_id = re.search(r'data-doc="([0-9a-f-]{36})"', card.text).group(1)
+    first_id = re.search(r'data-doc="([0-9a-f-]{36})"', card.text).group(1)
 
     r = await alice.post(
-        f"/inbox/{doc_id}/defer",
-        data={"domain_id": "", "csrf_token": web_csrf(card.text)},
+        f"/inbox/{first_id}/skip",
+        data={"domain_id": "", "skip": "", "csrf_token": web_csrf(card.text)},
         headers={"HX-Request": "true"},
     )
     assert r.status_code == 200 and r.headers.get("HX-Trigger") == "inbox-refresh"
-    r2 = await alice.get("/search?preset=inbox", headers={"HX-Request": "true"})
-    assert "Найдено: 1" in r2.text
+    second_id = re.search(r'data-doc="([0-9a-f-]{36})"', r.text).group(1)
+    assert second_id != first_id
+    # the skip carries forward as a hidden field, not a database row
+    assert f'name="skip" value="{first_id}"' in r.text
+
+    # skipping never touches the search preset — both documents still show
+    both = await alice.get("/search?preset=inbox", headers={"HX-Request": "true"})
+    assert "Найдено: 2" in both.text
+
+    # and a fresh queue (no skip param) starts over, showing the first one again
+    fresh = await alice.get("/inbox/card", headers={"HX-Request": "true"})
+    assert f'data-doc="{first_id}"' in fresh.text
 
 
 async def test_image_thumbnail(alice, web_domain):
@@ -401,7 +411,7 @@ async def test_image_thumbnail(alice, web_domain):
 async def test_global_tag_page_names_are_read_only(alice, web_domain):
     await _upload(alice, web_domain, "tg.txt")
     doc_id = await _doc_id(alice, web_domain)
-    dp = (await alice.get(f"/documents/{doc_id}")).text
+    dp = (await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})).text
     await alice.post(
         f"/documents/{doc_id}/tags",
         data={"tags": "Контракт", "csrf_token": web_csrf(dp)},
@@ -418,7 +428,7 @@ async def test_global_tag_page_names_are_read_only(alice, web_domain):
 async def test_search_result_tag_uses_its_colour(alice, web_domain):
     await _upload(alice, web_domain, "col.txt")
     doc_id = await _doc_id(alice, web_domain)
-    dp = (await alice.get(f"/documents/{doc_id}")).text
+    dp = (await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})).text
     await alice.post(
         f"/documents/{doc_id}/tags",
         data={"tags": "срочно", "csrf_token": web_csrf(dp)},
@@ -536,7 +546,7 @@ async def test_settings_save_allowed_types(alice, web_domain):
 async def test_trash_preset_and_bulk_restore(alice, web_domain):
     await _upload(alice, web_domain, "del.txt")
     doc_id = await _doc_id(alice, web_domain)
-    dp = (await alice.get(f"/documents/{doc_id}")).text
+    dp = (await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})).text
     r = await alice.post(f"/documents/{doc_id}/delete", data={"csrf_token": web_csrf(dp)})
     assert r.status_code == 303
 
@@ -562,7 +572,7 @@ async def test_trash_preset_and_bulk_restore(alice, web_domain):
 async def test_delete_and_restore_from_the_modal_close_and_refresh(alice, web_domain):
     await _upload(alice, web_domain, "md.txt")
     doc_id = await _doc_id(alice, web_domain)
-    dp = (await alice.get(f"/documents/{doc_id}")).text
+    dp = (await alice.get(f"/documents/{doc_id}", headers={"HX-Request": "true"})).text
 
     dele = await alice.post(
         f"/documents/{doc_id}/delete",

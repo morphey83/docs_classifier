@@ -8,8 +8,7 @@
 <div data-doc="{{ doc.id }}">
   <p class="text-secondary mb-2">
     <span class="badge bg-blue-lt">{{ domain.name }}</span> ·
-    {{ doc.mime }} · {{ doc.size_bytes|humansize }} · {{ doc.doc_date|shortdate }} ·
-    <a href="/documents/{{ doc.id }}" target="_blank">открыть ↗</a>
+    {{ doc.mime }} · {{ doc.size_bytes|humansize }} · {{ doc.doc_date|shortdate }}
   </p>
 
   {% if is_image %}
@@ -19,6 +18,7 @@
   <form hx-post="/inbox/{{ doc.id }}/done" hx-target="#tagcard">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <input type="hidden" name="domain_id" value="{{ picked }}">
+    <input type="hidden" name="skip" value="{{ skip }}">
 
     <div class="mb-3">
       <label class="form-label">Название</label>
@@ -27,12 +27,12 @@
 
     <div class="mb-2">
       <label class="form-label">Теги</label>
-      {{ m.tagfield('tags', cur_tags|join(', '), freq, 'тег и Enter') }}
+      {{ m.tagfield('tags', cur_tags|join(', '), freq) }}
     </div>
 
     <div class="tag-actions">
-      <button type="button" hx-post="/inbox/{{ doc.id }}/defer" hx-target="#tagcard"
-              hx-include="closest form" class="btn btn-outline-secondary">Отложить</button>
+      <button type="button" hx-post="/inbox/{{ doc.id }}/skip" hx-target="#tagcard"
+              hx-include="closest form" class="btn btn-outline-secondary">Пропустить</button>
       <button type="submit" class="btn btn-primary">Готово, дальше →</button>
     </div>
   </form>

@@ -264,17 +264,3 @@ class DocumentVersion(Base):
     replaced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-
-
-class InboxDefer(Base):
-    __tablename__ = "inbox_defer"
-
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE"), primary_key=True
-    )
-    document_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("document.id", ondelete="CASCADE"), primary_key=True
-    )
-    deferred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )

@@ -13,7 +13,6 @@ from app.models import (
     DocumentSetItem,
     DocumentTag,
     DocumentVersion,
-    InboxDefer,
     UploadBatchItem,
     User,
 )
@@ -77,7 +76,6 @@ async def hard_purge(db: AsyncSession, doc: Document) -> None:
     await db.execute(delete(DocumentTag).where(DocumentTag.document_id == doc_id))
     await db.execute(delete(DocumentVersion).where(DocumentVersion.document_id == doc_id))
     await db.execute(delete(DocumentSetItem).where(DocumentSetItem.document_id == doc_id))
-    await db.execute(delete(InboxDefer).where(InboxDefer.document_id == doc_id))
     await db.execute(
         update(UploadBatchItem)
         .where(UploadBatchItem.document_id == doc_id)

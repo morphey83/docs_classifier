@@ -48,14 +48,19 @@ async def inbox(message: Message, state: FSMContext, db: AsyncSession, user: Use
     await _next(message, state, db, domain, user)
 
 
-async def _next(target, state: FSMContext, db, domain: Domain, user: User) -> None:
-    doc = await docs_svc.next_inbox_document(db, domain.id, user.id)
+async def _next(
+    target, state: FSMContext, db, domain: Domain, user: User, skipped: list[str] | None = None
+) -> None:
+    skipped = skipped or []
+    exclude = [uuid.UUID(s) for s in skipped]
+    doc = await docs_svc.next_inbox_document(db, domain.id, exclude)
     if doc is None:
         await state.clear()
-        await target.answer("Инбокс пуст 🎉")
+        msg = "Инбокс пуст 🎉" if not skipped else "Больше нечего показать — остальное было пропущено в этом заходе. Начните /inbox заново, чтобы увидеть их."
+        await target.answer(msg)
         return
     await state.set_state(Edit.inbox_tags)
-    await state.update_data(doc=str(doc.id), domain=str(domain.id))
+    await state.update_data(doc=str(doc.id), domain=str(domain.id), skipped=skipped)
 
     text = (
         result_line(doc, domain.name, [])
@@ -74,14 +79,13 @@ async def tag_and_advance(
     doc = await docs_svc.get_document(db, uuid.UUID(data["doc"]))
     domain = (await domains_svc.get_membership(db, uuid.UUID(data["domain"]), user.id))[0]
     if doc is None:
-        return await _next(message, state, db, domain, user)
+        return await _next(message, state, db, domain, user, data.get("skipped"))
 
     names = [p.strip() for p in message.text.split(",") if p.strip()]
     tag_ids = await tags_svc.resolve_names(db, names, actor=user)
     await tags_svc.set_document_tags(db, doc, tag_ids, actor=user)
-    await docs_svc.complete_document(db, doc)
     await message.answer(f"✅ «{doc.title}» — {', '.join(names) or 'без тегов'}")
-    await _next(message, state, db, domain, user)
+    await _next(message, state, db, domain, user, data.get("skipped"))
 
 
 @router.callback_query(InboxCb.filter())
@@ -99,15 +103,19 @@ async def inbox_button(
         return await cb.answer("Начните с /inbox", show_alert=True)
     domain = (await domains_svc.get_membership(db, uuid.UUID(data["domain"]), user.id))[0]
     doc = await docs_svc.get_document(db, uuid.UUID(callback_data.id))
+    skipped = list(data.get("skipped") or [])
 
     if callback_data.verb == "done":
         await state.clear()
         await cb.answer("Остановлено")
         return
     if doc is not None and callback_data.verb == "skip":
-        await docs_svc.defer_document(db, doc, user.id)
+        # skips forward for this walkthrough only — nothing is persisted, so
+        # starting /inbox again shows it again
+        if callback_data.id not in skipped:
+            skipped.append(callback_data.id)
         await cb.answer("Пропущено")
     elif doc is not None and callback_data.verb == "notag":
         await docs_svc.complete_document(db, doc)
         await cb.answer("Готово без тегов")
-    await _next(cb.message, state, db, domain, user)
+    await _next(cb.message, state, db, domain, user, skipped)

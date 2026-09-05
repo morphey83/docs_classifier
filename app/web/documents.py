@@ -171,15 +171,12 @@ async def document_page(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
+    # the document card only ever lives in the shared detail modal — there is
+    # no standalone page to land on directly (same rule as domains/sets)
+    if not request.headers.get("HX-Request"):
+        return RedirectResponse("/search", status_code=303)
     doc, view = await load_document(db, user, document_id)
-    return render(
-        request,
-        "document.html",
-        {
-            **(await _doc_ctx(db, user, doc, view)),
-            "partial": "_doc_modal.html",
-        },
-    )
+    return render(request, "_doc_modal.html", await _doc_ctx(db, user, doc, view))
 
 
 @router.post("/documents/{document_id}")

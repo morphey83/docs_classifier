@@ -1,18 +1,22 @@
 """Web UI: the card-by-card tagging modal used by the /search inbox preset
 (open one, tag it, next). The queue itself is now the search preset; this
-module is just the modal flow (docs/architecture.md §14 rev 2)."""
+module is just the modal flow (docs/architecture.md §14 rev 2).
+
+"Пропустить" skips a document for the rest of this walkthrough only — the
+skipped ids ride along in a hidden form field (``skip``), never written to the
+database. Reopening the queue from scratch starts with an empty skip list."""
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.models import DocStatus, Document, InboxDefer
+from app.models import DocStatus
 from app.rbac import ROLE_CAPS, Cap, Role
 from app.services import documents as docs_svc
 from app.services import domains as domains_svc
@@ -45,22 +49,14 @@ def _scope(doms: dict, raw: str | None) -> list[uuid.UUID]:
     return list(doms)
 
 
-async def _queue(db: AsyncSession, domain_ids: list[uuid.UUID], user_id: uuid.UUID):
-    if not domain_ids:
-        return []
-    deferred = select(InboxDefer.document_id).where(InboxDefer.user_id == user_id)
-    rows = await db.scalars(
-        select(Document)
-        .where(
-            Document.domain_id.in_(domain_ids),
-            Document.status == DocStatus.inbox,
-            Document.deleted_at.is_(None),
-            Document.id.not_in(deferred),
-        )
-        .order_by(Document.uploaded_at.asc())
-        .limit(500)
-    )
-    return list(rows)
+def _parse_skip(raw: str | None) -> list[uuid.UUID]:
+    out = []
+    for part in (raw or "").split(","):
+        part = part.strip()
+        if part:
+            with contextlib.suppress(ValueError):
+                out.append(uuid.UUID(part))
+    return out
 
 
 @router.get("/inbox")
@@ -74,7 +70,9 @@ def _csrf(request: Request) -> str:
     return csrf.issue(request)
 
 
-async def _card_ctx(db: AsyncSession, user, doc: Document | None, raw_domain: str | None) -> dict:
+async def _card_ctx(
+    db: AsyncSession, user, doc, raw_domain: str | None, skip_ids: list[uuid.UUID]
+) -> dict:
     doms = await _taggable(db, user)
     domain = doms.get(doc.domain_id) if doc else None
     freq: list[str] = []
@@ -92,14 +90,14 @@ async def _card_ctx(db: AsyncSession, user, doc: Document | None, raw_domain: st
         "cur_tags": tags,
         "is_image": bool(doc and thumbs.can_thumb(doc.mime, doc.ext)),
         "picked": raw_domain or "",
+        "skip": ",".join(str(i) for i in skip_ids),
     }
 
 
-async def _next_doc(db, user, raw_domain):
+async def _next_doc(db, user, raw_domain, skip_ids: list[uuid.UUID]):
     doms = await _taggable(db, user)
     ids = _scope(doms, raw_domain)
-    q = await _queue(db, ids, user.id)
-    return q[0] if q else None
+    return await docs_svc.next_inbox_across(db, ids, skip_ids)
 
 
 @router.get("/inbox/card")
@@ -107,18 +105,20 @@ async def inbox_card(
     request: Request,
     doc: uuid.UUID | None = None,
     domain_id: str | None = None,
+    skip: str | None = None,
     user=Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
     doms = await _taggable(db, user)
+    skip_ids = _parse_skip(skip)
     target = None
     if doc is not None:
         d = await docs_svc.get_document(db, doc)
         if d is not None and d.domain_id in doms and d.status == DocStatus.inbox:
             target = d
     if target is None:
-        target = await _next_doc(db, user, domain_id)
-    ctx = await _card_ctx(db, user, target, domain_id)
+        target = await _next_doc(db, user, domain_id, skip_ids)
+    ctx = await _card_ctx(db, user, target, domain_id, skip_ids)
     return templates.TemplateResponse(
         request, "_inbox_card.html", {**ctx, "csrf": _csrf(request)}
     )
@@ -130,9 +130,9 @@ async def _doc_domain(db, user, document_id):
     return (d, doms.get(d.domain_id)) if d is not None else (None, None)
 
 
-async def _card_response(request, db, user, domain_id) -> Response:
-    target = await _next_doc(db, user, domain_id)
-    ctx = await _card_ctx(db, user, target, domain_id)
+async def _card_response(request, db, user, domain_id, skip_ids: list[uuid.UUID]) -> Response:
+    target = await _next_doc(db, user, domain_id, skip_ids)
+    ctx = await _card_ctx(db, user, target, domain_id, skip_ids)
     resp = templates.TemplateResponse(
         request, "_inbox_card.html", {**ctx, "csrf": _csrf(request)}
     )
@@ -147,6 +147,7 @@ async def inbox_done(
     tags: str = Form(default=""),
     title: str = Form(default=""),
     domain_id: str = Form(default=""),
+    skip: str = Form(default=""),
     _: None = CsrfGuard,
     user=Depends(current_user),
     db: AsyncSession = Depends(get_session),
@@ -159,16 +160,16 @@ async def inbox_done(
     names = [p.strip() for p in tags.replace("\n", ",").split(",") if p.strip()]
     tag_ids = await tags_svc.resolve_names(db, names, actor=user)
     await tags_svc.set_document_tags(db, doc, tag_ids, actor=user)
-    await docs_svc.complete_document(db, doc)
     await db.flush()
-    return await _card_response(request, db, user, domain_id or None)
+    return await _card_response(request, db, user, domain_id or None, _parse_skip(skip))
 
 
-@router.post("/inbox/{document_id}/defer")
-async def inbox_defer(
+@router.post("/inbox/{document_id}/skip")
+async def inbox_skip(
     request: Request,
     document_id: uuid.UUID,
     domain_id: str = Form(default=""),
+    skip: str = Form(default=""),
     _: None = CsrfGuard,
     user=Depends(current_user),
     db: AsyncSession = Depends(get_session),
@@ -176,17 +177,7 @@ async def inbox_defer(
     doc, domain = await _doc_domain(db, user, document_id)
     if domain is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "нет прав на этот документ")
-    await docs_svc.defer_document(db, doc, user.id)
-    await db.flush()
-    return await _card_response(request, db, user, domain_id or None)
-
-
-@router.post("/inbox/undefer")
-async def inbox_undefer(
-    _: None = CsrfGuard,
-    user=Depends(current_user),
-    db: AsyncSession = Depends(get_session),
-) -> Response:
-    for domain_id in await _taggable(db, user):
-        await docs_svc.clear_defers(db, domain_id, user.id)
-    return RedirectResponse("/search?preset=inbox", status_code=303)
+    skip_ids = _parse_skip(skip)
+    if document_id not in skip_ids:
+        skip_ids.append(document_id)
+    return await _card_response(request, db, user, domain_id or None, skip_ids)
