@@ -389,7 +389,7 @@ stay at the root. Paths below omit the `/api` prefix for brevity.
 ```
 POST   /auth/register            POST /auth/login    POST /auth/logout
 GET    /auth/me
-POST   /auth/api-keys            DELETE /auth/api-keys/{id}
+POST   /auth/api-keys            GET /auth/api-keys    DELETE /auth/api-keys/{id}
 POST   /auth/tg-link             # web-initiated linking: {token, deep_link} (§8)
 GET    /tg/link/{token}          # minimal standalone page: log in / register, confirm
 
@@ -683,8 +683,11 @@ non-deleted documents + its trash + its export artifacts.
 
 ## 11. Security & ops
 
-- Passwords: **argon2**. Server-side sessions (cookie) for the UI; API keys for
-  scripts; bot via account linking.
+- Passwords: **argon2**. Server-side sessions (cookie) for the UI; per-device
+  API keys (`Authorization: Bearer dc_…`, sha256-hashed at rest, checked
+  before the session cookie in `get_current_user`) for scripts and native/
+  mobile clients — issued and revoked from the profile page or
+  `POST/GET/DELETE /auth/api-keys`; bot via account linking.
 - Every request authorises against `domain_member.role` → capability.
 - Uploads: size cap, MIME sniffing, archive-bomb guards, path-traversal-safe
   extraction, per-domain storage quota.

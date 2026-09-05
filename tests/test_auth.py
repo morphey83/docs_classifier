@@ -58,3 +58,54 @@ async def test_logout_invalidates_session(client):
 
 async def test_me_requires_auth(client):
     assert (await client.get("/api/auth/me")).status_code == 401
+
+
+# --- per-device API keys (Bearer auth for native/mobile clients) ---------
+async def test_api_key_bearer_auth_works_without_cookie(alice, client_factory):
+    created = await alice.post("/api/auth/api-keys", json={"name": "Pixel"})
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["name"] == "Pixel"
+    token = body["token"]
+    assert token and token.startswith("dc_")
+
+    bare = client_factory()  # no session cookie at all
+    me = await bare.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200 and me.json()["username"] == "alice"
+
+
+async def test_api_key_list_hides_token_and_omits_revoked(alice):
+    r1 = await alice.post("/api/auth/api-keys", json={"name": "A"})
+    await alice.post("/api/auth/api-keys", json={"name": "B"})
+    key_id = r1.json()["id"]
+
+    listed = (await alice.get("/api/auth/api-keys")).json()
+    assert {k["name"] for k in listed} == {"A", "B"}
+    assert all(k["token"] is None for k in listed)
+
+    revoke = await alice.request("DELETE", f"/api/auth/api-keys/{key_id}")
+    assert revoke.status_code == 204
+    listed2 = (await alice.get("/api/auth/api-keys")).json()
+    assert {k["name"] for k in listed2} == {"B"}
+
+
+async def test_revoked_api_key_stops_authenticating(alice, client_factory):
+    created = (await alice.post("/api/auth/api-keys", json={"name": "Old phone"})).json()
+    token = created["token"]
+    await alice.request("DELETE", f"/api/auth/api-keys/{created['id']}")
+
+    bare = client_factory()
+    me = await bare.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 401
+
+
+async def test_garbage_bearer_token_is_401(client_factory):
+    bare = client_factory()
+    me = await bare.get("/api/auth/me", headers={"Authorization": "Bearer nonsense"})
+    assert me.status_code == 401
+
+
+async def test_api_key_cannot_revoke_another_users_key(alice, bob):
+    created = (await alice.post("/api/auth/api-keys", json={"name": "Mine"})).json()
+    r = await bob.request("DELETE", f"/api/auth/api-keys/{created['id']}")
+    assert r.status_code == 404

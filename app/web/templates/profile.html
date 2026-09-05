@@ -75,4 +75,55 @@
     </div>
   </div>
 </div>
+
+<div class="row row-cards mt-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <h3 class="card-title">API-ключи (мобильные приложения)</h3>
+        <p class="text-secondary">
+          Ключ даёт полный доступ к аккаунту в приложении на одном устройстве, без пароля.
+          Выпустите отдельный ключ на каждое устройство и отзывайте по одному, если оно потеряно.
+        </p>
+        {% if new_key_token %}
+        <div class="alert alert-success">
+          <div class="mb-1">Ключ создан — скопируйте сейчас, второй раз он не показывается:</div>
+          <code class="user-select-all">{{ new_key_token }}</code>
+        </div>
+        {% endif %}
+        {% if api_keys %}
+        <div class="table-responsive mb-3"><table class="table table-vcenter card-table">
+          <thead><tr><th>Название</th><th>Создан</th><th>Использован</th><th class="w-1"></th></tr></thead>
+          <tbody>
+          {% for key in api_keys %}
+          <tr>
+            <td>{{ key.name }}</td>
+            <td class="text-secondary">{{ key.created_at|shortdate }}</td>
+            <td class="text-secondary">{{ key.last_used_at|shortdate if key.last_used_at else 'ни разу' }}</td>
+            <td>
+              <form method="post" action="/profile/api-keys/{{ key.id }}/revoke"
+                    data-confirm="Отозвать ключ «{{ key.name }}»? Устройство потеряет доступ немедленно.">
+                <input type="hidden" name="csrf_token" value="{{ csrf }}">
+                <button class="btn btn-sm btn-ghost-danger">отозвать</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table></div>
+        {% else %}
+        <p class="text-secondary">Ключей пока нет.</p>
+        {% endif %}
+        <form method="post" action="/profile/api-keys" class="row g-2 align-items-end">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <div class="col">
+            <label class="form-label">Новое устройство</label>
+            <input class="form-control" name="name" placeholder="например, Pixel 8" required maxlength="120">
+          </div>
+          <div class="col-auto"><button type="submit" class="btn btn-primary">Выпустить ключ</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

@@ -650,6 +650,26 @@ async def test_profile_and_tg_link(alice):
     assert "/start " in after.text
 
 
+async def test_profile_api_key_create_and_revoke(alice):
+    page = (await alice.get("/profile")).text
+    created = await alice.post(
+        "/profile/api-keys", data={"name": "Pixel 8", "csrf_token": web_csrf(page)}
+    )
+    assert created.status_code == 200
+    assert "Pixel 8" in created.text and "dc_" in created.text  # the one-time token
+
+    listing = (await alice.get("/profile")).text
+    assert "Pixel 8" in listing
+    key_id = re.search(r"/profile/api-keys/([0-9a-f-]{36})/revoke", listing).group(1)
+
+    revoke = await alice.post(
+        f"/profile/api-keys/{key_id}/revoke", data={"csrf_token": web_csrf(listing)}
+    )
+    assert revoke.status_code == 303
+    after = (await alice.get("/profile")).text
+    assert "Ключей пока нет" in after
+
+
 async def test_password_change(alice):
     page = (await alice.get("/profile")).text
     r = await alice.post(

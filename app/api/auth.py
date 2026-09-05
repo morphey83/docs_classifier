@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_session
 from app.models import User
+from app.schemas.api_keys import ApiKeyCreate, ApiKeyOut
 from app.schemas.auth import LoginIn, RegisterIn, UserOut
 from app.schemas.tglink import TgLinkCreateOut
 from app.security import get_current_user
+from app.services import api_keys as api_keys_svc
 from app.services import tglink as tglink_svc
 from app.services.email import send_verification_email
 from app.services.users import (
@@ -117,3 +121,36 @@ async def create_tg_link(
         raise HTTPException(status.HTTP_409_CONFLICT, "this account already has a linked Telegram")
     tok = await tglink_svc.create_web_initiated(db, user)
     return TgLinkCreateOut(token=tok.token, deep_link=bot_deep_link(tok.token))
+
+
+# --- per-device API keys (Bearer auth for native/mobile clients) ---------
+@router.post("/api-keys", response_model=ApiKeyOut, status_code=status.HTTP_201_CREATED)
+async def create_api_key(
+    body: ApiKeyCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> ApiKeyOut:
+    key, raw = await api_keys_svc.create_api_key(db, user, name=body.name)
+    out = ApiKeyOut.model_validate(key)
+    out.token = raw  # shown exactly once — never recoverable after this response
+    return out
+
+
+@router.get("/api-keys", response_model=list[ApiKeyOut])
+async def list_api_keys(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)
+) -> list[ApiKeyOut]:
+    return [ApiKeyOut.model_validate(k) for k in await api_keys_svc.list_api_keys(db, user.id)]
+
+
+@router.delete("/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_api_key(
+    key_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    key = await api_keys_svc.get_owned_key(db, key_id, user.id)
+    if key is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "api key not found")
+    await api_keys_svc.revoke_api_key(db, key)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

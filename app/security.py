@@ -15,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 from app.config import settings
 from app.db import get_session
 from app.models import Session, User
+from app.services.api_keys import resolve_api_key
 
 _hasher = PasswordHasher()
 # A real hash, used to keep authenticate() timing ~constant for unknown users.
@@ -56,6 +57,16 @@ def _as_aware(dt: datetime) -> datetime:
 
 
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_session)) -> User:
+    # native/mobile clients: a per-device API key as a Bearer token (§4 of the
+    # native-app architecture) — checked first so a stray session cookie on
+    # the same request never masks an invalid key.
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        user = await resolve_api_key(db, auth[7:].strip())
+        if user is None:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid or revoked api key")
+        return user
+
     token = request.cookies.get(settings.session_cookie_name)
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not authenticated")
