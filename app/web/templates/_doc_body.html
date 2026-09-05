@@ -44,7 +44,7 @@
         <h3 class="card-title">Теги</h3>
         {% if can_write %}
         <form hx-post="/documents/{{ doc.id }}/tags" hx-target="#doc">
-          {{ m.tagfield('tags', tags|join(', '), freq, 'тег и Enter · пустое поле снимет все') }}
+          {{ m.tagfield('tags', tags|join(', '), freq) }}
           <button type="submit" class="btn btn-primary mt-2">Сохранить теги</button>
         </form>
         {% else %}

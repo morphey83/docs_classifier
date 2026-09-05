@@ -450,6 +450,7 @@
       var entry = root.querySelector('.dc-tagfield-entry');
       var sug = root.querySelector('.dc-tagfield-suggest');
       var freq = Array.prototype.slice.call(root.querySelectorAll('.dc-tagfield-freq .freq'));
+      var basePlaceholder = entry.getAttribute('placeholder') || '';
       var chips = (hidden.value || '').split(/[,\n]/).map(function (s) { return s.trim(); })
         .filter(Boolean);
       var seen = {}; chips = chips.filter(function (n) {
@@ -460,11 +461,14 @@
       function syncFreq() {
         freq.forEach(function (b) { b.disabled = has(b.dataset.tag); });
       }
+      function syncPlaceholder() {
+        entry.placeholder = chips.length ? '' : basePlaceholder;
+      }
       function commit() {
         hidden.value = chips.join(', ');
         hidden.dispatchEvent(new Event('input', { bubbles: true }));
         hidden.dispatchEvent(new Event('change', { bubbles: true }));
-        render(); syncFreq();
+        render(); syncFreq(); syncPlaceholder();
       }
       function render() {
         Array.prototype.slice.call(box.querySelectorAll('.chip')).forEach(function (n) { n.remove(); });
@@ -530,7 +534,7 @@
         b.addEventListener('click', function () { if (!b.disabled) { add(b.dataset.tag); entry.focus(); } });
       });
 
-      render(); syncFreq();
+      render(); syncFreq(); syncPlaceholder();
       root._tagfield = {
         value: function () { return hidden.value; },
         reset: function () { chips.length = 0; entry.value = ''; hideSug(); commit(); },

@@ -62,7 +62,7 @@
    expandable "частые" row below. `value` is the current comma-joined tags,
    `freq` an optional list of frequent tag names. Wired by dcInitTagFields()
    in base.html. #}
-{% macro tagfield(name, value='', freq=None, placeholder='тег и Enter') -%}
+{% macro tagfield(name, value='', freq=None, placeholder='пример: море, 2026') -%}
 <div class="dc-tagfield" data-tagfield>
   <input type="hidden" name="{{ name }}" value="{{ value }}">
   <div class="dc-tagfield-box">
